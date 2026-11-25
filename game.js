@@ -71,11 +71,12 @@ const LOCS = {
   hephTor:   { name: 'Schmiede des Hephaistos', x: 640, z: 262, r: 8, h: null, hidden: true },
   poseidonTor: { name: 'Grotte des Poseidon', x: 392, z: -238, r: 7, h: null, hidden: true },
   medusaTor: { name: 'Hort der Medusa', x: 650, z: -395, r: 8, h: null, hidden: true },
+  typhonTor: { name: 'Gipfel der Stürme', x: 150, z: -640, r: 8, h: null, hidden: true },
   polyphemTor: { name: 'Höhle des Polyphem', x: -905, z: 310, r: 8, h: null, hidden: true },
-  heimat:    { name: 'Siedlungsplatz', sub: 'Gründe hier deine eigene Stadt', x: -120, z: 120, r: 45, h: null },
-  eleusis:   { name: 'Siedlungsplatz', x: 20, z: -240, r: 45, h: null },
-  lebadeia:  { name: 'Siedlungsplatz', x: -260, z: -400, r: 45, h: null },
-  chalkis:   { name: 'Siedlungsplatz', x: 0, z: -460, r: 45, h: null },
+  heimat:    { name: 'Siedlungsplatz', sub: 'Gründe hier deine eigene Stadt', x: 60, z: -220, r: 45, h: null },
+  eleusis:   { name: 'Siedlungsplatz', x: -200, z: 340, r: 45, h: null },
+  lebadeia:  { name: 'Siedlungsplatz', x: -560, z: -240, r: 45, h: null },
+  chalkis:   { name: 'Siedlungsplatz', x: -100, z: -780, r: 45, h: null },
   megara:    { name: 'Megara', x: -200, z: -100, r: 45, h: null },
   argos:     { name: 'Argos', x: -380, z: 340, r: 45, h: null },
   korinth:   { name: 'Korinth', x: -300, z: 100, r: 45, h: null },
@@ -90,7 +91,6 @@ const ROADS = [
   [[-170, -260], [-60, -420], [40, -560], [90, -660]],
   [[-260, 520], [-120, 430]],
   [[460, 690], [400, 600]],
-  [[-48, 144], [-72, 120], [-120, 120]],
 ];
 const ROAD_SEGS = [];
 for (const r of ROADS) for (let i = 0; i < r.length - 1; i++) ROAD_SEGS.push([r[i][0], r[i][1], r[i + 1][0], r[i + 1][1]]);
@@ -1114,6 +1114,8 @@ function makeHumanoid(o = {}) {
   if (o.weapon === 'axe') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), M.wood, 0, 0, 0.5, weapon).rotation.x = Math.PI / 2; for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.04, 0.42, 0.3), lam(0x9a9a9a), 0, s * 0.2, 1.05, weapon); }
   if (o.weapon === 'fireSword') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); mesh(new THREE.BoxGeometry(0.1, 0.05, 1.15), lam(0xff8a30, 0xff4a00), 0, 0, 0.65, weapon); mesh(new THREE.BoxGeometry(0.34, 0.06, 0.08), M.gold, 0, 0, 0.08, weapon); }
   if (o.weapon === 'trident') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6), lam(0x2a8a8a), 0, 0, 0.6, weapon).rotation.x = Math.PI / 2; for (const sx of [-0.12, 0, 0.12]) mesh(new THREE.ConeGeometry(0.04, 0.4, 5), M.gold, sx, 0, 2.05, weapon).rotation.x = Math.PI / 2; mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05), M.gold, 0, 0, 1.85, weapon); }
+  if (o.weapon === 'bow') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.1); armR.add(weapon); const arc = mesh(new THREE.TorusGeometry(0.55, 0.03, 6, 16, Math.PI), M.darkwood, 0, 0, 0.1, weapon); arc.rotation.y = Math.PI / 2; arc.rotation.x = Math.PI / 2; mesh(new THREE.BoxGeometry(0.01, 0.01, 1.1), lam(0xe8e0cc), 0, 0, 0.1, weapon).rotation.x = Math.PI / 2; }
+  if (o.weapon === 'keraunos') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); const bm = lam(0xfff6a0, 0xffd020); [[0, 0.2, 0.5], [0.1, 0.55, -0.6], [0, 0.95, 0.5]].forEach(([x, z, r]) => { const m = mesh(new THREE.BoxGeometry(0.09, 0.09, 0.45), bm, x, 0, z, weapon); m.rotation.y = r; }); }
   if (o.weapon === 'club') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.16, 0.06, 1.3, 7), M.darkwood, 0, 0, 0.55, weapon).rotation.x = Math.PI / 2; }
   if (o.weapon === 'staff') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.9, 6), M.darkwood, 0, 0.3, 0.05, weapon); }
   if (o.scale) g.scale.setScalar(o.scale);
@@ -1130,6 +1132,7 @@ function animateHumanoid(h, speed, dt, opt = {}) {
   if (opt.attack !== undefined && opt.attack > 0) { const t = 1 - opt.attack; h.armR.rotation.x = t < 0.35 ? lerp(-0.3, -2.7, t / 0.35) : lerp(-2.7, -0.4, (t - 0.35) / 0.65); }
   else h.armR.rotation.x = opt.sitting ? -0.6 : s * 0.8 - (h.weapon ? 0.25 : 0);
   if (opt.idleTalk) h.armR.rotation.x = -0.6 + Math.sin(performance.now() / 300) * 0.25;
+  if (opt.bow) { h.armR.rotation.x = -1.5; h.armL.rotation.x = -1.4; h.armL.rotation.z = 0.3; }
 }
 function makeWolf(col = 0x6e6a64, heads = 1) {
   const g = new THREE.Group(), m = lam(col), d = lam(0x3c3a36);
@@ -1178,9 +1181,9 @@ function animateQuad(q, speed, dt, k = 2.2) {
 const player = {
   pos: new V3(0, 10, 26), vy: 0, yaw: Math.PI, onGround: false, hp: 100, maxHp: 100, stamina: 100,
   money: 20, potions: 1, dmg: 14, blessed: false, mounted: false, blocking: false, atkCd: 0, atkAnim: 0,
-  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [], gear: [], hasShip: false, chiron: false, wTier: 0, aTier: 0, horse: 'gaul', horses: ['gaul'], shipTier: 0, wanted: 0, adminFly: false, flying: false, sailing: false, stoned: 0, medCd: 0,
+  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [], gear: [], hasShip: false, chiron: false, wTier: 0, aTier: 0, horse: 'gaul', horses: ['gaul'], shipTier: 0, wanted: 0, adminFly: false, up: {}, skins: ['standard'], skin: 'standard', bowMode: false, flying: false, sailing: false, stoned: 0, medCd: 0,
 };
-const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], towns: defaultTowns(), bossDead: [], foundD: [], quiz: [], bounty: null };
+const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], towns: defaultTowns(), bossDead: [], foundD: [], quiz: [], bounty: null, olympia: {}, zeus: 0, zeusKills: 0, altars: [] };
 let hero, horse;
 const npcs = [], enemies = [], pickups = [], floaters = [], bolts = [];
 let race = null, dialog = null, started = false, paused = false, mapOpen = false;
@@ -1288,7 +1291,7 @@ function questTarget() {
 // ---------- Speichern ----------
 function saveData() {
     const sp = curD ? { x: curD.out[0], z: curD.out[1] } : player.pos;
-  return ({ S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })) } });
+  return ({ S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })), up: player.up, skins: player.skins, skin: player.skin } });
 }
 function save() {
   try { localStorage.setItem(saveKey(), JSON.stringify(saveData())); } catch (e) { /* ignorieren */ }
@@ -1353,7 +1356,7 @@ function talkPerikles() {
     { who: W, text: 'Wunderbar! Athene wird zufrieden sein. Hier, nimm diese Drachmen für deine Mühe.', fn: () => { addMoney(30); player.potions += 1; toast('+1 Ambrosia', 'gold'); } },
     { who: W, text: 'Nun reise nach Delphi im Nordwesten, hinter Theben. Die Pythia wird dir sagen, was die Götter verlangen.' },
     { who: W, text: 'Tipp: Drücke R, um dein Pferd zu rufen. Und Kleon dort am Markt verkauft nützliche Dinge.' },
-    { who: W, text: 'Noch etwas: Südwestlich von Athen liegt freies Land. Dort kannst du am Grenzstein deine eigene Stadt gründen. Und in den Tempeln von Hellas warten Opfergaben auf Helden!', fn: () => setStage(3) },
+    { who: W, text: 'Noch etwas: Überall in Hellas gibt es freie Siedlungsplätze – der nächste liegt nördlich von Athen. Dort kannst du am Grenzstein deine eigene Stadt gründen. Und in den Tempeln von Hellas warten Opfergaben auf Helden!', fn: () => setStage(3) },
   ]);
   else if (S.stage === 11) talk([
     { who: W, text: 'Bei Zeus! Der Minotauros ist tot? Ganz Athen wird deinen Namen besingen!' },
@@ -1400,22 +1403,8 @@ function talkLeonidas() {
   ]);
   else talk([{ who: W, text: pick(['Komm mit deinem Schild zurück – oder auf ihm.', 'Ein Spartaner fragt nicht, wie viele Feinde es sind, sondern wo sie sind.', 'Trainiere hart. Der Kampf verzeiht keine Schwäche.']) }]);
 }
-function talkJudge() {
-  const W = 'Kampfrichter';
-  if (race) { talk([{ who: W, text: 'Lauf! Die Zeit läuft!' }]); return; }
-  talk([{ who: W, text: `Willkommen im Stadion von Olympia! Lauf zum Ziel am anderen Ende und wieder zurück – in unter 32 Sekunden. Zu Fuß, versteht sich!${S.raceBest ? ' Deine Bestzeit: ' + S.raceBest.toFixed(1) + ' s.' : ''}`, opts: [
-    { label: 'Ich bin bereit!', fn: startRace },
-    { label: 'Vielleicht später.', fn: () => { } },
-  ] }]);
-}
-function startRace() {
-  if (player.mounted) dismount();
-  player.pos.set(SPOTS.raceStart[0] + 1, groundAt(SPOTS.raceStart[0], SPOTS.raceStart[1]), SPOTS.raceStart[1]);
-  race = { t: 0, half: false, limit: 32 };
-  player.stamina = 100;
-  toast('Los! Lauf zum Ziel am Ostende!', 'gold'); sfx('quest');
-}
 function prayShrine() {
+  if (S.zeus === 4) { zeusShrine(); return; }
   if (S.stage === 9) talk([
     { who: 'Stimme des Zeus', text: 'STERBLICHER. Du hast den Gipfel erklommen, den nur Götter betreten.' },
     { who: 'Stimme des Zeus', text: 'Deine Taten sind mir nicht verborgen geblieben. Nimm meinen Blitz – drücke Q, und der Himmel wird für dich sprechen.', fn: () => { player.blessed = true; player.maxHp += 30; player.hp = player.maxHp; flash = 1; sfx('zap'); toast('Segen des Zeus: Blitz (Q) & +30 Leben', 'gold'); } },
@@ -1441,6 +1430,9 @@ const EDEF = {
   bandit: { hp: 65, dmg: 11, speed: 6.5, range: 2.1, aggro: 24, cd: 1.4, name: 'Bandit', money: [6, 16], r: 0.5 },
   guard: { hp: 110, dmg: 14, speed: 6.2, range: 2.6, aggro: 22, cd: 1.5, name: 'Tempelwächter', money: [12, 25], r: 0.5 },
   minotaur: { hp: 650, dmg: 26, speed: 6.5, range: 3.6, aggro: 21, cd: 1.8, name: 'Minotauros', money: [150, 150], r: 1.0, hitR: 1.4, top: 4.4, charge: true, bossLike: true },
+  gigant: { hp: 800, dmg: 32, speed: 6, range: 4.2, aggro: 32, cd: 2.0, name: 'Gigant', money: [120, 120], r: 1.4, hitR: 1.8, top: 7.2, charge: true, bossLike: true },
+  typhon: { hp: 3600, dmg: 42, speed: 6.5, range: 5.2, aggro: 45, cd: 1.6, name: 'Typhon, Vater der Ungeheuer', money: [500, 500], r: 2.0, hitR: 2.6, top: 9.5, charge: true, boss: true, storm: true },
+  athlet: { hp: 220, dmg: 11, speed: 7.5, range: 2.0, aggro: 80, cd: 1.0, name: 'Champion Milon', money: [0, 0], r: 0.5, bossLike: true },
   satyr: { hp: 70, dmg: 12, speed: 8.5, range: 2.2, aggro: 24, cd: 1.2, name: 'Satyr', money: [5, 12], r: 0.5 },
   dryade: { hp: 60, dmg: 14, speed: 7, range: 2.4, aggro: 22, cd: 1.5, name: 'Dryade', money: [6, 14], r: 0.45 },
   eber: { hp: 90, dmg: 14, speed: 10, range: 2.0, aggro: 24, cd: 1.3, name: 'Wildeber', money: [4, 10], r: 0.8, top: 2.0 },
@@ -1468,6 +1460,9 @@ function spawnEnemy(type, x, z, over) {
   else if (type === 'bandit') model = makeHumanoid({ tunic: pick([0x3a2a1a, 0x4a3a2a, 0x2a2a2a]), hair: 0x1a1008, beard: true, weapon: 'sword', armor: 0x5a4a3a, veil: 0x3a2a1a });
   else if (type === 'guard') model = makeHumanoid({ tunic: 0x2a2a3a, armor: 0x8a7a5a, helmet: true, crest: 0x2a2a2a, shield: true, shieldCol: 0x6a5a3a, shieldEmblem: 0x2a2a2a, weapon: 'spear', greaves: true, pants: 0x1e1e26, scale: 1.12 });
   else if (type === 'soldat') model = makeHumanoid({ tunic: (over && over.col) || 0x8a1a1a, armor: 0x9a8a5a, helmet: true, crest: (over && over.col) || 0x8a1a1a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: (over && over.col) || 0x8a1a1a, cape: (over && over.col) || 0x8a1a1a, weapon: 'spear', greaves: true, pants: 0x2a2a2a });
+  else if (type === 'gigant') model = makeHumanoid({ skin: 0x8a7a6a, tunic: 0x5a4a3a, pants: 0x4a3a2a, armor: 0x6a6a5a, hair: 0x3a2a1a, beard: true, weapon: 'club', eyes: 0xffa040, scale: 3.0 });
+  else if (type === 'typhon') model = makeHumanoid({ skin: 0x2a4a2a, tunic: 0x1a2a1a, pants: 0x1a2a1a, armor: 0x2a3a2a, hair: 0x1a3a1a, snakes: true, eyes: 0xff2010, cape: 0x111111, weapon: 'axe', scale: 3.6 });
+  else if (type === 'athlet') model = makeHumanoid({ skin: 0xc98f5e, tunic: 0xc98f5e, pants: 0xf2ecdc, belt: 0xf2ecdc, beard: true, hair: 0x2a1a0e, wreath: true, scale: 1.1 });
   else if (type === 'satyr') model = makeHumanoid({ skin: 0xc99a6e, tunic: 0xc99a6e, pants: 0x5a3a22, hair: 0x3a2a1a, beard: true, horns: true, weapon: 'club' });
   else if (type === 'dryade') model = makeHumanoid({ skin: 0x7aa060, glow: 0x1a3a10, tunic: 0x4a7a3a, pants: 0x3a6a2a, hair: 0x2a6a1a, wreath: true, eyes: 0xb0ff80, weapon: 'staff' });
   else if (type === 'eber') model = makeBoar(0x4a3424, false);
@@ -1512,13 +1507,22 @@ function hurtPlayer(dmg, from) {
   if (player.blocking) {
     const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
     const dx = from.x - player.pos.x, dz = from.z - player.pos.z, d = Math.hypot(dx, dz) || 1;
-    if ((dx * fx + dz * fz) / d > 0.3) { dmg *= player.relics.includes('athene') ? 0.05 : 0.2; sfx('block'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, 'Geblockt', '#e8c46a'); if (player.stamina > 10) player.stamina -= 10; }
+    if ((dx * fx + dz * fz) / d > -0.1) {
+      if (clock.elapsedTime - (player.blockStart || 0) < 0.35) {
+        sfx('block'); floatText(player.pos.x, player.pos.y + 2.6, player.pos.z, 'Parade!', '#ffd24a', true);
+        if (from.def && !from.def.boss) { from.stunT = 1.5; floatText(from.x, from.y + 2.6, from.z, 'Betäubt', '#9ad0ff'); }
+        return;
+      }
+      if (player.stamina < 5) { dmg *= 0.6; floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, 'Schild durchbrochen!', '#ff9a7a'); }
+      else { dmg *= Math.max(0.02, (player.relics.includes('athene') ? 0.05 : 0.2) - 0.03 * upLvl('shield')); sfx('block'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, 'Geblockt', '#e8c46a'); player.stamina = Math.max(0, player.stamina - 10 * (1 - 0.12 * upLvl('shield'))); }
+    }
   }
   if (player.hasArmor) dmg *= 0.85;
   if (player.relics.includes('achilles')) dmg *= 0.8;
   if (player.gear.includes('hadeshelm')) dmg *= 0.7;
   dmg *= 1 - ARMORS[player.aTier || 0].red;
   dmg = Math.round(dmg);
+  if (OLY && OLY.ev === 'ringen' && player.hp - dmg < player.maxHp * 0.1) { player.hp = player.maxHp * 0.5; olyCleanup(); banner('Pankration verloren', 'Der Champion war heute stärker. Versuch es noch einmal!'); return; }
   player.hp -= dmg; player.lastHurt = clock.elapsedTime;
   $('damageFlash').style.opacity = 1; setTimeout(() => $('damageFlash').style.opacity = 0, 120);
   sfx('hurt');
@@ -1547,12 +1551,15 @@ function killEnemy(e) {
   e.dead = true; e.deadT = 0; e.respawn = 100;
   if (e.site && !isMine(townsState()[e.site]) && !isMember(townsState()[e.site])) { player.crimeKills = (player.crimeKills || 0) + 1; if (player.crimeKills % 2 === 0) addCrime(1); }
   if (e.def.hunter) { player.hunterKills = (player.hunterKills || 0) + 1; if (player.hunterKills % 3 === 0) addCrime(1); setTimeout(() => removeEnemy(e), 6000); }
+  if (OLY && e === OLY.foe) { const hpf = player.hp / player.maxHp; OLY.foe = null; olyCleanup(); olyResult('ringen', hpf, 'Sieg mit ' + Math.round(hpf * 100) + ' % Leben'); }
   if (e.isBountyBoss && S.bounty) { const rw = S.bounty.reward; banner('Kopfgeld kassiert!', e.def.name + ' ist erledigt – ' + rw + ' Drachmen'); addMoney(rw); S.bounty = null; updateQuestText(); save(); }
   const [a, b] = e.def.money; const m = Math.round(rr(a, b));
   if (m > 0) { player.money += m; floatText(e.x, e.y + 1.5, e.z, '+' + m + ' Dr', '#e8c46a'); sfx('coin'); }
   if (e.type === 'wolf' && S.stage === 4) { S.wolves++; updateQuestText(); if (S.wolves >= 5) { toast('Genug Wölfe besiegt! Zurück zur Pythia.', 'gold'); setStage(5); } }
   if (e.type === 'bandit' && S.stage === 7 && Math.hypot(e.home[0] - LOCS.banditen.x, e.home[1] - LOCS.banditen.z) < 40) { S.bandits++; updateQuestText(); if (S.bandits >= 4) { toast('Das Lager ist befreit! Zurück zu Leonidas.', 'gold'); setStage(8); } }
   if (e.type === 'minotaur') { banner('DER MINOTAUROS IST BESIEGT', 'Kehre nach Athen zurück, Held!'); if (S.stage === 10) setStage(11); S.minoDead = true; save(); }
+  if (e.type === 'gigant' && S.zeus === 2) { S.zeusKills = (S.zeusKills || 0) + 1; updateZeusText(); toast('Gigant gefallen (' + S.zeusKills + '/3)', 'gold'); if (S.zeusKills >= 3) setZeus(3); else save(); }
+  if (e.type === 'typhon' && S.zeus === 5) setTimeout(() => setZeus(6), 4500);
   if (e.def.boss && e.key) { banner(e.def.name + ' ist besiegt!', 'Öffne den Schatz am Ende der Halle.'); if (!S.bossDead.includes(e.key)) S.bossDead.push(e.key); sfx('quest'); save(); }
 }
 function updateEnemy(e, dt) {
@@ -1575,21 +1582,27 @@ function updateEnemy(e, dt) {
   let mvx = 0, mvz = 0, spd = 0;
   e.cd -= dt; e.atkAnim = Math.max(0, e.atkAnim - dt * 2.5);
   if (e.stoned > 0) { e.stoned -= dt; e.state = 'chase'; e.m.root.position.set(e.x, e.y, e.z); return; }
+  if (e.stunT > 0) { e.stunT -= dt; e.state = 'chase'; e.m.root.rotation.z = Math.sin(clock.elapsedTime * 20) * 0.08; return; }
   if (e.state === 'idle') {
     e.wt -= dt;
     if (e.wt <= 0) { e.wt = rr(3, 8); const a = rand() * 6.28, r = rand() * (D.charge || D.boss ? 5 : 14); e.tx = e.home[0] + Math.cos(a) * r; e.tz = e.home[1] + Math.sin(a) * r; }
     const tx = e.tx - e.x, tz = e.tz - e.z, td = Math.hypot(tx, tz);
     if (td > 0.8) { mvx = tx / td; mvz = tz / td; spd = D.speed * 0.3; }
     const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
-    if (d < D.aggro && !player.dead && !player.flying && !player.adminFly && !player.sailing && !(player.swimming && !D.fly) && homeD < 90 && Math.abs(P.y - e.y) < 12) e.state = 'chase';
+    if (d < D.aggro && !player.dead && !player.flying && !player.adminFly && !player.bird && !player.sailing && !(player.swimming && !D.fly) && homeD < 90 && Math.abs(P.y - e.y) < 12) e.state = 'chase';
   } else if (e.state === 'chase') {
     const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
-    if (player.dead || player.flying || player.adminFly || player.sailing || d > D.aggro * 2.5 || homeD > (D.hunter ? 1e9 : D.boss ? 40 : D.charge ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
+    if (player.dead || player.flying || player.adminFly || player.bird || player.sailing || d > D.aggro * 2.5 || homeD > (D.hunter ? 1e9 : D.boss ? 40 : D.charge ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
     else {
       if (D.charge) {
         e.chargeCd -= dt;
         if (e.chargeT > 0) { e.chargeT -= dt; mvx = Math.sin(e.yaw); mvz = Math.cos(e.yaw); spd = 17; if (d < 2.6 && !e.chargeHit) { e.chargeHit = true; if (tgtAlly) hurtAlly(tgtAlly, D.dmg * 1.2); else hurtPlayer(D.dmg * 1.2, e); player.knock = { x: mvx * 18, z: mvz * 18, t: 0.25 }; } }
         else if (e.chargeCd <= 0 && d > 7 && d < 20) { e.chargeT = 1.0; e.chargeCd = 6; e.chargeHit = false; e.yaw = Math.atan2(dx, dz); floatText(e.x, e.y + (D.top || 4) + 0.3, e.z, 'BRÜLL!', '#ff7050', true); }
+      }
+      if (D.storm) {
+        e.stormCd = (e.stormCd ?? 4) - dt; e.summonCd = (e.summonCd ?? 15) - dt;
+        if (e.stormCd <= 0 && d < 45) { e.stormCd = e.hp < e.maxHp * 0.4 ? 3.5 : 5.5; stormStrike(e); }
+        if (e.summonCd <= 0) { e.summonCd = 22; for (let k = 0; k < 2; k++) { const h = spawnEnemy('harpyie', e.x + rr(-6, 6), e.z + rr(-6, 6)); h.dungeon = e.dungeon; h.state = 'chase'; } floatText(e.x, e.y + 10, e.z, 'Kommt, meine Kinder!', '#ff9a7a', true); }
       }
       if (D.gaze) {
         e.gazeCd = (e.gazeCd ?? 5) - dt;
@@ -1623,7 +1636,7 @@ function updateEnemy(e, dt) {
   e.y = Math.max(groundAt(e.x, e.z), D.fly ? 0 : -99) + (D.fly ? 2.2 + Math.sin(clock.elapsedTime * 2 + e.x) * 0.4 - (e.wind > 0 ? 1.2 : 0) : 0);
   const r = e.m.root; r.position.set(e.x, e.y, e.z); r.rotation.y = e.yaw;
   const fs = e.flashT > 0 ? 1.12 : 1; e.flashT -= dt;
-  r.scale.setScalar(e.baseScale * fs);
+  r.scale.setScalar(e.baseScale * fs); r.rotation.z = 0;
   const m = e.m, t = clock.elapsedTime;
   if (m.centaur) { animateQuad(m, e.speedNow, dt); if (e.atkAnim > 0) { const k = 1 - e.atkAnim; m.armR.rotation.x = k < 0.35 ? lerp(-0.3, -2.7, k / 0.35) : lerp(-2.7, -0.4, (k - 0.35) / 0.65); } else m.armR.rotation.x = -0.5; }
   else if (m.wings) { const f = Math.sin(t * 12 + e.x) * 0.7; m.wings[0].rotation.z = f; m.wings[1].rotation.z = -f; }
@@ -1631,12 +1644,18 @@ function updateEnemy(e, dt) {
   else if (m.legs) { animateQuad(m, e.speedNow, dt); for (const h of (m.heads || [m.head])) h.rotation.x = e.atkAnim > 0 ? -Math.sin(e.atkAnim * Math.PI) * 0.6 : 0; }
   else animateHumanoid(m, e.speedNow, dt, { attack: e.atkAnim });
 }
-function canRevive(e) { return e.type !== 'minotaur' && !e.def.boss && !e.def.hunter && !e.bountyOf && !(e.site && isMine(townsState()[e.site])) && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
+function canRevive(e) { return e.type !== 'minotaur' && e.type !== 'gigant' && !e.def.boss && !e.def.hunter && !e.bountyOf && !(e.site && isMine(townsState()[e.site])) && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
 function revive(e) { e.dead = false; e.hp = e.maxHp; e.x = e.home[0]; e.z = e.home[1]; e.state = 'idle'; e.m.root.rotation.z = 0; e.m.root.visible = true; }
 
 // ---------- Spieler-Angriffe ----------
 function playerAttack() {
-  if (player.atkCd > 0 || dialog || player.dead || (player.swimming && !player.gear.includes('poseidon')) || player.blocking || player.stoned > 0 || player.sailing) return;
+  if (dialog || heroOpen || player.dead || (player.swimming && !player.gear.includes('poseidon') && !player.bird) || player.stoned > 0 || player.sailing) return;
+  if (OLY && OLY.ev === 'speer') { throwJavelin(); return; }
+  if (player.blocking) { shieldBash(); return; }
+  if (player.bird) { throwBlitz(true); return; }
+  if (player.blitzMode) { blitzStrike(); return; }
+  if (player.bowMode) { shootArrow(); return; }
+  if (player.atkCd > 0) return;
   player.atkCd = 0.55; player.atkAnim = 1;
   let fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
   const reach = (player.mounted ? (HORSES[player.horse].chariot ? 4.6 : 3.8) : 3.0) + (player.gear.includes('poseidon') ? 1.2 : 0);
@@ -1685,7 +1704,7 @@ function makeBolt(x, z) {
 function mount() {
   if (curD) { toast('Hier unten kann dein Pferd nicht hin.'); return; }
   if (player.flying || player.sailing) return;
-  if (player.swimming || race) { toast(race ? 'Beim Wettlauf kein Pferd!' : 'Im Wasser kann dein Pferd nicht kommen.'); return; }
+  if (player.swimming || (race && !race.mount)) { toast(race ? 'Beim Wettlauf kein Pferd!' : 'Im Wasser kann dein Pferd nicht kommen.'); return; }
   player.mounted = true; horse.root.visible = true; toast('Dein Pferd ist da. (R zum Absteigen)'); sfx('coin');
 }
 function dismount() { player.mounted = false; horse.root.visible = false; }
@@ -1696,7 +1715,7 @@ function refreshHeroLook() {
   hero.root.position.copy(p); hero.root.rotation.y = r; scene.add(hero.root);
   netSendLook();
 }
-function heroLook() { const gr = player.gear || []; return { tunic: 0x9b1c1c, armor: (player.aTier ? ARMORS[player.aTier].col : null) || (player.hasArmor ? 0xb98d3a : 0x7a5a3a), helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : 'sword', cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x3a2a1e, greaves: player.hasArmor || player.aTier >= 2, hair: 0x2a1a0e }; }
+function heroLook() { const gr = player.gear || []; const sk = (SKINS.find(k => k.id === player.skin) || SKINS[0]).look; return Object.assign({ tunic: 0x9b1c1c, armor: (player.aTier ? ARMORS[player.aTier].col : null) || (player.hasArmor ? 0xb98d3a : 0x7a5a3a), helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : 'sword', cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x3a2a1e, greaves: player.hasArmor || player.aTier >= 2, hair: 0x2a1a0e }, sk, player.bowMode ? { weapon: 'bow' } : player.blitzMode ? { weapon: 'keraunos' } : {}); }
 
 // ---------- Sammelobjekte ----------
 const ampGeo = (() => { const pts = []; const prof = [[0, 0], [0.18, 0.02], [0.3, 0.25], [0.36, 0.55], [0.3, 0.85], [0.14, 1.0], [0.1, 1.15], [0.16, 1.22], [0.0, 1.22]]; for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y)); return new THREE.LatheGeometry(pts, 12); })();
@@ -1792,6 +1811,7 @@ function drawMinimap() {
   ctx.font = '700 12px Alegreya Sans, sans-serif'; ctx.textAlign = 'center';
   for (const q2 of QUIZZERS) { if (S.quiz.includes(q2.id)) continue; const [mx, my] = toMini(q2.x, q2.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = '#1a3a5a'; ctx.beginPath(); ctx.arc(mx, my, 6, 0, 7); ctx.fill(); ctx.fillStyle = '#8fe0ff'; ctx.fillText('?', mx, my + 4); }
   for (const tv of TAVERNS) { const [mx, my] = toMini(tv.x, tv.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = '#c08040'; ctx.fillText('🍺', mx, my + 4); }
+  { const zt = zeusTarget(); if (zt) { let [mx, my] = toMini(zt.x, zt.z); const ddx = mx - S2 / 2, ddy = my - S2 / 2, dd = Math.hypot(ddx, ddy), mr = S2 / 2 - 10; if (dd > mr) { mx = S2 / 2 + ddx / dd * mr; my = S2 / 2 + ddy / dd * mr; } ctx.fillStyle = '#b07aff'; ctx.beginPath(); ctx.arc(mx, my, 5, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.stroke(); } }
   if (S.bounty) { let [mx, my] = toMini(S.bounty.x, S.bounty.z); const ddx = mx - S2 / 2, ddy = my - S2 / 2, dd = Math.hypot(ddx, ddy), mr = S2 / 2 - 10; if (dd > mr) { mx = S2 / 2 + ddx / dd * mr; my = S2 / 2 + ddy / dd * mr; } ctx.fillStyle = '#e0402a'; ctx.beginPath(); ctx.arc(mx, my, 5, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.stroke(); }
   for (const ch of CHESTS) { if (ch.opened) continue; const [mx, my] = toMini(ch.x, ch.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = ch.tier === 2 ? '#ffd24a' : '#d8b860'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 1; ctx.fillRect(mx - 3, my - 2.5, 6, 5); ctx.strokeRect(mx - 3, my - 2.5, 6, 5); }
   for (const e of enemies) { if (e.dead) continue; const [mx, my] = toMini(e.x, e.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 4) continue; ctx.fillStyle = e.type === 'minotaur' ? '#ff3a1a' : '#c0392b'; ctx.beginPath(); ctx.arc(mx, my, e.type === 'minotaur' ? 4 : 2.2, 0, 7); ctx.fill(); }
@@ -1877,6 +1897,17 @@ function drawOverlay(dt) {
     octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.7)'; octx.strokeText(f.text, s.x, s.y); octx.fillStyle = f.color; octx.fillText(f.text, s.x, s.y);
     octx.globalAlpha = 1;
   }
+  // Zeus-Marker
+  const zt = zeusTarget();
+  if (zt && !mapOpen) {
+    const s3 = project(zt.x, groundAt(zt.x, zt.z) + 5, zt.z), m3 = 40;
+    let x = s3.behind ? innerWidth - s3.x : s3.x, y = s3.behind ? innerHeight - m3 : s3.y;
+    x = clamp(x, m3, innerWidth - m3); y = clamp(y, m3, innerHeight - m3);
+    octx.fillStyle = '#b07aff'; octx.strokeStyle = '#1a0030'; octx.lineWidth = 2;
+    octx.beginPath(); octx.moveTo(x, y - 11); octx.lineTo(x + 8, y); octx.lineTo(x, y + 11); octx.lineTo(x - 8, y); octx.closePath(); octx.fill(); octx.stroke();
+    octx.font = '600 12px Alegreya Sans, sans-serif'; octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.6)'; const lb = '⚡ ' + Math.round(Math.hypot(zt.x - player.pos.x, zt.z - player.pos.z)) + ' m';
+    octx.strokeText(lb, x, y + 26); octx.fillStyle = '#e0c8ff'; octx.fillText(lb, x, y + 26);
+  }
   // Kopfgeld-Marker
   if (S.bounty && !curD && !mapOpen) {
     const b = S.bounty, s2 = project(b.x, groundAt(b.x, b.z) + 4, b.z), m2 = 40;
@@ -1906,11 +1937,6 @@ function drawOverlay(dt) {
       const t = Math.round(d) + ' m'; octx.strokeText(t, x, y + 26); octx.fillStyle = '#fff3d0'; octx.fillText(t, x, y + 26);
       octx.globalAlpha = 1;
     }
-  }
-  if (race) {
-    octx.font = '700 30px Cinzel, serif'; octx.lineWidth = 4; octx.strokeStyle = 'rgba(0,0,0,.7)';
-    const t = (race.limit - race.t).toFixed(1) + ' s'; octx.strokeText(t, innerWidth / 2, 80); octx.fillStyle = race.limit - race.t < 6 ? '#ff7a5a' : '#ffd24a'; octx.fillText(t, innerWidth / 2, 80);
-    octx.font = '600 15px Alegreya Sans, sans-serif'; octx.fillStyle = '#fff3d0'; octx.fillText(race.half ? 'Zurück zum Start!' : 'Zum Ziel am Ostende!', innerWidth / 2, 104);
   }
 }
 
@@ -2035,6 +2061,7 @@ function spawnDungeonEnemies() {
   }
 }
 function enterDungeon(def) {
+  if (def.req && !def.req()) { toast(def.reqMsg); return; }
   if (player.mounted) dismount();
   fadeTo(() => {
     curD = def;
@@ -2061,6 +2088,7 @@ function buildDungeons() {
     { key: 'hephaistos', name: 'Schmiede des Hephaistos', sub: 'Im glühenden Herzen des Vulkans', at: [L.hephTor.x, L.hephTor.z], theme: 'fire', rooms: 4, enemies: ['feuergeist', 'skelett'], boss: 'talos', reward: 'hephklinge' },
     { key: 'poseidon', name: 'Grotte des Poseidon', sub: 'Wo die Skylla lauert', at: [L.poseidonTor.x, L.poseidonTor.z], theme: 'sea', rooms: 4, enemies: ['triton'], boss: 'skylla', reward: 'poseidon' },
     { key: 'medusa', name: 'Hort der Medusa', sub: 'Schau ihr niemals in die Augen', at: [L.medusaTor.x, L.medusaTor.z], theme: 'stone', rooms: 4, enemies: ['schlangenkrieger', 'skelett'], boss: 'medusa', reward: 'pegasus' },
+    { key: 'typhon', name: 'Gipfel der Stürme', sub: 'Typhon, der Vater der Ungeheuer, erwartet dich', at: [L.typhonTor.x, L.typhonTor.z], theme: 'storm', rooms: 3, enemies: ['harpyie', 'schatten'], boss: 'typhon', reward: 'blitzvogel', req: () => S.zeus >= 5, reqMsg: 'Ein gewaltiger Sturm versperrt den Eingang. (Prüfungen des Zeus – frag Hermes in Olympia)' },
     { key: 'polyphem', name: 'Höhle des Polyphem', sub: 'Hier haust der Zyklop', at: [L.polyphemTor.x, L.polyphemTor.z], theme: 'cave', rooms: 3, enemies: ['wolf'], boss: 'zyklop', bossOver: { name: 'Polyphem', hp: 900, boss: true, money: [150, 150] } },
   ];
   for (const d of defs) { buildDungeonInterior(d); buildEntrance(d); }
@@ -2393,7 +2421,7 @@ function netSend(dt) {
   if (!NET.ws || NET.ws.readyState !== 1 || !NET.id) return;
   NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = 0.12;
   const P = player.pos;
-  const m = player.sailing ? 's' : player.flying ? 'p' : player.mounted ? 'h' : (player.swimming && player.gear.includes('poseidon')) ? 'k' : '';
+  const m = player.sailing ? 's' : (player.flying || player.bird) ? 'p' : player.mounted ? 'h' : (player.swimming && player.gear.includes('poseidon')) ? 'k' : '';
   const st = { t: 'st', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +player.yaw.toFixed(2), sp: +Math.min(60, player.speedNow).toFixed(1), m, atk: player.atkAnim > 0.5, d: curD ? curD.idx : -1 };
   const key = JSON.stringify(st), now = performance.now();
   if (key === NET.lastSt && now - (NET.lastStT || 0) < 1000) return;
@@ -2711,14 +2739,14 @@ function hurtAlly(a, dmg) {
 }
 function updateAllies(dt) {
   const P = player.pos, t = clock.elapsedTime;
-  const hidden = player.sailing || player.flying || player.adminFly;
+  const hidden = player.sailing || player.flying || player.adminFly || player.bird;
   allies.forEach((a, i) => {
     a.m.root.visible = !hidden;
     if (hidden) return;
     a.cd -= dt; a.atk = Math.max(0, a.atk - dt * 2.6);
     if (t - a.lastHit > 6) a.hp = Math.min(a.maxHp, a.hp + dt * 3);
     let tgt = null, best = 18;
-    for (const e of enemies) { if (e.dead || e.stoned > 0) continue; const d = Math.hypot(e.x - a.x, e.z - a.z); if (d < best && Math.hypot(e.x - P.x, e.z - P.z) < 30) { best = d; tgt = e; } }
+    for (const e of enemies) { if (e.dead || e.stoned > 0 || e.oly) continue; const d = Math.hypot(e.x - a.x, e.z - a.z); if (d < best && Math.hypot(e.x - P.x, e.z - P.z) < 30) { best = d; tgt = e; } }
     let tx, tz, spd = 0;
     if (tgt) {
       tx = tgt.x; tz = tgt.z;
@@ -3017,7 +3045,11 @@ addEventListener('keydown', (e) => {
   if (k === 'KeyF') { if (player.potions > 0 && player.hp < player.maxHp) { player.potions--; player.hp = Math.min(player.maxHp, player.hp + 60); sfx('drink'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, '+60', '#7aff8a'); } else if (player.potions <= 0) toast('Keine Ambrosia mehr. Kleon in Athen verkauft welche.'); }
   if (k === 'KeyQ') zeusBolt();
   if (k === 'KeyP') toggleAdmin();
-  if (adminOpen) return;
+  if (k === 'KeyI' || (k === 'Escape' && heroOpen)) { toggleHero(); return; }
+  if (adminOpen || heroOpen) return;
+  if (k === 'KeyX') cycleWeapon();
+  if (k === 'KeyV') throwBlitz(false);
+  if (k === 'KeyU') toggleBird();
   if (k === 'KeyT') toggleFly();
   if (k === 'KeyB') toggleShip();
   if (k === 'KeyG') medusaHead();
@@ -3040,9 +3072,476 @@ addEventListener('mousemove', (e) => {
   if (locked || mouse.left) { const mx = e.movementX || 0, my = e.movementY || 0; if (Math.abs(mx) > 300 || Math.abs(my) > 300) return; camYaw -= mx * 0.0026; camPitch = clamp(camPitch + my * 0.0022, -0.35, 1.25); }
 });
 addEventListener('wheel', (e) => { camZoom = clamp(camZoom * (e.deltaY > 0 ? 1.1 : 0.9), 0.45, 2.2); }, { passive: true });
-document.addEventListener('pointerlockchange', () => { paused = started && document.pointerLockElement !== canvas && !dialog && !mapOpen && !adminOpen && !NET.chatOpen; $('pause').classList.toggle('hidden', !paused); });
+document.addEventListener('pointerlockchange', () => { paused = started && document.pointerLockElement !== canvas && !dialog && !mapOpen && !adminOpen && !heroOpen && !NET.chatOpen && !TOUCH.on; $('pause').classList.toggle('hidden', !paused); });
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeOverlay(); });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.left = mouse.right = false; });
+
+// ============================================================
+// Heldenmenü (Upgrades, Skins, Ausrüstung), Bogen, Schild, Olympische Spiele
+// ============================================================
+const UPGRADES = {
+  hp: { name: 'Lebenskraft', desc: '+15 maximales Leben', base: 60 },
+  dmg: { name: 'Stärke', desc: '+3 Nahkampfschaden', base: 70 },
+  st: { name: 'Ausdauer', desc: '−10 % Ausdauerverbrauch beim Sprinten', base: 50 },
+  spd: { name: 'Schnelligkeit', desc: '+4 % Laufgeschwindigkeit', base: 60 },
+  bow: { name: 'Bogenschießen', desc: '+5 Pfeilschaden', base: 60 },
+  shield: { name: 'Schildkunde', desc: 'Blocken hält mehr ab und kostet weniger Ausdauer', base: 50 },
+};
+const SKINS = [
+  { id: 'standard', name: 'Held von Athen', cost: 0, look: {} },
+  { id: 'athen', name: 'Athener Blau', cost: 120, look: { tunic: 0x1c3a7a, cape: 0xe8e0cc, crest: 0x1c3a7a, shieldEmblem: 0xe8e0cc } },
+  { id: 'sparta', name: 'Spartaner', cost: 120, look: { tunic: 0x8e1717, cape: 0x8e1717, crest: 0xa01818, shieldEmblem: 0x8a1a1a, beard: true } },
+  { id: 'meer', name: 'Meereswächter', cost: 250, look: { tunic: 0x1a6a7a, armor: 0x3a9a9a, cape: 0x1a4a6a, crest: 0x60d0ff, shieldCol: 0x3a9a9a, shieldEmblem: 0x1a4a6a } },
+  { id: 'schatten', name: 'Schattenkrieger', cost: 300, look: { tunic: 0x1a1a22, armor: 0x2a2a34, helmetCol: 0x1a1a22, cape: 0x0a0a10, crest: 0x6a1a8a, shieldCol: 0x2a2a34, shieldEmblem: 0x6a1a8a, pants: 0x101014 } },
+  { id: 'gold', name: 'Goldener Held', cost: 450, look: { tunic: 0xf2ecdc, armor: 0xe8c46a, helmetCol: 0xe8c46a, cape: 0xe8c46a, crest: 0xffffff, shieldCol: 0xe8c46a, shieldEmblem: 0xffffff } },
+  { id: 'olympia', name: 'Olympiasieger', unlock: 'Gewinne in Olympia alle 5 Goldmedaillen', look: { tunic: 0xffffff, cape: 0xe8c46a, crest: 0x5a7a2a, armor: 0xf2ecdc, shieldEmblem: 0x5a7a2a } },
+  { id: 'hades', name: 'Herr der Unterwelt', unlock: 'Besiege Kerberos in der Unterwelt', look: { tunic: 0x1a1a1a, armor: 0x2a2a34, helmetCol: 0x2a2a34, cape: 0x1a3a2a, crest: 0x40ff90, shieldEmblem: 0x40ff90 } },
+];
+function skinUnlocked(sk) { if (sk.id === 'olympia') return OLY_EVENTS.every(e => (S.olympia[e.id] || 0) === 3); if (sk.id === 'hades') return player.gear.includes('hadeshelm'); return true; }
+const upLvl = (k) => (player.up && player.up[k]) || 0;
+const bowDamage = () => 12 + upLvl('bow') * 5 + WEAPONS[player.wTier || 0].dmg * 0.5;
+
+let heroOpen = false, heroTab = 'up';
+function toggleHero() {
+  heroOpen = !heroOpen;
+  $('heroPanel').classList.toggle('hidden', !heroOpen);
+  if (heroOpen) { for (const k in keys) keys[k] = false; if (document.pointerLockElement) document.exitPointerLock(); renderHero(); }
+}
+function renderHero() {
+  const body = $('heroBody'); body.textContent = '';
+  const tabs = document.createElement('div'); tabs.className = 'htabs';
+  for (const [id, lab] of [['up', 'Upgrades'], ['skin', 'Skins'], ['gear', 'Ausrüstung'], ['oly', 'Olympia']]) tabs.appendChild(adminBtn(lab, () => { heroTab = id; renderHero(); }, heroTab === id ? 'on' : ''));
+  body.appendChild(tabs);
+  const info = document.createElement('div'); info.className = 'ahint'; info.textContent = '⚱ ' + player.money + ' Drachmen'; body.appendChild(info);
+  const row = (label, btn) => { const r = document.createElement('div'); r.className = 'arow'; const s = document.createElement('span'); s.textContent = label; r.appendChild(s); if (btn) r.appendChild(btn); body.appendChild(r); };
+  if (heroTab === 'up') {
+    for (const [k, u] of Object.entries(UPGRADES)) {
+      const l = upLvl(k), cost = u.base * (l + 1);
+      row(u.name + ' ' + '▰'.repeat(l) + '▱'.repeat(5 - l) + ' – ' + u.desc, l >= 5 ? null : adminBtn('Stufe ' + (l + 1) + ': ' + cost + ' Dr', () => {
+        if (!spend(cost)) return;
+        player.up[k] = l + 1;
+        if (k === 'hp') { player.maxHp += 15; player.hp += 15; }
+        toast(u.name + ' Stufe ' + (l + 1) + '!', 'gold'); save(); renderHero();
+      }));
+    }
+  } else if (heroTab === 'skin') {
+    for (const sk of SKINS) {
+      const own = player.skins.includes(sk.id), unl = skinUnlocked(sk), active = player.skin === sk.id;
+      let btn;
+      if (active) btn = adminBtn('✔ Angelegt', () => { }, 'on');
+      else if (own || (sk.unlock && unl)) btn = adminBtn('Anlegen', () => { if (!player.skins.includes(sk.id)) player.skins.push(sk.id); player.skin = sk.id; refreshHeroLook(); save(); renderHero(); });
+      else if (sk.unlock) btn = adminBtn('🔒 gesperrt', () => toast(sk.unlock));
+      else btn = adminBtn('Kaufen: ' + sk.cost + ' Dr', () => { if (spend(sk.cost)) { player.skins.push(sk.id); player.skin = sk.id; refreshHeroLook(); toast('Neuer Skin: ' + sk.name, 'gold'); save(); renderHero(); } });
+      row(sk.name + (sk.unlock && !unl ? ' – ' + sk.unlock : ''), btn);
+    }
+  } else if (heroTab === 'gear') {
+    row('Waffe: ' + WEAPONS[player.wTier || 0].name + ' (' + Math.round(playerDamage()) + ' Schaden)');
+    row('Bogen: ' + Math.round(bowDamage()) + ' Schaden pro Pfeil – Taste X / 🏹 zum Wechseln');
+    row('Rüstung: ' + ARMORS[player.aTier || 0].name + ' (−' + Math.round(ARMORS[player.aTier || 0].red * 100) + ' % Schaden)');
+    row('Leben: ' + Math.ceil(player.hp) + ' / ' + player.maxHp);
+    row('Reittier: ' + HORSES[player.horse || 'gaul'].name + (player.shipTier ? ' · Schiff: ' + SHIPS[player.shipTier].name : ''));
+    row('Relikte: ' + (player.relics.length ? player.relics.map(k => RELICS[k].name).join(', ') : 'keine'));
+    row('Göttliche Schätze: ' + (player.gear.length ? player.gear.map(k => GEAR[k].name).join(', ') : 'keine'));
+    row('Gefolge: ' + (allies.length ? allies.map(a => a.def.name).join(', ') : 'niemand'));
+  } else {
+    for (const ev of OLY_EVENTS) row(ev.name + ': ' + MEDALS[S.olympia[ev.id] || 0] + ' – ' + ev.goal);
+    row('Alle 5 Gold schalten den Skin „Olympiasieger“ frei. Melde dich beim Kampfrichter im Stadion von Olympia.');
+  }
+}
+
+// ---------- Bogen ----------
+const arrows = [];
+const ARROW_GEO = new THREE.CylinderGeometry(0.025, 0.025, 0.9, 5); ARROW_GEO.rotateX(Math.PI / 2);
+const ARROW_TIP = new THREE.ConeGeometry(0.06, 0.18, 5); ARROW_TIP.rotateX(Math.PI / 2); ARROW_TIP.translate(0, 0, 0.5);
+function toggleBow() {
+  if (player.sailing) return;
+  player.bowMode = !player.bowMode; if (player.bowMode) player.blitzMode = false; refreshHeroLook();
+  document.body.classList.toggle('bow', player.bowMode);
+  toast(player.bowMode ? '🏹 Bogen bereit – zielen mit der Kamera, Angriff zum Schießen' : '⚔ Schwert gezogen');
+}
+const _cdir = new V3(), _cr = new V3();
+function shootArrow() {
+  if (player.atkCd > 0) return;
+  if (OLY && OLY.ev === 'bogen') { if (OLY.arrows <= 0) return; OLY.arrows--; }
+  player.atkCd = 0.6; player.atkAnim = 1; sfx('swing');
+  camera.getWorldDirection(_cdir);
+  _cr.set(Math.cos(camYaw), 0, -Math.sin(camYaw));
+  const o = new V3(player.pos.x, player.pos.y + (player.mounted ? 2.9 : 1.6), player.pos.z).addScaledVector(_cr, 0.3);
+  let target = camera.position.clone().addScaledVector(_cdir, 80);
+  let best = 0.087;
+  for (const e of enemies) {
+    if (e.dead || e.oly === false) continue;
+    const c = new V3(e.x, e.y + (e.def.top || 2) * 0.6, e.z), v = c.clone().sub(camera.position), d = v.length();
+    if (d > 70) continue;
+    const ang = Math.acos(clamp(v.normalize().dot(_cdir), -1, 1));
+    if (ang < best) { best = ang; target = c; }
+  }
+  if (OLY && OLY.ev === 'bogen') { let bt = 0.05; for (const tg of OLY.targets) { const c = new V3(tg.x, tg.y, tg.z), v = c.clone().sub(camera.position); const ang = Math.acos(clamp(v.normalize().dot(_cdir), -1, 1)); if (ang < bt) { bt = ang; target = c.add(new V3(0, (c.x - o.x) * (c.x - o.x) * 9.8 / (2 * 58 * 58), 0)); } } }
+  const vel = target.sub(o).normalize().multiplyScalar(58);
+  player.yaw = Math.atan2(vel.x, vel.z);
+  const g = new THREE.Group(); g.add(new THREE.Mesh(ARROW_GEO, M.wood)); g.add(new THREE.Mesh(ARROW_TIP, lam(0xd8d8d0)));
+  g.position.copy(o); scene.add(g);
+  arrows.push({ g, vel, t: 4, stuck: 0, dmg: bowDamage() });
+}
+const _ap = new V3();
+function updateArrows(dt) {
+  for (let i = arrows.length - 1; i >= 0; i--) {
+    const a = arrows[i];
+    if (a.stuck > 0) { a.stuck -= dt; if (a.stuck <= 0) { scene.remove(a.g); arrows.splice(i, 1); } continue; }
+    a.t -= dt; _ap.copy(a.g.position);
+    if (!a.blitz) a.vel.y -= 9.8 * dt; a.g.position.addScaledVector(a.vel, dt);
+    a.g.quaternion.setFromUnitVectors(new V3(0, 0, 1), a.vel.clone().normalize());
+    const p = a.g.position;
+    let hit = false;
+    if (OLY && OLY.ev === 'bogen') for (const tg of OLY.targets) {
+      if (_ap.x < tg.x && p.x >= tg.x) {
+        const k = (tg.x - _ap.x) / (p.x - _ap.x), yy = _ap.y + (p.y - _ap.y) * k, zz = _ap.z + (p.z - _ap.z) * k;
+        const off = Math.hypot(yy - tg.y, zz - tg.z);
+        if (off < 1.3) { const pts = Math.round((off < 0.35 ? 10 : off < 0.8 ? 6 : 3) * tg.mul); OLY.score += pts; floatText(tg.x, tg.y + 1.8, tg.z, '+' + pts, off < 0.35 ? '#ffd24a' : '#fff', off < 0.35); sfx('coin'); p.set(tg.x - 0.1, yy, zz); hit = true; }
+      }
+    }
+    if (!hit) for (const e of enemies) {
+      if (e.dead) continue;
+      if (Math.hypot(e.x - p.x, e.z - p.z) < (e.def.hitR || 0.3) + (a.blitz ? 1 : 0.45) && p.y > e.y - 0.2 && p.y < e.y + (e.def.top || 2.2)) { if (a.blitz) blitzExplode(p); else damageEnemy(e, a.dmg * rr(0.9, 1.1)); hit = true; scene.remove(a.g); arrows.splice(i, 1); break; }
+    }
+    if (hit && arrows[i] === a) { a.stuck = 3; continue; }
+    if (hit) continue;
+    if (p.y < groundAt(p.x, p.z) || a.t <= 0) { if (a.blitz) { if (a.t > 0) blitzExplode(p); scene.remove(a.g); arrows.splice(i, 1); continue; } a.stuck = 4; }
+  }
+}
+
+// ---------- Schild ----------
+function shieldBash() {
+  if (player.atkCd > 0 || player.stamina < 12) return;
+  player.atkCd = 0.9; player.stamina -= 12; sfx('block');
+  const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
+  let n = 0;
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const dx = e.x - player.pos.x, dz = e.z - player.pos.z, d = Math.hypot(dx, dz);
+    if (d > 2.8 + (e.def.hitR || 0.3) || (d > 0.8 && (dx * fx + dz * fz) / d < 0.3)) continue;
+    damageEnemy(e, 4 + upLvl('shield') * 2); n++;
+    if (!e.def.boss) { e.stunT = 1.3; floatText(e.x, e.y + 2.6, e.z, 'Betäubt', '#9ad0ff'); const k = 3 / (d || 1); const q = { x: e.x + dx * k, z: e.z + dz * k }; if (groundAt(q.x, q.z) > -0.5) { resolveCollisions(q, e.def.r); e.x = q.x; e.z = q.z; } }
+  }
+  floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, n ? 'Schildstoß!' : 'Schildstoß', '#e8c46a');
+}
+
+// ---------- Olympische Spiele ----------
+const MEDALS = ['–', '🥉 Bronze', '🥈 Silber', '🥇 Gold'];
+const OLY_EVENTS = [
+  { id: 'lauf', name: 'Stadionlauf', goal: 'Hin und zurück: Gold unter 25 s, Silber unter 28 s, Bronze unter 32 s', medal: (t) => t <= 25 ? 3 : t <= 28 ? 2 : t <= 32 ? 1 : 0 },
+  { id: 'wagen', name: 'Wagenrennen', goal: '2 Runden im Streitwagen: Gold unter 17 s, Silber unter 21 s, Bronze unter 26 s', medal: (t) => t <= 17 ? 3 : t <= 21 ? 2 : t <= 26 ? 1 : 0 },
+  { id: 'speer', name: 'Speerwurf', goal: '3 Würfe: Gold ab 85 m, Silber ab 70 m, Bronze ab 50 m', medal: (d) => d >= 85 ? 3 : d >= 70 ? 2 : d >= 50 ? 1 : 0 },
+  { id: 'bogen', name: 'Bogenschießen', goal: '8 Pfeile auf 3 Scheiben: Gold ab 100, Silber ab 65, Bronze ab 35 Punkten', medal: (p) => p >= 100 ? 3 : p >= 65 ? 2 : p >= 35 ? 1 : 0 },
+  { id: 'ringen', name: 'Pankration', goal: 'Besiege den Champion: Gold mit über 60 % Leben, Silber über 30 %', medal: (h) => h >= 0.6 ? 3 : h >= 0.3 ? 2 : 1 },
+];
+let OLY = null;
+function stadium() { const [sx, sz] = SPOTS.raceStart, [ex] = SPOTS.raceEnd; return { sx, sz, ex, cx: (sx + ex) / 2 }; }
+function talkJudge() {
+  const W = 'Kampfrichter';
+  if (race || OLY) { talk([{ who: W, text: 'Ein Wettkampf läuft gerade! Gib alles!', opts: [{ label: 'Wettkampf abbrechen', fn: () => olyAbort('Abgebrochen.') }, { label: 'Weiter', fn: () => { } }] }]); return; }
+  talk([{ who: W, text: 'Willkommen bei den Olympischen Spielen! Zeig, was in dir steckt – für jede Medaille gibt es Drachmen und Ruhm. Gesamt: ' + OLY_EVENTS.filter(e => S.olympia[e.id] === 3).length + '/5 Gold.', opts: OLY_EVENTS.map(ev => ({ label: ev.name + ' – ' + MEDALS[S.olympia[ev.id] || 0], fn: () => talk([{ who: W, text: ev.name + ': ' + ev.goal + '.', opts: [{ label: 'Los geht\'s!', fn: () => olyStart(ev.id) }, { label: 'Zurück', fn: talkJudge }] }]) })).concat([{ label: 'Auf Wiedersehen', fn: () => { } }]) }]);
+}
+function olyStart(id) {
+  const st = stadium();
+  if (player.flying) stopFlying(true);
+  if (id !== 'wagen' && player.mounted) dismount();
+  player.pos.set(st.sx + 1, groundAt(st.sx + 1, st.sz), st.sz); player.vy = 0; player.yaw = Math.PI / 2; camYaw = -Math.PI / 2; camPitch = 0.2;
+  player.stamina = 100; player.hp = player.maxHp;
+  if (id === 'lauf' || id === 'wagen') {
+    const legs = id === 'lauf' ? [SPOTS.raceEnd, SPOTS.raceStart] : [SPOTS.raceEnd, SPOTS.raceStart, SPOTS.raceEnd, SPOTS.raceStart];
+    race = { t: 0, legs, leg: 0, limit: id === 'lauf' ? 40 : 35, ev: id, mount: id === 'wagen' };
+    if (id === 'wagen') { race.prevHorse = player.horse; player.horse = 'wagen'; setHorseModel(); mount(); }
+    toast(id === 'lauf' ? 'Los! Zum Ostende und zurück!' : 'Los! Zwei Runden – Ostende, Start, Ostende, Start!', 'gold'); sfx('quest');
+    return;
+  }
+  OLY = { ev: id, t: 0 };
+  if (id === 'speer') { Object.assign(OLY, { tries: 3, best: 0, m: 0, dir: 1, jav: null, lock: true }); toast('Tippe/klicke Angriff, wenn die Kraftanzeige voll ist!', 'gold'); }
+  if (id === 'bogen') {
+    Object.assign(OLY, { arrows: 8, score: 0, lock: true, targets: [] });
+    if (!player.bowMode) toggleBow();
+    [[20, -4, 1], [35, 3, 1.5], [50, -2, 2]].forEach(([dx, dz, mul]) => {
+      const x = st.sx + dx, z = st.sz + dz, y = groundAt(x, z) + 1.6, g = new THREE.Group();
+      const disc = (r, col, off) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.1, 24), lam(col)); m.rotation.z = Math.PI / 2; m.position.x = off; g.add(m); };
+      disc(1.3, 0xf2ecdc, 0); disc(0.8, 0xb02020, -0.03); disc(0.35, 0xe8c46a, -0.06);
+      const post = new THREE.Mesh(G.cyl8, M.wood); post.scale.set(0.15, 1.6, 0.15); post.position.set(0.1, -0.8, 0); g.add(post);
+      g.position.set(x, y, z); scene.add(g);
+      OLY.targets.push({ x: x - 0.06, y, z, mul, g });
+    });
+    toast('8 Pfeile, 3 Scheiben – weiter entfernte bringen mehr Punkte!', 'gold');
+  }
+  if (id === 'ringen') {
+    player.pos.set(st.cx - 4, groundAt(st.cx - 4, st.sz), st.sz); camYaw = -Math.PI / 2;
+    if (player.bowMode) toggleBow();
+    const foe = spawnEnemy('athlet', st.cx + 4, st.sz); foe.oly = true; foe.state = 'chase'; OLY.foe = foe;
+    toast('Pankration! Besiege den Champion – ohne zu fallen!', 'gold');
+  }
+  sfx('quest');
+}
+function olyCleanup() {
+  if (!OLY) return;
+  if (OLY.targets) for (const t of OLY.targets) scene.remove(t.g);
+  if (OLY.jav) scene.remove(OLY.jav.m);
+  if (OLY.foe && enemies.includes(OLY.foe)) removeEnemy(OLY.foe);
+  OLY = null;
+}
+function olyAbort(msg) {
+  if (race) { if (race.mount) { dismount(); player.horse = race.prevHorse || 'gaul'; setHorseModel(); } race = null; }
+  olyCleanup(); toast(msg);
+}
+function olyResult(id, value, text) {
+  const ev = OLY_EVENTS.find(e => e.id === id), medal = ev.medal(value), prev = S.olympia[id] || 0;
+  banner(medal ? MEDALS[medal] + ' – ' + ev.name : ev.name + ': keine Medaille', text);
+  if (medal > prev) {
+    const prize = [0, 25, 45, 80], gain = prize[medal] - prize[prev];
+    S.olympia[id] = medal; addMoney(gain); sfx('quest');
+    if (OLY_EVENTS.every(e => S.olympia[e.id] === 3) && S.zeus === 1) setTimeout(() => setZeus(2), 9000);
+    if (OLY_EVENTS.every(e => S.olympia[e.id] === 3)) setTimeout(() => banner('OLYMPIASIEGER!', 'Alle 5 Goldmedaillen – der Skin „Olympiasieger“ ist freigeschaltet!'), 4500);
+  }
+  save();
+}
+function updateOly(dt) {
+  const hud = $('olyHud');
+  if (race && race.ev) {
+    hud.textContent = (race.ev === 'lauf' ? '🏃 Stadionlauf' : '🐎 Wagenrennen') + ' · ' + race.t.toFixed(1) + ' s · Etappe ' + Math.min(race.leg + 1, race.legs.length) + '/' + race.legs.length;
+    return;
+  }
+  if (!OLY) { if (hud.textContent) hud.textContent = ''; return; }
+  OLY.t += dt;
+  if (OLY.ev === 'speer') {
+    if (!OLY.jav) { OLY.m += OLY.dir * dt * 1.5; if (OLY.m > 1) { OLY.m = 1; OLY.dir = -1; } if (OLY.m < 0) { OLY.m = 0; OLY.dir = 1; } }
+    else {
+      const j = OLY.jav; j.v.y -= 9.8 * dt; j.m.position.addScaledVector(j.v, dt); j.m.quaternion.setFromUnitVectors(new V3(0, 0, 1), j.v.clone().normalize());
+      if (j.m.position.y <= groundAt(j.m.position.x, j.m.position.z)) {
+        const d = j.m.position.x - stadium().sx;
+        OLY.best = Math.max(OLY.best, d); floatText(j.m.position.x, j.m.position.y + 1.5, j.m.position.z, d.toFixed(1) + ' m', '#ffd24a', true);
+        OLY.tries--; const m = j.m; setTimeout(() => scene.remove(m), 2500); OLY.jav = null;
+        if (OLY.tries <= 0) { const b = OLY.best; olyCleanup(); olyResult('speer', b, 'Bester Wurf: ' + b.toFixed(1) + ' m'); return; }
+      }
+    }
+    const n = 20, f = Math.round(OLY.m * n);
+    hud.textContent = '🗡 Speerwurf · Würfe: ' + OLY.tries + ' · Bester: ' + OLY.best.toFixed(1) + ' m · Kraft ' + '█'.repeat(f) + '░'.repeat(n - f);
+  } else if (OLY.ev === 'bogen') {
+    hud.textContent = '🏹 Bogenschießen · Pfeile: ' + OLY.arrows + ' · Punkte: ' + OLY.score;
+    if (OLY.arrows <= 0 && !arrows.some(a => a.stuck <= 0)) { OLY.endT = (OLY.endT || 0) + dt; if (OLY.endT > 1) { const sc = OLY.score; olyCleanup(); olyResult('bogen', sc, sc + ' Punkte'); } }
+  } else if (OLY.ev === 'ringen') {
+    hud.textContent = '🤼 Pankration · Champion: ' + Math.max(0, Math.ceil(OLY.foe.hp)) + ' · Du: ' + Math.ceil(player.hp) + '/' + player.maxHp;
+  }
+}
+function throwJavelin() {
+  if (!OLY || OLY.jav || OLY.tries <= 0) return;
+  player.atkAnim = 1; sfx('swing');
+  const q = OLY.m, v = 14 + q * 18, a = 40 * Math.PI / 180;
+  const m = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6), M.wood); shaft.rotation.x = Math.PI / 2; m.add(shaft);
+  const tip = new THREE.Mesh(G.cone, lam(0xd8d8d0)); tip.scale.set(0.1, 0.3, 0.1); tip.rotation.x = Math.PI / 2; tip.position.z = 1.4; m.add(tip);
+  m.position.set(player.pos.x + 0.5, player.pos.y + 1.8, player.pos.z); scene.add(m);
+  OLY.jav = { m, v: new V3(Math.cos(a) * v, Math.sin(a) * v, 0) };
+  floatText(player.pos.x, player.pos.y + 2.6, player.pos.z, Math.round(q * 100) + ' % Kraft', q > 0.9 ? '#ffd24a' : '#fff');
+}
+
+// ============================================================
+// Nebenquest-Reihe: Die Prüfungen des Zeus – Keraunos & Blitzadler
+// ============================================================
+GEAR.keraunos = { name: 'Keraunos – Blitz des Zeus', desc: 'X: Blitzwaffe wählen (Schlag mit Kettenblitz) · V: Blitz werfen' };
+GEAR.blitzvogel = { name: 'Gestalt des Blitzadlers', desc: 'U: Verwandle dich in den Blitzadler – fliege und schleudere Blitze' };
+THEMES.storm = { wall: 0x2a2e3a, floor: 0x22252e, col: 0x4a5060, fire: 0x9ad0ff, light: 0xa8ccff, H: 10, pool: 0x3a6aff };
+const ZEUS_ALTARS = [
+  { name: 'Altar von Dodona', x: -700, z: -480 },
+  { name: 'Altar auf dem Lykaion', x: -380, z: 470 },
+  { name: 'Altar im Ida-Gebirge', x: 540, z: 630 },
+];
+const ZEUS_STEPS = [
+  () => 'Sprich mit Hermes beim Zeustempel in Olympia.',
+  () => 'Gewinne bei den Olympischen Spielen alle 5 Goldmedaillen (' + OLY_EVENTS.filter(e => S.olympia[e.id] === 3).length + '/5).',
+  () => 'Besiege die 3 Giganten am Fuß des Olymp (' + (S.zeusKills || 0) + '/3).',
+  () => 'Entzünde die drei Altäre des Zeus: Dodona, Lykaion und Ida (' + (S.altars || []).length + '/3).',
+  () => 'Kehre zum Schrein des Zeus auf dem Gipfel des Olymp zurück.',
+  () => 'Letzte Prüfung: Besiege Typhon im Gipfel der Stürme (Eingang am Hang des Olymp). Sehr schwer!',
+  () => 'Du bist Champion des Zeus! (U: Blitzadler · V: Blitz werfen)',
+];
+let hermesNPC = null;
+function buildZeusQuest() {
+  const L = LOCS.olympia, sp = findSpotNear(L, 18, 45, 2.5) || [L.x - 14, L.z - 12];
+  hermesNPC = addNPC('Hermes, der Götterbote', sp[0], sp[1], { tunic: 0xf2ecdc, pants: 0xe8e0cc, helmet: true, helmetCol: 0xe8c46a, crest: 0xffffff, cape: 0xe8c46a, weapon: 'staff', skin: 0xe0b08a }, talkHermes);
+  ZEUS_ALTARS.forEach((A, i) => {
+    let x = A.x, z = A.z;
+    for (let k = 0; k < 200 && heightAt(x, z) < 3; k++) { x = A.x + rr(-60, 60); z = A.z + rr(-60, 60); }
+    A.x = x; A.z = z; reserve(x, z, 4);
+    const f = new Frame(x, z, 0);
+    f.box(M.marble2, 0, -1, 0, 2.6, 2.1, 2.6, true); f.box(M.marble, 0, 1.1, 0, 2.9, 0.3, 2.9);
+    f.put(G.cyl, M.bronze, 0, 1.45, 0, 0, 0, 0, 1.6, 0.4, 1.6);
+    for (let c = 0; c < 4; c++) { const a = c / 4 * 6.28 + 0.78; f.put(G.col, M.marble, Math.cos(a) * 3, 2.2, Math.sin(a) * 3, 0, 0, 0, 0.7, 4.4, 0.7); circleCol(x + Math.cos(a) * 3, z + Math.sin(a) * 3, 0.45); }
+    A.fire = new THREE.Mesh(G.cone, lam(0x9ad0ff, 0x4aa0ff)); A.fire.position.set(x, f.y + 2.4, z); A.fire.scale.set(0.9, 1.6, 0.9); A.fire.visible = false; scene.add(A.fire); fires.push(A.fire);
+    interactables.push({ pos: () => new V3(x, heightAt(x, z), z), label: 'Altar des Zeus entzünden', r: 3.6, active: () => S.zeus === 3 && !S.altars.includes(i), fn: () => {
+      S.altars.push(i); A.fire.visible = true; flash = 0.8; sfx('zap'); makeBolt(x, z);
+      toast(A.name + ' brennt! (' + S.altars.length + '/3)', 'gold');
+      if (S.altars.length >= 3) setZeus(4); else { updateZeusText(); save(); }
+    } });
+  });
+}
+function setZeus(n) {
+  S.zeus = n; sfx('quest');
+  const msg = { 1: 'Die Prüfungen des Zeus beginnen!', 2: 'Hermes: „Zeus ist beeindruckt. Nun bezwinge die Giganten!“', 3: 'Die Giganten sind gefallen. Entzünde die heiligen Altäre!', 4: 'Die Altäre brennen. Zeus erwartet dich auf dem Olymp!', 5: 'Zeus gab dir den Keraunos. Nur noch Typhon steht dir im Weg …', 6: 'CHAMPION DES ZEUS' };
+  if (msg[n]) banner('⚡ Prüfungen des Zeus', msg[n]);
+  if (n === 2) spawnGiants();
+  updateZeusText(); save();
+}
+function spawnGiants() {
+  for (const e of enemies.filter(e => e.type === 'gigant')) removeEnemy(e);
+  const left = 3 - (S.zeusKills || 0);
+  const spots = [[40, -590], [170, -600], [90, -560]];
+  for (let i = 0; i < left; i++) { let [x, z] = spots[i]; for (let k = 0; k < 50 && heightAt(x, z) < 3; k++) { x = spots[i][0] + rr(-40, 40); z = spots[i][1] + rr(-40, 40); } spawnEnemy('gigant', x, z); }
+}
+function updateZeusText() { const el = $('zeusText'); if (el) el.textContent = S.zeus > 0 && S.zeus < 6 ? '⚡ ' + ZEUS_STEPS[S.zeus]() : ''; }
+function zeusTarget() {
+  if (!S.zeus || S.zeus >= 6 || curD) return null;
+  const P = player.pos, near = (arr) => arr.reduce((b, a) => (!b || Math.hypot(a.x - P.x, a.z - P.z) < Math.hypot(b.x - P.x, b.z - P.z) ? a : b), null);
+  if (S.zeus === 1) return { x: SPOTS.judge[0], z: SPOTS.judge[1] };
+  if (S.zeus === 2) { const g = near(enemies.filter(e => e.type === 'gigant' && !e.dead)); return g ? { x: g.x, z: g.z } : null; }
+  if (S.zeus === 3) return near(ZEUS_ALTARS.filter((A, i) => !S.altars.includes(i)));
+  if (S.zeus === 4) return { x: SPOTS.shrine[0], z: SPOTS.shrine[1] };
+  if (S.zeus === 5) { const d = DUNGEONS.find(d => d.key === 'typhon'); return d ? { x: d.at[0], z: d.at[1] } : null; }
+  return null;
+}
+function talkHermes() {
+  const W = 'Hermes';
+  if (!S.zeus) talk([
+    { who: W, text: 'Ah, da bist du ja! Ich bin Hermes, der Bote der Götter. Mein Vater Zeus sucht einen Champion.' },
+    { who: W, text: 'Doch nur der Würdigste erhält den Keraunos – den Blitz des Zeus. Und wer alle Prüfungen besteht, dem schenkt er die Gestalt des Blitzadlers …' },
+    { who: W, text: 'Erste Prüfung: Gewinne bei den Olympischen Spielen hier in Olympia alle fünf Goldmedaillen!', fn: () => { setZeus(1); if (OLY_EVENTS.every(e => S.olympia[e.id] === 3)) setZeus(2); } },
+  ]);
+  else if (S.zeus >= 6) talk([{ who: W, text: 'Champion des Zeus! Selbst die Götter flüstern deinen Namen.' }]);
+  else talk([{ who: W, text: 'Deine Aufgabe: ' + ZEUS_STEPS[S.zeus]() + (S.zeus === 5 ? ' Typhon ist der Vater aller Ungeheuer – weiche seinen Blitzen aus, wenn der Boden rot leuchtet!' : '') }]);
+}
+function zeusShrine() {
+  talk([
+    { who: 'Stimme des Zeus', text: 'Du hast die Spiele gewonnen, die Giganten gestürzt und meine Altäre entzündet. Du bist würdig.' },
+    { who: 'Stimme des Zeus', text: 'Nimm den Keraunos, meinen Blitz! Schlage damit zu – oder schleudere ihn auf deine Feinde.', fn: () => { flash = 1.5; sfx('zap'); makeBolt(player.pos.x + 2, player.pos.z); gainGear('keraunos'); } },
+    { who: 'Stimme des Zeus', text: 'Doch eine letzte Prüfung bleibt: Typhon, der Vater der Ungeheuer, erhebt sich im Gipfel der Stürme. Besiege ihn, und du wirst zum Blitzadler!', fn: () => setZeus(5) },
+  ]);
+}
+
+// ---------- Keraunos: Schlagen & Werfen ----------
+function cycleWeapon() {
+  if (player.sailing || player.bird) return;
+  const has = player.gear.includes('keraunos');
+  if (!player.bowMode && !player.blitzMode) player.bowMode = true;
+  else if (player.bowMode) { player.bowMode = false; player.blitzMode = has; }
+  else player.blitzMode = false;
+  document.body.classList.toggle('bow', player.bowMode || player.blitzMode);
+  refreshHeroLook();
+  toast(player.bowMode ? '🏹 Bogen bereit' : player.blitzMode ? '⚡ Keraunos bereit – Angriff = Blitzschlag, V = Blitz werfen' : '⚔ Schwert gezogen');
+}
+function blitzStrike() {
+  if (player.atkCd > 0) return;
+  player.atkCd = 0.65; player.atkAnim = 1; sfx('zap');
+  const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
+  let tgt = null, best = 4.6;
+  for (const e of enemies) { if (e.dead) continue; const dx = e.x - player.pos.x, dz = e.z - player.pos.z, d = Math.hypot(dx, dz) - (e.def.hitR || 0.3); if (d < best && (d < 1 || (dx * fx + dz * fz) / Math.hypot(dx, dz) > -0.1)) { best = d; tgt = e; } }
+  if (!tgt) { makeBolt(player.pos.x + fx * 3, player.pos.z + fz * 3); return; }
+  player.yaw = Math.atan2(tgt.x - player.pos.x, tgt.z - player.pos.z);
+  const base = playerDamage() * 1.6 + 15;
+  damageEnemy(tgt, base * rr(0.9, 1.1), rand() < 0.2); makeBolt(tgt.x, tgt.z);
+  let from = tgt, hit = [tgt];
+  for (let c = 0; c < 2; c++) {
+    let nx = null, nd = 9;
+    for (const e of enemies) { if (e.dead || hit.includes(e)) continue; const d = Math.hypot(e.x - from.x, e.z - from.z); if (d < nd) { nd = d; nx = e; } }
+    if (!nx) break;
+    boltLine(from, nx); damageEnemy(nx, base * 0.55); hit.push(nx); from = nx;
+  }
+}
+function boltLine(a, b) {
+  const pts = [], n = 8;
+  for (let i = 0; i <= n; i++) { const t = i / n; pts.push(new V3(lerp(a.x, b.x, t) + (i % n ? rr(-0.6, 0.6) : 0), lerp(a.y + 1.5, b.y + 1.5, t) + (i % n ? rr(-0.6, 0.6) : 0), lerp(a.z, b.z, t) + (i % n ? rr(-0.6, 0.6) : 0))); }
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xcfe8ff, transparent: true, fog: false }));
+  scene.add(line); bolts.push({ line, t: 0.35 });
+}
+function throwBlitz(fromBird) {
+  if (!player.gear.includes('keraunos') && !fromBird) { toast('Diese Macht gewährt nur Zeus. (Prüfungen des Zeus bei Hermes in Olympia)'); return; }
+  if ((player.blitzCd || 0) > 0) { if (!fromBird) toast('Der Blitz lädt … (' + player.blitzCd.toFixed(1) + ' s)'); return; }
+  player.blitzCd = fromBird ? 0.8 : 2.2; player.atkAnim = 1; sfx('zap');
+  camera.getWorldDirection(_cdir);
+  const o = new V3(player.pos.x, player.pos.y + (player.bird ? 0.5 : 1.8), player.pos.z);
+  let target = camera.position.clone().addScaledVector(_cdir, 90), best = 0.1;
+  for (const e of enemies) { if (e.dead) continue; const c = new V3(e.x, e.y + (e.def.top || 2) * 0.5, e.z), v = c.clone().sub(camera.position); if (v.length() > 100) continue; const ang = Math.acos(clamp(v.normalize().dot(_cdir), -1, 1)); if (ang < best) { best = ang; target = c; } }
+  const vel = target.sub(o).normalize().multiplyScalar(80);
+  if (!player.bird) player.yaw = Math.atan2(vel.x, vel.z);
+  const g = new THREE.Group();
+  for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.7), lam(0xfff6a0, 0xffe040)); m.position.set(i % 2 ? 0.12 : -0.12, 0, -0.5 + i * 0.5); m.rotation.y = i % 2 ? 0.5 : -0.5; g.add(m); }
+  g.position.copy(o); scene.add(g);
+  arrows.push({ g, vel, t: 2, stuck: 0, dmg: 0, blitz: true });
+}
+function blitzExplode(p) {
+  makeBolt(p.x, p.z); flash = Math.max(flash, 0.5);
+  const dmg = 70 + playerDamage() * 0.8;
+  for (const e of enemies) { if (e.dead) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < 6.5 + (e.def.hitR || 0)) { damageEnemy(e, dmg * (1 - d / 10)); if (!e.def.boss && !e.dead) e.stunT = 1.2; } }
+}
+
+// ---------- Blitzadler ----------
+let birdM = null;
+function makeBird() {
+  const g = new THREE.Group(), glow = lam(0xbfe0ff, 0x3a7aff), gold = lam(0xffd24a, 0xa07000);
+  const add = (geo, mat, x, y, z, p = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); p.add(m); return m; };
+  add(new THREE.SphereGeometry(0.7, 12, 8), glow, 0, 0, 0).scale.set(0.8, 0.7, 1.6);
+  add(new THREE.SphereGeometry(0.4, 10, 8), glow, 0, 0.35, 1.1);
+  add(new THREE.ConeGeometry(0.14, 0.45, 6), gold, 0, 0.3, 1.55).rotation.x = Math.PI / 2;
+  for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.06, 6, 4), lam(0xffffff, 0xffffff), s * 0.18, 0.45, 1.4);
+  const tail = add(new THREE.BoxGeometry(1.2, 0.08, 1.0), glow, 0, 0, -1.4); tail.rotation.x = 0.1;
+  const wings = [];
+  for (const s of [-1, 1]) {
+    const w = new THREE.Group(); w.position.set(s * 0.45, 0.15, 0.1); g.add(w);
+    add(new THREE.BoxGeometry(2.6, 0.08, 1.3), glow, s * 1.3, 0, 0, w);
+    add(new THREE.BoxGeometry(1.8, 0.06, 0.9), lam(0xffffff, 0x6aa0ff), s * 3.4, 0, -0.2, w);
+    for (let k = 0; k < 3; k++) add(new THREE.BoxGeometry(0.06, 0.06, 1.2), gold, s * (1 + k * 1.1), 0.05, -0.1, w);
+    wings.push(w);
+  }
+  return { root: g, wings };
+}
+function toggleBird() {
+  if (!player.gear.includes('blitzvogel')) { toast('Nur wer Typhon besiegt, erhält die Gestalt des Blitzadlers.'); return; }
+  if (curD) { toast('Unter der Erde kannst du dich nicht verwandeln.'); return; }
+  if (player.bird) {
+    const floor = Math.max(groundAt(player.pos.x, player.pos.z), -0.5);
+    if (player.pos.y - floor > 6) { toast('Flieg tiefer, um dich zurückzuverwandeln (C).'); return; }
+    player.bird = false; birdM.root.visible = false; hero.root.visible = true; player.vy = 0; flash = 0.6; sfx('zap'); return;
+  }
+  if (player.mounted) dismount(); if (player.flying) stopFlying(true); if (player.sailing) return;
+  player.bird = true; birdM.root.visible = true; hero.root.visible = false; player.pos.y += 2; flash = 1; sfx('zap'); makeBolt(player.pos.x, player.pos.z);
+  toast('⚡ Blitzadler! Leertaste steigen · C sinken · Angriff = Blitze · U zurückverwandeln', 'gold');
+}
+function updateBird(dt, moving, sprint, canMove) {
+  const P = player.pos, t = clock.elapsedTime, sp = sprint ? 120 : 60;
+  if (moving) { P.x += _mv.x * sp * dt; P.z += _mv.z * sp * dt; player.yaw = angLerp(player.yaw, Math.atan2(_mv.x, _mv.z), Math.min(1, dt * 5)); }
+  if (canMove && keys.Space) P.y += 25 * dt; if (canMove && (keys.KeyC || keys.ControlLeft)) P.y -= 30 * dt;
+  P.x = clamp(P.x, -HALF + 10, HALF - 10); P.z = clamp(P.z, -HALF + 10, HALF - 10);
+  const floor = Math.max(groundAt(P.x, P.z), -0.5) + 1.2; if (P.y < floor) P.y = floor; if (P.y > 420) P.y = 420;
+  player.speedNow = moving ? sp : 0; player.swimming = false; player.vy = 0;
+  if (!player.dead && t - player.lastHurt > 4 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * 8);
+  birdM.root.position.set(P.x, P.y, P.z); birdM.root.rotation.set(moving ? 0.15 : 0, player.yaw, Math.sin(t * 1.3) * 0.1);
+  const f = Math.sin(t * (moving ? 7 : 3.5)) * 0.6; birdM.wings[0].rotation.z = f; birdM.wings[1].rotation.z = -f;
+  pegasus.root.visible = false; hippo.root.visible = false; ship.root.visible = false; horse.root.visible = false;
+  if (Math.random() < dt * 3) { const sx = P.x + rr(-3, 3), sz = P.z + rr(-3, 3); boltLine({ x: P.x, y: P.y - 1.5, z: P.z }, { x: sx, y: P.y - 3, z: sz }); }
+}
+
+// ---------- Typhons Sturmangriff ----------
+const STRIKES = [];
+function stormStrike(e) {
+  const P = player.pos;
+  for (let i = 0; i < 3; i++) {
+    const x = P.x + (i ? rr(-7, 7) : 0), z = P.z + (i ? rr(-7, 7) : 0);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.4, 28), new THREE.MeshBasicMaterial({ color: 0xff3a1a, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2; ring.position.set(x, groundAt(x, z) + 0.1, z); scene.add(ring);
+    STRIKES.push({ x, z, t: 1.3, ring, dmg: e.def.dmg * 1.3 });
+  }
+  floatText(e.x, e.y + 9.5, e.z, 'STURM!', '#9ad0ff', true);
+}
+function updateStrikes(dt) {
+  for (let i = STRIKES.length - 1; i >= 0; i--) {
+    const s = STRIKES[i]; s.t -= dt; s.ring.material.opacity = 0.4 + Math.sin(s.t * 20) * 0.4;
+    if (s.t <= 0) { scene.remove(s.ring); STRIKES.splice(i, 1); makeBolt(s.x, s.z); sfx('zap'); if (Math.hypot(player.pos.x - s.x, player.pos.z - s.z) < 3.4) hurtPlayer(s.dmg, { x: s.x, z: s.z }); }
+  }
+}
 
 // ============================================================
 // Touch-Steuerung (iPad / Handy)
@@ -3055,7 +3554,7 @@ function isTouchDevice() { return ('ontouchstart' in window) || navigator.maxTou
   document.addEventListener('touchend', (e) => { const now = Date.now(); if (now - lastEnd < 350 && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); lastEnd = now; }, { passive: false });
   document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
   for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
-  document.addEventListener('touchmove', (e) => { if (e.touches.length > 1 || (started && e.target.tagName !== 'INPUT' && !e.target.closest('#adminPanel, #dialog, #bigmap, #menu'))) e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', (e) => { if (e.touches.length > 1 || (started && e.target.tagName !== 'INPUT' && !e.target.closest('#adminPanel, #heroPanel, #dialog, #bigmap, #menu'))) e.preventDefault(); }, { passive: false });
 })();
 function pressKey(code, down) { window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: code })); }
 function setupTouch() {
@@ -3090,7 +3589,7 @@ function setupTouch() {
   mk('jmp', '⤒', 'mid', () => pressKey('Space', true), () => pressKey('Space', false));
   mk('use', 'E', 'mid gold', () => pressKey('KeyE', true), () => pressKey('KeyE', false));
   mk('dn', '⤓', 'mid', () => pressKey('KeyC', true), () => pressKey('KeyC', false));
-  const side = [['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
+  const side = [['I', '🎒', 'KeyI'], ['X', '🏹', 'KeyX'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
   for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, id === 'R' ? ui : row);
   // Kamera: mit dem Finger über das Bild wischen, zwei Finger = Zoom
   const pts = new Map(); let pinch = 0;
@@ -3112,9 +3611,9 @@ function setupTouch() {
 function updateTouchUI() {
   if (!TOUCH.on) return;
   const show = (id, v) => { const b = TOUCH.btns[id]; if (b && (b.style.display === 'none') === v) b.style.display = v ? '' : 'none'; };
-  const fly = player.flying || player.adminFly;
+  const fly = player.flying || player.adminFly || player.bird;
   show('dn', fly); show('sQ', player.blessed); show('sT', player.gear.includes('pegasus')); show('sG', player.gear.includes('pegasus'));
-  show('sB', player.hasShip); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
+  show('sB', player.hasShip); show('sV', player.gear.includes('keraunos')); show('sU', player.gear.includes('blitzvogel')); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
   show('use', !!nearInter || !!dialog);
   const u = $('touchUI'); if (u) u.style.display = started ? '' : 'none';
 }
@@ -3143,7 +3642,7 @@ function updatePlayer(dt) {
   const flt = player.stoned > 0 ? 'grayscale(1) brightness(0.8)' : ''; if (canvas.style.filter !== flt) canvas.style.filter = flt;
   _fwd.set(-Math.sin(camYaw), 0, -Math.cos(camYaw)); _right.set(Math.cos(camYaw), 0, -Math.sin(camYaw));
   _mv.set(0, 0, 0);
-  const canMove = !dialog && !player.dead && !mapOpen && !adminOpen && !NET.chatOpen && !(player.stoned > 0);
+  const canMove = !dialog && !player.dead && !mapOpen && !adminOpen && !heroOpen && !NET.chatOpen && !(player.stoned > 0) && !(OLY && OLY.lock);
   if (canMove) {
     if (keys.KeyW || keys.ArrowUp) _mv.add(_fwd);
     if (keys.KeyS || keys.ArrowDown) _mv.sub(_fwd);
@@ -3151,11 +3650,15 @@ function updatePlayer(dt) {
     if (keys.KeyA || keys.ArrowLeft) _mv.sub(_right);
     if (TOUCH.jx || TOUCH.jy) { _mv.addScaledVector(_right, TOUCH.jx); _mv.addScaledVector(_fwd, -TOUCH.jy); }
   }
+  const wasBlocking = player.blocking;
   player.blocking = canMove && mouse.right && !player.mounted && !player.swimming;
+  if (player.blocking && !wasBlocking) player.blockStart = clock.elapsedTime;
   const moving = _mv.lengthSq() > 0;
   if (moving) _mv.normalize();
   const sprint = (keys.ShiftLeft || keys.ShiftRight || TOUCH.sprint) && moving && player.stamina > 1 && !player.blocking;
+  player.blitzCd = Math.max(0, (player.blitzCd || 0) - dt);
   if (player.adminFly) { updateAdminFly(dt, moving, sprint, canMove); return; }
+  if (player.bird) { updateBird(dt, moving, sprint, canMove); return; }
   if (player.sailing) { updateSailing(dt, moving, sprint); return; }
   if (player.flying) { updateFlying(dt, moving, sprint, canMove); return; }
   const hasHippo = player.gear.includes('poseidon');
@@ -3164,7 +3667,8 @@ function updatePlayer(dt) {
   if (player.swimming) speed = hasHippo ? (sprint ? 36 : 26) : (sprint ? 6 : 4);
   if (player.blocking) speed = 3.2;
   if (player.relics.includes('hermes')) speed *= 1.2;
-  const stMul = player.relics.includes('herakles') ? 0.5 : 1;
+  if (!player.mounted && !player.swimming) speed *= 1 + 0.04 * upLvl('spd');
+  const stMul = (player.relics.includes('herakles') ? 0.5 : 1) * (race ? 0.5 : 1) * (1 - 0.1 * upLvl('st'));
   if (sprint && !player.mounted) player.stamina = Math.max(0, player.stamina - dt * 22 * stMul);
   else if (sprint && player.mounted) player.stamina = Math.max(0, player.stamina - dt * 10 * stMul);
   else player.stamina = Math.min(100, player.stamina + dt * 16);
@@ -3203,7 +3707,7 @@ function updatePlayer(dt) {
   const riding = player.swimming && hasHippo;
   hero.root.position.set(P.x, P.y + hy + (riding ? 1.0 : player.swimming ? -0.85 : 0), P.z);
   hero.root.rotation.y = player.yaw;
-  animateHumanoid(hero, player.mounted || riding ? 0 : player.speedNow, dt, { attack: player.atkAnim, block: player.blocking, sitting: player.mounted || riding });
+  animateHumanoid(hero, player.mounted || riding ? 0 : player.speedNow, dt, { attack: player.atkAnim, block: player.blocking, sitting: player.mounted || riding, bow: player.bowMode && !player.blocking });
   hippo.root.visible = riding; if (riding) { hippo.root.position.set(P.x, P.y - 0.4, P.z); hippo.root.rotation.y = player.yaw; animateQuad(hippo, player.speedNow * 0.4, dt); }
   pegasus.root.visible = false; ship.root.visible = false;
   if (player.swimming && !riding) { hero.armL.rotation.x = -2.6 + Math.sin(clock.elapsedTime * 4) * 0.6; hero.armR.rotation.x = -2.6 - Math.sin(clock.elapsedTime * 4) * 0.6; }
@@ -3212,19 +3716,18 @@ function updatePlayer(dt) {
     if (horse.horses) { for (const hh of horse.horses) animateQuad(hh, player.speedNow * 0.6, dt); for (const w of horse.wheels) w.rotation.x += player.speedNow * dt / 0.65; hero.root.position.set(P.x - Math.sin(player.yaw) * 1.3, P.y + 1.0, P.z - Math.cos(player.yaw) * 1.3); animateHumanoid(hero, 0, dt, { attack: player.atkAnim }); }
     else animateQuad(horse, player.speedNow * 0.6, dt);
   }
-  // Rennen
+  // Wettrennen (Olympia)
   if (race) {
     race.t += dt;
-    const [ex, ez] = SPOTS.raceEnd, [sx, sz] = SPOTS.raceStart;
-    if (!race.half && Math.abs(P.x - ex) < 2.5 && Math.abs(P.z - ez) < 11) { race.half = true; toast('Wende! Zurück zum Start!', 'gold'); sfx('coin'); }
-    if (race.half && Math.abs(P.x - sx) < 2.5 && Math.abs(P.z - sz) < 11) {
-      const t = race.t; race = null;
-      const first = !S.raceBest;
-      if (!S.raceBest || t < S.raceBest) S.raceBest = t;
-      banner('SIEG IN OLYMPIA!', 'Deine Zeit: ' + t.toFixed(1) + ' Sekunden');
-      addMoney(first ? 50 : 20); save();
-    } else if (race && race.t > race.limit) { race = null; toast('Zu langsam! Sprich erneut mit dem Kampfrichter.'); }
-    if (race && player.mounted) { race = null; toast('Disqualifiziert – kein Pferd im Stadion!'); }
+    const [tx, tz] = race.legs[race.leg];
+    if (Math.abs(P.x - tx) < 3 && Math.abs(P.z - tz) < 11) { race.leg++; if (race.leg < race.legs.length) { toast('Wende! Weiter!', 'gold'); sfx('coin'); } }
+    if (race.leg >= race.legs.length) {
+      const t = race.t, ev = race.ev, rr2 = race; race = null;
+      if (rr2.mount) { dismount(); player.horse = rr2.prevHorse || 'gaul'; setHorseModel(); }
+      olyResult(ev, t, 'Deine Zeit: ' + t.toFixed(1) + ' Sekunden');
+    } else if (race.t > race.limit) olyAbort('Zu langsam! Sprich erneut mit dem Kampfrichter.');
+    else if (!race.mount && player.mounted) olyAbort('Disqualifiziert – kein Pferd beim Lauf!');
+    else if (race.mount && !player.mounted) olyAbort('Vom Wagen gestiegen – disqualifiziert!');
   }
 }
 function updateSailing(dt, moving, sprint) {
@@ -3337,8 +3840,9 @@ function camBlocked(x, y, z) {
 }
 function updateCamera(dt) {
   const P = player.pos;
-  const tgt = new V3(P.x, P.y + (player.sailing ? 3.5 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
-  let dist = (player.sailing ? 17 : player.flying ? 11 : player.mounted ? 9 : 6.5) * camZoom;
+  const tgt = new V3(P.x, P.y + (player.bird ? 1.5 : player.sailing ? 3.5 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
+  if (player.bowMode && !player.sailing) { tgt.x += Math.cos(camYaw) * 0.8; tgt.z -= Math.sin(camYaw) * 0.8; tgt.y += 0.2; }
+  let dist = (player.bird ? 12 : player.sailing ? 17 : player.flying ? 11 : player.mounted ? 9 : 6.5) * camZoom * (player.bowMode && !player.sailing ? 0.7 : 1);
   const dx = Math.sin(camYaw) * Math.cos(camPitch), dy = Math.sin(camPitch), dz = Math.cos(camYaw) * Math.cos(camPitch);
   for (let k = 0.12; k <= 1.0001; k += 0.08) { if (camBlocked(tgt.x + dx * dist * k, tgt.y + dy * dist * k, tgt.z + dz * dist * k)) { dist *= Math.max(0.12, k - 0.1); break; } }
   const cx = tgt.x + dx * dist, cz = tgt.z + dz * dist;
@@ -3356,6 +3860,9 @@ function updateHUD() {
   $('money').textContent = player.money; $('potions').textContent = player.potions;
   const ab = [];
   ab.push(player.mounted ? '[R] Absteigen' : '[R] ' + HORSES[player.horse || 'gaul'].name);
+  ab.push('[X] ' + (player.bowMode ? (player.gear.includes('keraunos') ? 'Keraunos' : 'Schwert') : player.blitzMode ? 'Schwert' : 'Bogen'), '[I] Held');
+  if (player.gear.includes('keraunos')) ab.push(player.blitzCd > 0 ? 'Blitz ' + player.blitzCd.toFixed(1) + ' s' : '[V] Blitz werfen');
+  if (player.gear.includes('blitzvogel')) ab.push(player.bird ? '[U] Zurückverwandeln' : '[U] Blitzadler');
   if (NET.account && NET.account.admin) ab.push('[P] Admin');
   if (player.hasShip) ab.push(player.sailing ? '[B] Anlegen' : '[B] Schiff');
   if (player.gear.includes('pegasus')) { ab.push(player.flying ? '[T] Landen' : '[T] Pegasus'); ab.push(player.medCd > 0 ? 'Medusa: ' + Math.ceil(player.medCd) + ' s' : '[G] Medusenhaupt'); }
@@ -3392,7 +3899,7 @@ function loop() {
     updatePlayer(dt);
     for (const e of enemies) updateEnemy(e, dt);
     updateNPCs(dt);
-    updateRemotes(dt); netSend(dt); updateAllies(dt); updateWanted(dt);
+    updateRemotes(dt); netSend(dt); updateAllies(dt); updateWanted(dt); updateArrows(dt); updateOly(dt); updateStrikes(dt);
     updatePickups(dt, t);
     updateSky(dt);
     animateWorld(dt, t);
@@ -3434,7 +3941,7 @@ function startGame(fromSave) {
     for (const ch of CHESTS) if (S.chests.includes(ch.id)) markChestOpened(ch);
     for (const e of enemies) if ((e.ruin !== undefined && RUINS[e.ruin].chest.opened) || (e.key && (S.bossDead || []).includes(e.key))) { e.dead = true; e.respawn = 1e9; e.deadT = 99; e.m.root.visible = false; }
     S.bossDead = S.bossDead || []; S.foundD = S.foundD || []; player.gear = player.gear || [];
-    S.quiz = S.quiz || [];
+    S.quiz = S.quiz || []; S.olympia = S.olympia || {}; player.up = player.up || {}; player.skins = player.skins || ['standard']; player.skin = player.skin || 'standard';
     player.horses = player.horses || ['gaul']; player.horse = player.horse || 'gaul';
     if (player.hasShip && !player.shipTier) player.shipTier = 2;
     for (const a of (sv.p.allies || [])) if (MERCS[a.type]) spawnAlly(a.type, a.hp);
@@ -3448,6 +3955,7 @@ function startGame(fromSave) {
   if (!sv) S.towns = defaultTowns();
   if (mpEnabled()) setTimeout(() => { if (!NET.towns) syncTowns(); }, 6000); else syncTowns();
   setHorseModel(); setShipModel();
+  S.altars = S.altars || []; S.zeus = S.zeus || 0; ZEUS_ALTARS.forEach((A, i) => { A.fire.visible = S.altars.includes(i); }); if (S.zeus === 2) spawnGiants(); updateZeusText();
   started = true;
   $('menu').classList.add('hidden'); $('hud').classList.remove('hidden');
   updateQuestText();
@@ -3467,12 +3975,13 @@ function init() {
   buildTerrain();
   buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
   buildIslands();
-  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildServices(); buildQuizNPCs();
+  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildServices(); buildQuizNPCs(); buildZeusQuest();
   buildVegetation();
   finalizeStatic();
   buildClouds();
   hero = makeHumanoid(heroLook()); scene.add(hero.root);
   horse = makeHorse(); horse.root.visible = false; scene.add(horse.root);
+  birdM = makeBird(); birdM.root.visible = false; scene.add(birdM.root);
   pegasus = makePegasus(); pegasus.root.visible = false; scene.add(pegasus.root);
   hippo = makeHippo(); hippo.root.visible = false; scene.add(hippo.root);
   ship = makeShip(); ship.root.visible = false; scene.add(ship.root);
@@ -3487,9 +3996,10 @@ function init() {
   if (loadSave()) $('btnLoad').classList.remove('hidden');
   setupMenuNet(); setupTouch();
   $('dlgClose').onclick = (e) => { e.stopPropagation(); dialog = null; renderDialog(); };
+  $('heroClose').onclick = (e) => { e.stopPropagation(); if (heroOpen) toggleHero(); };
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);

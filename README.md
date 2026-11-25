@@ -32,6 +32,17 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
   bringt neue Bewohner und mehr Steuereinnahmen, die du am Grenzstein einsammelst
 - Händler, Wettlauf in Olympia, 40 Amphoren zum Sammeln, Minikarte & Weltkarte, automatisches Speichern
 
+## Heldenmenü, Waffen & Olympia
+
+- **Heldenmenü** (**I** / 🎒): Upgrades (Lebenskraft, Stärke, Ausdauer, Schnelligkeit, Bogenschießen, Schildkunde – je 5 Stufen), **Rüstungs-Skins** (Athener Blau, Spartaner, Meereswächter, Schattenkrieger, Goldener Held, Olympiasieger, Herr der Unterwelt) und eine Ausrüstungsübersicht
+- **Bogen** (**X** wechselt Schwert → Bogen → Keraunos): Pfeile fliegen dorthin, wo die Kamera zielt
+- **Schild**: blockt nach vorne, im richtigen Moment geblockt = **Parade** (kein Schaden, Gegner betäubt), Angriff beim Blocken = **Schildstoß**
+- **Olympische Spiele** beim Kampfrichter in Olympia: Stadionlauf, Wagenrennen, Speerwurf (Kraftanzeige), Bogenschießen auf Scheiben und Pankration gegen den Champion – mit Gold-, Silber- und Bronzemedaillen
+
+## Die Prüfungen des Zeus (Nebenquest-Reihe)
+
+Hermes in Olympia startet die Reihe: Alle 5 Olympia-Goldmedaillen → 3 Giganten am Olymp besiegen → die Altäre von Dodona, Lykaion und Ida entzünden → Zeus übergibt den **Keraunos** (Blitzschlag mit Kettenblitz, **V** = Blitz werfen) → letzte, sehr schwere Prüfung: **Typhon** im Gipfel der Stürme (rote Ringe = gleich schlägt der Blitz ein!) → Belohnung: die **Gestalt des Blitzadlers** (**U**), mit der man blitzschnell fliegt und Blitze schleudert.
+
 ## Tavernen, Händler & Nebenmissionen
 
 - **10 Tavernen** (🍺 auf der Karte): Essen & Bett zum Heilen, **Söldner anheuern** (Speerträger, Hoplit, Spartanischer Veteran – bis zu 4 folgen dir und kämpfen mit), **Kopfgeldbrett** mit Gesetzlosen zum Jagen, Gerüchte und das eigene Kopfgeld begleichen
@@ -46,7 +57,7 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
 ## Mehrspieler & Städte
 
 - **Lobbys mit bis zu 30 Helden**: Im Menü eine Lobby wählen (automatisch, bestehende oder neue). Andere Spieler, ihre Reittiere und Schiffe sind in der Welt sichtbar, mit **Enter** wird gechattet.
-- **7 Stadtplätze**: 4 freie Bauplätze (Heimat, Eleusis, Lebadeia, Chalkis) und 3 feindliche Poleis (Megara, Argos, Korinth).
+- **7 Stadtplätze**: 4 freie Bauplätze (Heimat, Eleusis, Lebadeia, Chalkis – weit über die Karte verteilt) und 3 feindliche Poleis (Megara, Argos, Korinth).
 - **Städten beitreten**: Für 50 Drachmen Tribut wirst du Bürger einer fremden Stadt (auch Megara, Argos, Korinth). Ihre Soldaten werden deine Verbündeten, du kannst beim Ausbau helfen und die Stadtwache mitfinanzieren. Herrscher können Bürger verbannen.
 - **Städte erobern**: Besiege die Garnison einer fremden Stadt und erobere sie am Grenzstein. Du erhältst ihre Schatzkammer, ihre Steuern und kannst sie weiter ausbauen. Im Mehrspieler können andere Helden auch deine Städte erobern!
 - **Konto mit Name und Passwort**: Spielstand liegt in der Cloud – auf jedem Gerät weiterspielen. Rangliste auf der Weltkarte (**M**).
@@ -73,6 +84,10 @@ Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code lie
 | G | Haupt der Medusa |
 | M | Weltkarte & Rangliste |
 | Enter | Chat (online) |
+| X | Waffe wechseln (Schwert, Bogen, Keraunos) |
+| V | Blitz werfen (Keraunos) |
+| U | Blitzadler |
+| I | Heldenmenü |
 | Esc | Gespräch schließen |
 | P | Admin-Menü (nur Admins) |
 | 1–9 | Antwort wählen |

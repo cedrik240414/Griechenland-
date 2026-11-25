@@ -88,6 +88,7 @@
 
   #menu { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
     background:radial-gradient(ellipse at center, rgba(20,14,6,.55), rgba(0,0,0,.92)); }
+  #menu { overflow-y:auto; -webkit-overflow-scrolling:touch; align-items:safe center; padding:16px 0; }
   #menu .card { width:min(620px, calc(100% - 32px)); padding:30px 34px; text-align:center; }
   #menu h1 { margin:0; font-size:46px; color:var(--gold); text-shadow:0 2px 14px rgba(232,196,106,.35); }
   #menu .sub { font-family:'Cinzel',serif; letter-spacing:.35em; color:#d8ccb0; font-size:13px; margin:6px 0 18px; }
@@ -120,7 +121,16 @@
   .btn.small { font-size:15px; padding:8px 18px; margin:0; }
   #accInfo { font-size:15px; } #accInfo b { color:var(--gold); } #accInfo a { color:#bfb293; }
   #wanted { position:absolute; top:22px; left:50%; transform:translateX(-50%); font-family:'Cinzel',serif; font-size:20px; color:#ff6a4a; text-shadow:0 2px 6px #000; letter-spacing:.1em; }
+  #zeusText { font-size:14px; color:#d8b8ff; margin-top:4px; }
   #bountyText { font-size:14px; color:#ffb0a0; margin-top:4px; } #allyText { font-size:13px; color:#a8e0a0; margin-top:3px; }
+  #heroPanel { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:min(560px, calc(100% - 24px)); max-height:86vh; overflow:auto; padding:16px 20px; z-index:6; pointer-events:auto; }
+  #heroPanel h3 { margin:0 0 4px; font-family:'Cinzel',serif; color:var(--gold); }
+  #heroClose { position:absolute; top:10px; right:12px; font-size:20px; background:none; border:none; color:#bfb293; cursor:pointer; }
+  .htabs { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; } .htabs .abtn { font-size:15px; padding:7px 12px; }
+  #heroPanel .arow { padding:5px 0; border-bottom:1px solid rgba(232,196,106,.15); } #heroPanel .arow span { font-size:15px; }
+  #olyHud { position:absolute; top:56px; left:50%; transform:translateX(-50%); font-size:18px; color:#ffd24a; text-shadow:0 2px 6px #000; white-space:nowrap; font-family:'Cinzel',serif; }
+  body.touch.bow #crosshair { display:block !important; }
+  body.bow #crosshair { width:10px; height:10px; margin:-5px; background:none; border:2px solid rgba(255,240,200,.9); }
   #adminPanel { position:fixed; right:20px; top:60px; width:min(420px, calc(100% - 32px)); max-height:80vh; overflow:auto; padding:14px 18px; z-index:5; pointer-events:auto; }
   #adminPanel h3 { margin:0 0 6px; font-family:'Cinzel',serif; color:#ff8a6a; }
   #adminPanel h4 { margin:12px 0 6px; color:var(--gold); font-family:'Cinzel',serif; font-size:14px; }
@@ -146,8 +156,9 @@
 <canvas id="overlay"></canvas>
 
 <div id="hud" class="hidden">
-  <div id="questBox" class="panel"><div class="qtitle">AUFGABE</div><div id="questText"></div><div id="bountyText"></div><div id="allyText"></div></div>
+  <div id="questBox" class="panel"><div class="qtitle">AUFGABE</div><div id="questText"></div><div id="zeusText"></div><div id="bountyText"></div><div id="allyText"></div></div>
   <div id="wanted"></div>
+  <div id="olyHud"></div>
   <div id="minimapWrap"><canvas id="minimap" width="200" height="200"></canvas></div>
   <div id="minimapN">N</div>
   <div id="clock"></div>
@@ -166,6 +177,7 @@
   <div id="toasts"></div>
   <div id="dialog" class="panel hidden"><div id="dlgName"></div><div id="dlgText"></div><div id="dlgOpts"></div><div id="dlgHint">[E] Weiter</div><button id="dlgClose" aria-label="Schließen">✕</button></div>
 </div>
+<div id="heroPanel" class="panel hidden"><h3>🎒 Held</h3><div class="ahint">[I] oder Esc schließen</div><div id="heroBody"></div><button id="heroClose" aria-label="Schließen">✕</button></div>
 <div id="adminPanel" class="panel hidden"><h3>⚙ Admin-Menü</h3><div class="ahint">[P] schließen – danach ins Spiel klicken</div><div id="adminBody"></div></div>
 <div id="damageFlash"></div>
 <div id="banner"><h2></h2><div></div></div>
@@ -204,6 +216,11 @@
       <b>R</b><span>Pferd rufen / absteigen</span>
       <b>F</b><span>Ambrosia trinken (Heilung)</span>
       <b>Q</b><span>Blitz des Zeus (nach Segen)</span>
+      <b>X</b><span>Waffe wechseln: Schwert → Bogen → Keraunos</span>
+      <b>V</b><span>Blitz werfen (Keraunos)</span>
+      <b>U</b><span>Blitzadler-Verwandlung</span>
+      <b>I</b><span>Heldenmenü: Upgrades, Skins, Ausrüstung</span>
+      <b>Blocken</b><span>Rechte Maustaste – im richtigen Moment = Parade, + Angriff = Schildstoß</span>
       <b>B</b><span>Eigenes Schiff rufen / anlegen</span>
       <b>T</b><span>Pegasus (fliegen: Leertaste hoch, C runter)</span>
       <b>G</b><span>Haupt der Medusa (Feinde versteinern)</span>
