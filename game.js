@@ -1336,7 +1336,7 @@ function questTarget() {
 // ---------- Speichern ----------
 function saveData() {
     const sp = curD ? { x: curD.out[0], z: curD.out[1] } : player.pos;
-  return ({ S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })), up: player.up, skins: player.skins, skin: player.skin } });
+  return ({ v: 2, S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })), up: player.up, skins: player.skins, skin: player.skin } });
 }
 function save() {
   try { localStorage.setItem(saveKey(), JSON.stringify(saveData())); } catch (e) { /* ignorieren */ }
@@ -4295,6 +4295,7 @@ function startGame(fromSave) {
     Object.assign(S, sv.S);
     Object.assign(player, sv.p);
     player.pos.set(sv.p.x, groundAt(sv.p.x, sv.p.z) + 0.5, sv.p.z);
+    if (sv.v !== 2 || groundAt(sv.p.x, sv.p.z) < -0.5) player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]) + 0.5, SPOTS.respawn[1]);
     for (const p of pickups) if (p.kind === 'amph' && S.amph.includes(p.id)) { p.taken = true; p.mesh.visible = false; p.ring.visible = false; }
     if (S.stage === 1) { S.olives = 0; spawnOlives(); }
     if (S.minoDead) { const m = enemies.find(e => e.type === 'minotaur'); if (m) { m.dead = true; m.respawn = 1e9; m.m.root.visible = false; m.deadT = 99; } }
