@@ -3,19 +3,18 @@
 Cloudflare Worker mit
 - **Durable Object `World`**: eine Lobby mit bis zu 10 Helden (Positionen, Chat, gemeinsame Städte, die man gründen und erobern kann)
 - **Durable Object `Directory`**: Liste der aktiven Lobbys
-- **D1-Datenbank `hellas`**: Cloud-Spielstände und Heldenrangliste
+- **Durable Object `Store`** (SQLite-Datenbank): Cloud-Spielstände und Heldenrangliste
+
+**Live:** https://hellas-server.cedrikve.workers.dev
 
 ## Einrichten (einmalig)
 
-Benötigt wird ein Cloudflare-API-Token mit den Rechten **Workers Scripts: Edit**, **D1: Edit** und **Account Settings: Read**
-(oder `npx wrangler login` im Browser).
+Benötigt wird ein Cloudflare-API-Token mit dem Recht **Workers Scripts: Edit** (oder `npx wrangler login` im Browser).
 
 ```bash
 cd server
 npm install
-npx wrangler d1 create hellas            # gibt eine database_id aus → in wrangler.toml eintragen
-npx wrangler d1 execute hellas --remote --file=schema.sql
-npx wrangler deploy                      # gibt die Adresse aus, z. B. https://hellas-server.NAME.workers.dev
+npx wrangler deploy        # gibt die Adresse aus, z. B. https://hellas-server.NAME.workers.dev
 ```
 
 Danach die Adresse in `../config.js` eintragen:
@@ -27,7 +26,6 @@ window.HELLAS_SERVER = 'https://hellas-server.NAME.workers.dev';
 ## Lokal testen
 
 ```bash
-npx wrangler d1 execute hellas --local --file=schema.sql
 npx wrangler dev
 ```
 

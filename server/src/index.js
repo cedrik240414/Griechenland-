@@ -1,7 +1,7 @@
 // Hellas – Multiplayer- und Datenbank-Server (Cloudflare Worker)
 // /ws?room=lobby-N  WebSocket in eine Lobby (max. 10 Helden, Durable Object "World")
 // /api/lobbies      Liste der aktiven Lobbys
-// /api/save         Cloud-Spielstand speichern (POST) / laden (GET)
+// /api/save         Cloud-Spielstand speichern (POST) / laden (GET) – SQLite im Durable Object "Store"
 // /api/leaderboard  Heldenrangliste
 
 const MAX_PLAYERS = 10;
@@ -48,31 +48,13 @@ export default {
       const r = await env.DIR.get(env.DIR.idFromName('dir')).fetch('https://dir/list');
       return json(await r.json());
     }
-    if (url.pathname === '/api/save' && req.method === 'POST') {
-      let body; try { body = await req.json(); } catch { return json({ error: 'Ungültiges JSON' }, 400); }
-      const { id, secret, name, data } = body || {};
-      if (!ID_RE.test(id || '') || typeof secret !== 'string' || secret.length < 16 || !data) return json({ error: 'Ungültige Daten' }, 400);
-      const raw = JSON.stringify(data);
-      if (raw.length > 60000) return json({ error: 'Spielstand zu groß' }, 413);
-      const hash = await sha256(secret);
-      const row = await env.DB.prepare('SELECT secret_hash FROM saves WHERE id = ?').bind(id).first();
-      if (row && row.secret_hash !== hash) return json({ error: 'Falscher Schlüssel' }, 403);
-      const score = scoreOf(data);
-      await env.DB.prepare('INSERT INTO saves (id, secret_hash, name, data, score, updated) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(id) DO UPDATE SET name = ?3, data = ?4, score = ?5, updated = ?6')
-        .bind(id, hash, cleanName(name), raw, score, Date.now()).run();
-      return json({ ok: true, score });
-    }
-    if (url.pathname === '/api/save' && req.method === 'GET') {
-      const id = url.searchParams.get('id') || '', secret = url.searchParams.get('secret') || '';
-      if (!ID_RE.test(id)) return json({ error: 'Ungültige ID' }, 400);
-      const row = await env.DB.prepare('SELECT secret_hash, name, data, score FROM saves WHERE id = ?').bind(id).first();
-      if (!row) return json({ error: 'Kein Spielstand gefunden' }, 404);
-      if (row.secret_hash !== await sha256(secret)) return json({ error: 'Falscher Schlüssel' }, 403);
-      return json({ name: row.name, score: row.score, data: JSON.parse(row.data) });
-    }
-    if (url.pathname === '/api/leaderboard') {
-      const { results } = await env.DB.prepare('SELECT name, score, updated FROM saves ORDER BY score DESC LIMIT 10').all();
-      return json({ top: results });
+    if (url.pathname === '/api/save' || url.pathname === '/api/leaderboard') {
+      let payload;
+      if (url.pathname === '/api/leaderboard') payload = { op: 'top' };
+      else if (req.method === 'POST') { try { payload = Object.assign({ op: 'save' }, await req.json()); } catch { return json({ error: 'Ungültiges JSON' }, 400); } }
+      else payload = { op: 'load', id: url.searchParams.get('id') || '', secret: url.searchParams.get('secret') || '' };
+      const r = await env.STORE.get(env.STORE.idFromName('store')).fetch('https://store/', { method: 'POST', body: JSON.stringify(payload) });
+      return json(await r.json(), r.status);
     }
     if (url.pathname === '/') return json({ ok: true, game: 'Hellas – Pfad der Helden', maxPlayers: MAX_PLAYERS });
     return json({ error: 'Nicht gefunden' }, 404);
@@ -201,4 +183,37 @@ function sanitizeLook(l) {
   if (l && typeof l === 'object') for (const k of ['tunic', 'cape', 'crest', 'armor', 'helmetCol', 'shieldEmblem']) { const v = l[k]; if (typeof v === 'number' && v >= 0 && v <= 0xffffff) out[k] = v; }
   if (l && typeof l.weapon === 'string') out.weapon = ['sword', 'fireSword', 'trident'].includes(l.weapon) ? l.weapon : 'sword';
   return out;
+}
+
+// Datenbank: Cloud-Spielstände und Rangliste (SQLite im Durable Object)
+export class Store {
+  constructor(ctx) {
+    this.sql = ctx.storage.sql;
+    this.sql.exec('CREATE TABLE IF NOT EXISTS saves (id TEXT PRIMARY KEY, secret_hash TEXT NOT NULL, name TEXT NOT NULL, data TEXT NOT NULL, score INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL)');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS saves_score ON saves (score DESC)');
+  }
+  async fetch(req) {
+    const out = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
+    const b = await req.json();
+    if (b.op === 'top') return out({ top: this.sql.exec('SELECT name, score, updated FROM saves ORDER BY score DESC LIMIT 10').toArray() });
+    if (!ID_RE.test(b.id || '')) return out({ error: 'Ungültige ID' }, 400);
+    const row = this.sql.exec('SELECT secret_hash, name, data, score FROM saves WHERE id = ?', b.id).toArray()[0];
+    const hash = await sha256(String(b.secret || ''));
+    if (b.op === 'load') {
+      if (!row) return out({ error: 'Kein Spielstand gefunden' }, 404);
+      if (row.secret_hash !== hash) return out({ error: 'Falscher Schlüssel' }, 403);
+      return out({ name: row.name, score: row.score, data: JSON.parse(row.data) });
+    }
+    if (b.op === 'save') {
+      if (typeof b.secret !== 'string' || b.secret.length < 16 || !b.data) return out({ error: 'Ungültige Daten' }, 400);
+      const raw = JSON.stringify(b.data);
+      if (raw.length > 60000) return out({ error: 'Spielstand zu groß' }, 413);
+      if (row && row.secret_hash !== hash) return out({ error: 'Falscher Schlüssel' }, 403);
+      const score = scoreOf(b.data);
+      this.sql.exec('INSERT INTO saves (id, secret_hash, name, data, score, updated) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data, score = excluded.score, updated = excluded.updated',
+        b.id, hash, cleanName(b.name), raw, score, Date.now());
+      return out({ ok: true, score });
+    }
+    return out({ error: 'Unbekannt' }, 400);
+  }
 }

@@ -37,9 +37,9 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
 - **Lobbys mit bis zu 10 Helden**: Im Menü eine Lobby wählen (automatisch, bestehende oder neue). Andere Spieler, ihre Reittiere und Schiffe sind in der Welt sichtbar, mit **Enter** wird gechattet.
 - **7 Stadtplätze**: 4 freie Bauplätze (Heimat, Eleusis, Lebadeia, Chalkis) und 3 feindliche Poleis (Megara, Argos, Korinth).
 - **Städte erobern**: Besiege die Garnison einer fremden Stadt und erobere sie am Grenzstein. Du erhältst ihre Schatzkammer, ihre Steuern und kannst sie weiter ausbauen. Im Mehrspieler können andere Helden auch deine Städte erobern!
-- **Cloud-Speicher & Rangliste** über die D1-Datenbank. Mit dem Spielstand-Code (Weltkarte **M**) lädst du deinen Helden auf einem anderen Gerät.
+- **Cloud-Speicher & Rangliste** über die Server-Datenbank. Mit dem Spielstand-Code (Weltkarte **M**) lädst du deinen Helden auf einem anderen Gerät.
 
-Der Server liegt im Ordner [`server/`](server/README.md) (Cloudflare Worker). Ohne Server läuft das Spiel als Einzelspieler.
+Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code liegt im Ordner [`server/`](server/README.md) (Cloudflare Worker). Ist er nicht erreichbar, läuft das Spiel als Einzelspieler.
 
 ## Steuerung
 
