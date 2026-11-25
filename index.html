@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hellas – Pfad der Helden</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Alegreya+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --gold:#e8c46a; --gold-d:#a8842e; --ink:#1b140c; --parch:rgba(28,20,12,.78); }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#0b0a08; color:#f3e9d2;
+    font-family:'Alegreya Sans', system-ui, sans-serif; user-select:none; }
+  canvas#game { display:block; }
+  #overlay { position:fixed; inset:0; pointer-events:none; }
+  .hidden { display:none !important; }
+  .panel { background:var(--parch); border:1px solid rgba(232,196,106,.45); border-radius:8px;
+    box-shadow:0 4px 18px rgba(0,0,0,.45); }
+  h1,h2,.cinzel { font-family:'Cinzel', serif; letter-spacing:.06em; }
+
+  #hud { position:fixed; inset:0; pointer-events:none; }
+  #bars { position:absolute; left:20px; bottom:20px; width:280px; }
+  .bar { position:relative; height:18px; margin-top:6px; background:rgba(0,0,0,.55); border:1px solid rgba(232,196,106,.5); border-radius:4px; overflow:hidden; }
+  .bar > div { height:100%; transition:width .15s; }
+  #hpFill { background:linear-gradient(#d0463b,#8e1d17); }
+  #stFill { background:linear-gradient(#e8c46a,#a8842e); }
+  .bar span { position:absolute; inset:0; text-align:center; font-size:12px; line-height:18px; text-shadow:0 1px 2px #000; }
+  #stats { font-size:15px; text-shadow:0 1px 3px #000; }
+  #abilities { margin-top:6px; font-size:13px; color:#d8ccb0; text-shadow:0 1px 3px #000; }
+  #questBox { position:absolute; left:20px; top:20px; max-width:360px; padding:10px 14px; }
+  #questBox .qtitle { font-family:'Cinzel',serif; color:var(--gold); font-size:13px; letter-spacing:.12em; }
+  #questText { font-size:16px; margin-top:3px; }
+  #minimapWrap { position:absolute; right:20px; top:20px; width:200px; height:200px; border-radius:50%; overflow:hidden;
+    border:2px solid var(--gold-d); box-shadow:0 4px 16px rgba(0,0,0,.6); }
+  #minimapN { position:absolute; right:112px; top:8px; font-family:'Cinzel',serif; color:var(--gold); font-size:14px; text-shadow:0 1px 2px #000; }
+  #clock { position:absolute; right:20px; top:228px; width:200px; text-align:center; font-size:13px; color:#d8ccb0; text-shadow:0 1px 3px #000; }
+  #locName { position:absolute; top:22%; left:0; right:0; text-align:center; font-family:'Cinzel',serif; font-size:44px;
+    color:var(--gold); text-shadow:0 2px 12px #000; opacity:0; transition:opacity 1s; }
+  #locName small { display:block; font-size:16px; color:#efe2c2; letter-spacing:.3em; }
+  #prompt { position:absolute; bottom:32%; left:0; right:0; text-align:center; font-size:18px; text-shadow:0 1px 4px #000; }
+  #prompt b { display:inline-block; padding:1px 8px; border:1px solid var(--gold); border-radius:4px; color:var(--gold); margin-right:6px; }
+  #crosshair { position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px; border-radius:50%; background:rgba(255,240,200,.7); }
+  #dialog { position:absolute; left:50%; bottom:40px; transform:translateX(-50%); width:min(720px, calc(100% - 32px)); padding:16px 20px; pointer-events:auto; }
+  #dlgName { font-family:'Cinzel',serif; color:var(--gold); font-size:18px; margin-bottom:6px; }
+  #dlgText { font-size:18px; line-height:1.45; min-height:52px; }
+  #dlgOpts { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+  #dlgOpts button { text-align:left; font:inherit; font-size:16px; color:#f3e9d2; background:rgba(232,196,106,.12); border:1px solid rgba(232,196,106,.45);
+    border-radius:5px; padding:6px 10px; cursor:pointer; }
+  #dlgOpts button:hover { background:rgba(232,196,106,.28); }
+  #dlgHint { margin-top:8px; font-size:13px; color:#bfb293; text-align:right; }
+  #toasts { position:absolute; right:20px; bottom:20px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
+  .toast { padding:8px 14px; font-size:15px; animation:tin .3s ease-out; }
+  .toast.gold { border-color:var(--gold); color:var(--gold); }
+  @keyframes tin { from { transform:translateX(30px); opacity:0; } }
+  #damageFlash { position:fixed; inset:0; pointer-events:none; background:radial-gradient(transparent 40%, rgba(170,0,0,.55)); opacity:0; transition:opacity .25s; }
+  #fade { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity .6s; }
+  #bigmap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.6); }
+  #bigmap canvas { width:min(86vh, 92vw); height:min(86vh, 92vw); border:2px solid var(--gold-d); border-radius:8px; }
+
+  #menu { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at center, rgba(20,14,6,.55), rgba(0,0,0,.92)); }
+  #menu .card { width:min(620px, calc(100% - 32px)); padding:30px 34px; text-align:center; }
+  #menu h1 { margin:0; font-size:46px; color:var(--gold); text-shadow:0 2px 14px rgba(232,196,106,.35); }
+  #menu .sub { font-family:'Cinzel',serif; letter-spacing:.35em; color:#d8ccb0; font-size:13px; margin:6px 0 18px; }
+  #menu p { line-height:1.5; color:#e6dac0; }
+  .btn { font-family:'Cinzel',serif; font-size:18px; letter-spacing:.08em; color:var(--ink); background:linear-gradient(#f0d488,#c99a3c);
+    border:none; border-radius:6px; padding:11px 26px; margin:6px; cursor:pointer; box-shadow:0 3px 10px rgba(0,0,0,.4); }
+  .btn:hover { filter:brightness(1.1); }
+  .btn.alt { background:transparent; color:var(--gold); border:1px solid var(--gold); }
+  .btn:disabled { opacity:.4; cursor:default; }
+  #controls { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; text-align:left; font-size:14px; margin:18px auto 0; max-width:420px; color:#d8ccb0; }
+  #controls b { color:var(--gold); font-weight:700; }
+  #loading { margin-top:14px; color:#bfb293; font-size:14px; }
+  #pause { position:fixed; left:0; right:0; top:44%; text-align:center; font-family:'Cinzel',serif; font-size:22px; color:var(--gold); text-shadow:0 2px 8px #000; pointer-events:none; }
+  #banner { position:fixed; left:0; right:0; top:30%; text-align:center; pointer-events:none; opacity:0; transition:opacity 1.2s; }
+  #banner h2 { font-size:52px; margin:0; color:var(--gold); text-shadow:0 3px 16px #000; }
+  #banner div { font-size:20px; text-shadow:0 2px 6px #000; }
+  @media (max-width:640px) {
+    #minimapWrap { width:130px; height:130px; } #minimapN { right:77px; } #clock { width:130px; top:156px; }
+    #bars { width:200px; } #questBox { max-width:calc(100% - 180px); }
+    #menu h1 { font-size:32px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<canvas id="overlay"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="questBox" class="panel"><div class="qtitle">AUFGABE</div><div id="questText"></div></div>
+  <div id="minimapWrap"><canvas id="minimap" width="200" height="200"></canvas></div>
+  <div id="minimapN">N</div>
+  <div id="clock"></div>
+  <div id="bars">
+    <div id="stats">⚱ <span id="money">0</span> Drachmen &nbsp; ✚ <span id="potions">0</span> Ambrosia</div>
+    <div class="bar"><div id="hpFill" style="width:100%"></div><span id="hpText"></span></div>
+    <div class="bar" style="height:8px"><div id="stFill" style="width:100%"></div></div>
+    <div id="abilities"></div>
+  </div>
+  <div id="locName"></div>
+  <div id="prompt"></div>
+  <div id="crosshair"></div>
+  <div id="toasts"></div>
+  <div id="dialog" class="panel hidden"><div id="dlgName"></div><div id="dlgText"></div><div id="dlgOpts"></div><div id="dlgHint">[E] Weiter</div></div>
+</div>
+<div id="damageFlash"></div>
+<div id="banner"><h2></h2><div></div></div>
+<div id="bigmap" class="hidden"><canvas id="bigmapCanvas" width="900" height="900"></canvas></div>
+<div id="pause" class="hidden">Klicke, um weiterzuspielen</div>
+<div id="fade"></div>
+
+<div id="menu">
+  <div class="card panel">
+    <h1>HELLAS</h1>
+    <div class="sub">PFAD DER HELDEN</div>
+    <p>Hellas im Zeitalter der Helden. Von der Akropolis bis zum Gipfel des Olymp, vom Orakel in Delphi bis zum Labyrinth von Kreta – die Götter haben dich auserwählt.</p>
+    <div>
+      <button class="btn" id="btnNew" disabled>Neues Spiel</button>
+      <button class="btn alt hidden" id="btnLoad">Fortsetzen</button>
+    </div>
+    <div id="loading">Die Welt wird erschaffen …</div>
+    <div id="controls">
+      <b>W A S D</b><span>Laufen</span>
+      <b>Maus</b><span>Kamera drehen (Mausrad: Zoom)</span>
+      <b>Shift</b><span>Sprinten</span>
+      <b>Leertaste</b><span>Springen / Schwimmen</span>
+      <b>Linke Maustaste</b><span>Angreifen</span>
+      <b>Rechte Maustaste</b><span>Mit dem Schild blocken</span>
+      <b>E</b><span>Sprechen / Interagieren / Weiter</span>
+      <b>R</b><span>Pferd rufen / absteigen</span>
+      <b>F</b><span>Ambrosia trinken (Heilung)</span>
+      <b>Q</b><span>Blitz des Zeus (nach Segen)</span>
+      <b>M</b><span>Karte</span>
+      <b>1 – 4</b><span>Antwort im Gespräch wählen</span>
+    </div>
+  </div>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

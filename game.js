@@ -1,0 +1,1994 @@
+/* Hellas – Pfad der Helden
+ * Ein Open-World-Spiel im antiken Griechenland. Three.js (r160), alles prozedural.
+ */
+'use strict';
+(() => {
+const V3 = THREE.Vector3;
+const $ = (id) => document.getElementById(id);
+
+// ============================================================
+// Hilfsfunktionen, Zufall, Rauschen
+// ============================================================
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+let rand = mulberry32(20260425);
+const rr = (a, b) => a + (b - a) * rand();
+const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+function hash(x, y) { let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+  return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+}
+function fbm(x, y, o = 5) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < o; i++) { s += a * vnoise(x * f + i * 17.3, y * f - i * 9.1); f *= 2; a *= 0.5; } return s; }
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const lerp = (a, b, t) => a + (b - a) * t;
+const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+function angLerp(a, b, t) { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * t; }
+function segDist(px, pz, ax, az, bx, bz) { const dx = bx - ax, dz = bz - az; const t = clamp(((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz), 0, 1); return Math.hypot(px - ax - dx * t, pz - az - dz * t); }
+
+// ============================================================
+// Welt-Definition
+// ============================================================
+const WORLD = 2000, SEG = 400, CELL = WORLD / SEG, N = SEG + 1, HALF = WORLD / 2;
+const BLOBS = [
+  { x: -300, z: -80, r: 480 },   // Attika / Mittelgriechenland
+  { x: 0, z: -560, r: 340 },     // Thessalien / Olymp
+  { x: -350, z: 360, r: 330 },   // Peloponnes
+  { x: -650, z: -300, r: 250 },  // Westen
+  { x: 480, z: 660, r: 170 },    // Kreta
+];
+const PEAKS = [
+  { x: 100, z: -680, h: 175, s: 80 },  // Olymp
+  { x: -480, z: -430, h: 80, s: 70 },  // Parnass
+  { x: -400, z: 560, h: 60, s: 55 },   // Taygetos
+  { x: 540, z: 620, h: 30, s: 45 },    // Ida (Kreta)
+];
+const LOCS = {
+  athen:     { name: 'Athen', sub: 'Stadt der Athene', x: 0, z: 0, r: 78, h: 6, city: true },
+  akropolis: { name: 'Akropolis', x: 0, z: -35, r: 30, h: 22, hidden: true },
+  piraeus:   { name: 'Piräus', sub: 'Hafen von Athen', x: 140, z: 70, r: 36, h: 2, city: true },
+  theben:    { name: 'Theben', sub: 'Stadt des Kadmos', x: -170, z: -260, r: 40, h: 12, city: true },
+  delphi:    { name: 'Delphi', sub: 'Heiligtum des Apollon', x: -420, z: -330, r: 46, h: 38, city: true },
+  olympia:   { name: 'Olympia', sub: 'Heiligtum des Zeus', x: -560, z: 130, r: 78, h: 5, city: true },
+  sparta:    { name: 'Sparta', sub: 'Stadt der Krieger', x: -260, z: 520, r: 70, h: 8, city: true },
+  banditen:  { name: 'Banditenlager', sub: 'Vorsicht, Wanderer', x: -120, z: 430, r: 26, h: null },
+  olymp:     { name: 'Gipfel des Olymp', sub: 'Thron der Götter', x: 100, z: -680, r: 14, h: null },
+  kreta:     { name: 'Knossos', sub: 'Insel Kreta', x: 460, z: 690, r: 62, h: 6, city: true },
+  heimat:    { name: 'Siedlungsplatz', sub: 'Gründe hier deine eigene Stadt', x: -120, z: 120, r: 45, h: null },
+};
+const LOC_LIST = Object.values(LOCS);
+const ROADS = [
+  [[0, 0], [-80, -120], [-170, -260], [-300, -300], [-420, -330]],
+  [[0, 0], [70, 40], [140, 70]],
+  [[0, 0], [-150, 40], [-330, 80], [-560, 130]],
+  [[-560, 130], [-450, 300], [-260, 520]],
+  [[0, 0], [-60, 180], [-150, 350], [-260, 520]],
+  [[-170, -260], [-60, -420], [40, -560], [90, -660]],
+  [[-260, 520], [-120, 430]],
+  [[460, 690], [400, 600]],
+  [[-48, 144], [-72, 120], [-120, 120]],
+];
+const ROAD_SEGS = [];
+for (const r of ROADS) for (let i = 0; i < r.length - 1; i++) ROAD_SEGS.push([r[i][0], r[i][1], r[i + 1][0], r[i + 1][1]]);
+function roadDist(x, z) { let m = 1e9; for (const s of ROAD_SEGS) { const d = segDist(x, z, s[0], s[1], s[2], s[3]); if (d < m) m = d; } return m; }
+const FORESTS = [
+  { x: -250, z: -150, r: 85 }, { x: -540, z: -170, r: 90 }, { x: -60, z: -380, r: 80 },
+  { x: -430, z: 330, r: 80 }, { x: -680, z: -360, r: 90 }, { x: 160, z: -470, r: 70 },
+];
+
+function rawHeight(x, z) {
+  let land = -9;
+  for (const b of BLOBS) { const d = Math.hypot(x - b.x, z - b.z) / b.r; land = Math.max(land, 1 - d); }
+  land += fbm(x * 0.0035 + 11, z * 0.0035 - 7, 4) * 0.28;
+  let h;
+  if (land < 0) h = Math.max(-38, land * 110);
+  else {
+    const hills = fbm(x * 0.009, z * 0.009, 5) * 0.5 + 0.5;
+    h = Math.min(land, 0.5) * 14 + hills * hills * 42 * smooth(0.0, 0.3, land);
+  }
+  for (const p of PEAKS) { const d2 = (x - p.x) ** 2 + (z - p.z) ** 2; h += p.h * Math.exp(-d2 / (2 * p.s * p.s)); }
+  return h;
+}
+for (const L of LOC_LIST) if (L.h === null) L.h = rawHeight(L.x, L.z);
+function shapedHeight(x, z) {
+  let h = rawHeight(x, z);
+  for (const L of LOC_LIST) {
+    const d = Math.hypot(x - L.x, z - L.z);
+    const w = smooth(L.r * 1.7, L.r, d);
+    if (w > 0) h = lerp(h, L.h, w);
+  }
+  return h;
+}
+
+const HGT = new Float32Array(N * N);
+function heightAt(x, z) {
+  const gx = (x + HALF) / CELL, gz = (z + HALF) / CELL;
+  if (gx < 0 || gz < 0 || gx >= SEG || gz >= SEG) return -38;
+  const ix = Math.floor(gx), iz = Math.floor(gz), fx = gx - ix, fz = gz - iz;
+  const a = HGT[iz * N + ix], b = HGT[(iz + 1) * N + ix], d = HGT[iz * N + ix + 1], c = HGT[(iz + 1) * N + ix + 1];
+  if (fx + fz <= 1) return a + (d - a) * fx + (b - a) * fz;
+  return c + (b - c) * (1 - fx) + (d - c) * (1 - fz);
+}
+function slopeAt(x, z) { const e = 2; return Math.hypot(heightAt(x + e, z) - heightAt(x - e, z), heightAt(x, z + e) - heightAt(x, z - e)) / (2 * e); }
+function inCity(x, z, pad = 1.1) { for (const L of LOC_LIST) if (Math.hypot(x - L.x, z - L.z) < L.r * pad) return L; return null; }
+
+function terrainColor(x, z, h, slope) {
+  let c;
+  if (h < -0.4) c = mixc([0.30, 0.42, 0.40], [0.80, 0.72, 0.52], smooth(-22, -0.4, h));
+  else {
+    const n = fbm(x * 0.02, z * 0.02, 3) * 0.5 + 0.5;
+    const n2 = fbm(x * 0.07 + 3, z * 0.07, 2) * 0.5 + 0.5;
+    c = mixc([0.40, 0.49, 0.21], [0.69, 0.62, 0.34], smooth(0.3, 0.75, n));
+    c = mixc(c, [0.33, 0.42, 0.18], smooth(0.55, 0.8, n2) * 0.5);
+    for (const F of FORESTS) { const d = Math.hypot(x - F.x, z - F.z); if (d < F.r * 1.2) c = mixc(c, [0.27, 0.36, 0.16], smooth(F.r * 1.2, F.r * 0.5, d) * 0.7); }
+    c = mixc(c, [0.56, 0.53, 0.48], Math.max(smooth(0.6, 1.0, slope), smooth(62, 100, h)));
+    c = mixc(c, [0.95, 0.96, 0.98], smooth(118, 136, h + n * 10));
+    c = mixc([0.87, 0.79, 0.57], c, smooth(1.4, 3.2, h));
+    const rd = roadDist(x, z);
+    if (rd < 4.5 && h > 0.3) c = mixc([0.62, 0.52, 0.38], c, smooth(2.4, 4.5, rd));
+    for (const L of LOC_LIST) {
+      if (!L.city) continue;
+      const d = Math.hypot(x - L.x, z - L.z);
+      if (d < L.r) c = mixc(c, [0.72, 0.67, 0.56], smooth(L.r * 0.95, L.r * 0.55, d) * 0.6 * (1 - smooth(0.25, 0.6, slope)));
+    }
+  }
+  return c;
+}
+
+// ============================================================
+// Renderer, Szene, Licht, Himmel
+// ============================================================
+const canvas = $('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.2, 4200);
+scene.fog = new THREE.Fog(0xbfd9ef, 220, 1300);
+
+const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x8a7a55, 1.3);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const SC = sun.shadow.camera; SC.left = -75; SC.right = 75; SC.top = 75; SC.bottom = -75; SC.near = 1; SC.far = 600;
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
+scene.add(sun, sun.target);
+
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: { top: { value: new THREE.Color(0x3d7fd0) }, bottom: { value: new THREE.Color(0xcfe3f2) }, sunDir: { value: new V3(0, 1, 0) }, sunCol: { value: new THREE.Color(0xfff0d0) } },
+  vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: 'uniform vec3 top; uniform vec3 bottom; uniform vec3 sunDir; uniform vec3 sunCol; varying vec3 vP;' +
+    'void main(){ vec3 d = normalize(vP); float h = max(d.y, 0.0); vec3 c = mix(bottom, top, pow(h, 0.55));' +
+    'float s = max(dot(d, sunDir), 0.0); c += sunCol * (pow(s, 900.0) * 3.0 + pow(s, 10.0) * 0.22);' +
+    'if (d.y < 0.0) c = bottom; gl_FragColor = linearToOutputTexel(vec4(c, 1.0)); }',
+  side: THREE.BackSide, depthWrite: false, fog: false,
+});
+const sky = new THREE.Mesh(new THREE.SphereGeometry(3500, 32, 16), skyMat);
+sky.renderOrder = -10;
+scene.add(sky);
+const starGeo = new THREE.BufferGeometry();
+{ const p = []; for (let i = 0; i < 1600; i++) { const u = rand() * 2 - 1, t = rand() * Math.PI * 2, y = Math.abs(u); const r = Math.sqrt(1 - y * y); p.push(Math.cos(t) * r * 3300, y * 3300 + 50, Math.sin(t) * r * 3300); } starGeo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); }
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false });
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// Wasser
+const waterMat = new THREE.MeshPhongMaterial({ color: 0x1f6f9a, specular: 0x99bbcc, shininess: 90, transparent: true, opacity: 0.86 });
+const water = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000, 1, 1), waterMat);
+water.rotation.x = -Math.PI / 2;
+water.receiveShadow = true;
+scene.add(water);
+
+// ============================================================
+// Materialien & statische Geometrie (zusammengefasst pro Region)
+// ============================================================
+const matCache = {};
+function lam(hex, emissive) {
+  const k = hex + '|' + (emissive || 0);
+  if (!matCache[k]) matCache[k] = new THREE.MeshLambertMaterial({ color: hex, emissive: emissive || 0 });
+  return matCache[k];
+}
+const M = {
+  marble: lam(0xf1ece1), marble2: lam(0xdcd3c1), white: lam(0xefe8da), terracotta: lam(0xb5553a), roof2: lam(0x9c4a32),
+  wood: lam(0x7a5230), darkwood: lam(0x4a321e), stone: lam(0xb8ab92), stone2: lam(0x9a8f7c), dark: lam(0x2b2218),
+  bronze: lam(0xb98d3a), red: lam(0x9b1c1c), blue: lam(0x2a4d8f), cloth: lam(0xe7dcc3), minoan: lam(0xa8302a),
+  black: lam(0x1a1a1a), gold: lam(0xe8c46a, 0x3a2a00), fire: lam(0xff9a2a, 0xff6a00), water: lam(0x3f8fc0, 0x0a2030),
+  tent: lam(0x8a6a44), sail: lam(0xf2ead6), olive: lam(0x7d8c4a),
+};
+const STATIC = new Map();
+const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _eu = new THREE.Euler(), _pv = new V3(), _sv = new V3();
+function addStatic(geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
+  _eu.set(rx, ry, rz, 'YXZ'); _q.setFromEuler(_eu); _pv.set(x, y, z); _sv.set(sx, sy, sz); _m4.compose(_pv, _q, _sv);
+  const g = geo.index ? geo.toNonIndexed() : geo.clone();
+  for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+  g.applyMatrix4(_m4);
+  const key = mat.uuid + '|' + Math.floor(x / 220) + ',' + Math.floor(z / 220);
+  if (!STATIC.has(key)) STATIC.set(key, { mat, list: [] });
+  STATIC.get(key).list.push(g);
+}
+function finalizeStatic() {
+  for (const { mat, list } of STATIC.values()) {
+    let n = 0; for (const g of list) n += g.attributes.position.count;
+    const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+    let o = 0;
+    for (const g of list) { pos.set(g.attributes.position.array, o); nor.set(g.attributes.normal.array, o); o += g.attributes.position.array.length; g.dispose(); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.computeBoundingSphere();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    scene.add(mesh);
+  }
+  STATIC.clear();
+}
+const G = {
+  box: new THREE.BoxGeometry(1, 1, 1),
+  col: new THREE.CylinderGeometry(0.46, 0.55, 1, 14, 1),
+  cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 14, 1),
+  cyl8: new THREE.CylinderGeometry(0.5, 0.5, 1, 8, 1),
+  cone: new THREE.ConeGeometry(0.5, 1, 10),
+  cone4: new THREE.ConeGeometry(0.5, 1, 4),
+  sphere: new THREE.SphereGeometry(0.5, 12, 8),
+  minoanCol: new THREE.CylinderGeometry(0.6, 0.42, 1, 12, 1),
+};
+{ const s = new THREE.Shape(); s.moveTo(-0.5, 0); s.lineTo(0.5, 0); s.lineTo(0, 1); s.closePath(); G.prism = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: false }); G.prism.translate(0, 0, -0.5); }
+
+// Kollision
+const CGRID = 16, cgrid = new Map();
+const ckey = (cx, cz) => cx * 100003 + cz;
+function addCollider(c) {
+  let minX, maxX, minZ, maxZ;
+  if (c.t === 'c') { minX = c.x - c.r; maxX = c.x + c.r; minZ = c.z - c.r; maxZ = c.z + c.r; }
+  else { minX = c.minX; maxX = c.maxX; minZ = c.minZ; maxZ = c.maxZ; }
+  const m = 1.5;
+  for (let cx = Math.floor((minX - m) / CGRID); cx <= Math.floor((maxX + m) / CGRID); cx++)
+    for (let cz = Math.floor((minZ - m) / CGRID); cz <= Math.floor((maxZ + m) / CGRID); cz++) {
+      const k = ckey(cx, cz); if (!cgrid.has(k)) cgrid.set(k, []); cgrid.get(k).push(c);
+    }
+}
+function circleCol(x, z, r) { addCollider({ t: 'c', x, z, r }); }
+function boxCol(minX, maxX, minZ, maxZ, top = 1e9) { addCollider({ t: 'b', minX, maxX, minZ, maxZ, top }); }
+function resolveCollisions(p, r) {
+  const list = cgrid.get(ckey(Math.floor(p.x / CGRID), Math.floor(p.z / CGRID)));
+  if (!list) return false;
+  let hit = false;
+  for (const c of list) {
+    if (c.t === 'c') {
+      const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), R = c.r + r;
+      if (d < R && d > 1e-6) { p.x = c.x + dx / d * R; p.z = c.z + dz / d * R; hit = true; }
+    } else {
+      if (p.y !== undefined && p.y >= c.top - 0.25) continue;
+      if (p.x > c.minX - r && p.x < c.maxX + r && p.z > c.minZ - r && p.z < c.maxZ + r) {
+        const a = p.x - (c.minX - r), b = (c.maxX + r) - p.x, cc = p.z - (c.minZ - r), d = (c.maxZ + r) - p.z;
+        const m = Math.min(a, b, cc, d);
+        if (m === a) p.x = c.minX - r; else if (m === b) p.x = c.maxX + r; else if (m === cc) p.z = c.minZ - r; else p.z = c.maxZ + r;
+        hit = true;
+      }
+    }
+  }
+  return hit;
+}
+const platforms = [];
+function addPlatform(minX, maxX, minZ, maxZ, top) { platforms.push({ minX, maxX, minZ, maxZ, top }); }
+function groundAt(x, z) {
+  let h = heightAt(x, z);
+  for (const p of platforms) if (x > p.minX && x < p.maxX && z > p.minZ && z < p.maxZ && p.top > h) h = p.top;
+  return h;
+}
+
+const RES = [];
+let FORCE_BUILD = false;
+function reserve(x, z, r) { RES.push([x, z, r]); }
+function isFree(x, z, r) { for (const q of RES) if (Math.hypot(x - q[0], z - q[1]) < r + q[2]) return false; return true; }
+// Lokales Koordinatensystem für Gebäude
+class Frame {
+  constructor(x, z, rot = 0, y = null) { this.x = x; this.z = z; this.rot = rot; this.y = y === null ? heightAt(x, z) : y; this.c = Math.cos(rot); this.s = Math.sin(rot); }
+  w(lx, lz) { return [this.x + lx * this.c + lz * this.s, this.z - lx * this.s + lz * this.c]; }
+  put(geo, mat, lx, ly, lz, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) { const [x, z] = this.w(lx, lz); addStatic(geo, mat, x, this.y + ly, z, rx, this.rot + ry, rz, sx, sy, sz); }
+  box(mat, lx, ly, lz, w, h, d, collide = false, top = null) {
+    this.put(G.box, mat, lx, ly + h / 2, lz, 0, 0, 0, w, h, d);
+    if (collide) this.colBox(lx, lz, w, d, top === null ? 1e9 : this.y + top);
+  }
+  colBox(lx, lz, w, d, top = 1e9) {
+    const pts = [this.w(lx - w / 2, lz - d / 2), this.w(lx + w / 2, lz - d / 2), this.w(lx - w / 2, lz + d / 2), this.w(lx + w / 2, lz + d / 2)];
+    boxCol(Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[1])), top);
+  }
+  platform(lx, lz, w, d, top) {
+    const pts = [this.w(lx - w / 2, lz - d / 2), this.w(lx + w / 2, lz + d / 2)];
+    addPlatform(Math.min(pts[0][0], pts[1][0]), Math.max(pts[0][0], pts[1][0]), Math.min(pts[0][1], pts[1][1]), Math.max(pts[0][1], pts[1][1]), this.y + top);
+  }
+}
+
+// ============================================================
+// Gebäude-Bausteine
+// ============================================================
+function temple(f, W, L, nx, nz, colH, opt = {}) {
+  const cm = opt.colMat || M.marble, base = opt.baseMat || M.marble2;
+  reserve(f.x, f.z, Math.hypot(W, L) / 2 + 2);
+  // Stufen (Krepis)
+  for (let i = 0; i < 3; i++) { const inset = i * 0.7; f.box(base, 0, -2 + 0, 0, W + 2.8 - inset * 2, 2 + 0.4 * (i + 1) - 0.0, L + 2.8 - inset * 2); }
+  const top = 1.2;
+  f.platform(0, 0, W + 2.8, L + 2.8, top);
+  const sx = (W - 1.2) / (nx - 1), sz = (L - 1.2) / (nz - 1);
+  const ring = [];
+  for (let i = 0; i < nx; i++) { ring.push([-W / 2 + 0.6 + i * sx, -L / 2 + 0.6]); ring.push([-W / 2 + 0.6 + i * sx, L / 2 - 0.6]); }
+  for (let j = 1; j < nz - 1; j++) { ring.push([-W / 2 + 0.6, -L / 2 + 0.6 + j * sz]); ring.push([W / 2 - 0.6, -L / 2 + 0.6 + j * sz]); }
+  for (const [x, z] of ring) {
+    f.put(opt.colGeo || G.col, cm, x, top + colH / 2, z, 0, 0, 0, 1, colH, 1);
+    f.box(cm, x, top + colH, z, 1.35, 0.3, 1.35);
+    f.box(cm, x, top - 0.05, z, 1.3, 0.2, 1.3);
+    const [wx, wz] = f.w(x, z); circleCol(wx, wz, 0.62);
+  }
+  const eY = top + colH + 0.3;
+  f.box(cm, 0, eY, 0, W + 0.4, 0.8, L + 0.4);
+  f.box(opt.friezeMat || M.marble2, 0, eY + 0.8, 0, W + 0.5, 0.6, L + 0.5);
+  const pY = eY + 1.4, pH = W * 0.2;
+  f.put(G.prism, cm, 0, pY, 0, 0, 0, 0, W + 0.5, pH, L + 0.5);
+  const ang = Math.atan2(pH, W / 2), slab = Math.hypot(W / 2, pH) + 0.5;
+  for (const s of [-1, 1]) f.put(G.box, opt.roofMat || M.terracotta, s * W / 4, pY + pH / 2 + 0.12, 0, 0, 0, -s * ang, slab, 0.22, L + 1.0);
+  // Cella
+  if (!opt.noCella) {
+    const cw = W - 5, cl = L - 7.5;
+    f.box(opt.cellaMat || M.marble2, 0, top, 0, cw, colH + 0.3, cl, true);
+    f.box(M.dark, 0, top, cl / 2 + 0.01, 2.2, 4, 0.1);
+  }
+  if (opt.chest !== false) { const [cx, cz] = f.w(0, opt.noCella ? 0 : (L - 7.5) / 2 + 1.5); opt.chestRef = addChest(cx, f.y + top, cz, f.rot, opt.tier || 1); }
+  if (opt.guards !== false && W >= 7) for (const s of [-1, 1]) { const [gx, gz] = f.w(s * (W / 2 - 1.2), L / 2 + 2.6); TEMPLE_GUARDS.push([gx, gz, f.rot]); }
+}
+function tholos(f, R, n, colH) {
+  reserve(f.x, f.z, R + 3);
+  for (let i = 0; i < 3; i++) f.put(G.cyl, M.marble2, 0, -0.8 + i * 0.4, 0, 0, 0, 0, (R + 2.4 - i * 0.7) * 2, 2.4, (R + 2.4 - i * 0.7) * 2);
+  f.platform(0, 0, R * 2 + 3, R * 2 + 3, 1.2);
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2, x = Math.cos(a) * R, z = Math.sin(a) * R;
+    f.put(G.col, M.marble, x, 1.2 + colH / 2, z, 0, 0, 0, 0.9, colH, 0.9);
+    const [wx, wz] = f.w(x, z); circleCol(wx, wz, 0.55);
+  }
+  f.put(G.cyl, M.marble, 0, 1.2 + colH + 0.35, 0, 0, 0, 0, R * 2 + 1.4, 0.7, R * 2 + 1.4);
+  f.put(G.cone, M.terracotta, 0, 1.2 + colH + 0.7 + 1.2, 0, 0, 0, 0, R * 2 + 1.8, 2.4, R * 2 + 1.8);
+}
+function house(x, z, rot, w, d, h, opt = {}) {
+  if (!FORCE_BUILD && !isFree(x, z, Math.max(w, d) * 0.62)) return null;
+  reserve(x, z, Math.max(w, d) * 0.62);
+  const f = new Frame(x, z, rot);
+  const y0 = Math.min(heightAt(...f.w(-w / 2, -d / 2)), heightAt(...f.w(w / 2, d / 2)), heightAt(...f.w(-w / 2, d / 2)), heightAt(...f.w(w / 2, -d / 2)));
+  f.y = y0;
+  const wallM = opt.wall || M.white;
+  f.box(M.stone2, 0, -3, 0, w + 0.3, 3.3, d + 0.3);
+  f.box(wallM, 0, 0, 0, w, h, d, true);
+  f.put(G.prism, opt.roof || M.terracotta, 0, h, 0, 0, Math.PI / 2, 0, d + 0.8, 1.7, w + 0.8);
+  f.box(M.darkwood, 0, 0, d / 2 + 0.03, 1.0, 1.9, 0.08);
+  for (const sx of [-1, 1]) if (w > 4.5) f.box(M.dark, sx * w * 0.3, h * 0.55, d / 2 + 0.03, 0.6, 0.6, 0.06);
+  return f;
+}
+function statue(x, z, rot, s = 1, mat = M.marble, y = null) {
+  reserve(x, z, 1.5 * s);
+  const f = new Frame(x, z, rot, y);
+  f.box(M.marble2, 0, 0, 0, 1.6 * s, 1.4 * s, 1.6 * s, true);
+  const b = 1.4 * s;
+  f.put(G.cyl, mat, 0, b + 0.9 * s, 0, 0, 0, 0, 0.8 * s, 1.8 * s, 0.6 * s);
+  f.box(mat, 0, b + 1.8 * s, 0, 0.9 * s, 0.9 * s, 0.45 * s);
+  f.put(G.sphere, mat, 0, b + 2.95 * s, 0, 0, 0, 0, 0.5 * s, 0.55 * s, 0.5 * s);
+  f.put(G.cyl8, mat, 0.6 * s, b + 1.6 * s, 0, 0, 0, 0, 0.18 * s, 1.4 * s, 0.18 * s);
+  f.put(G.cyl8, mat, -0.6 * s, b + 2.6 * s, 0.2 * s, 0, 0, 0, 0.1 * s, 4.2 * s, 0.1 * s);
+  f.put(G.cone, mat, -0.6 * s, b + 4.9 * s, 0.2 * s, 0, 0, 0, 0.2 * s, 0.5 * s, 0.2 * s);
+  f.put(G.cyl, mat, 0.65 * s, b + 1.3 * s, 0.25 * s, Math.PI / 2, 0, 0, 1.1 * s, 0.1 * s, 1.1 * s);
+  f.put(G.sphere, mat, 0, b + 3.25 * s, 0, 0, 0, 0, 0.55 * s, 0.35 * s, 0.6 * s);
+  return f;
+}
+const fires = [];
+function brazier(x, z, y = null) {
+  const f = new Frame(x, z, 0, y);
+  f.put(G.cyl8, M.bronze, 0, 0.6, 0, 0, 0, 0, 0.25, 1.2, 0.25);
+  f.put(G.cyl, M.bronze, 0, 1.3, 0, 0, 0, 0, 1.0, 0.3, 1.0);
+  const fm = new THREE.Mesh(G.cone, M.fire); fm.position.set(x, f.y + 1.85, z); fm.scale.set(0.7, 1.0, 0.7); scene.add(fm); fires.push(fm);
+  circleCol(x, z, 0.5);
+}
+function campfire(x, z) {
+  const f = new Frame(x, z, 0);
+  for (let i = 0; i < 4; i++) f.put(G.cyl8, M.darkwood, 0, 0.15, 0, 0, i * Math.PI / 4, Math.PI / 2, 0.18, 1.6, 0.18);
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; f.put(G.sphere, M.stone2, Math.cos(a) * 1.0, 0.1, Math.sin(a) * 1.0, 0, 0, 0, 0.45, 0.35, 0.45); }
+  const fm = new THREE.Mesh(G.cone, M.fire); fm.position.set(x, f.y + 0.75, z); fm.scale.set(0.9, 1.2, 0.9); scene.add(fm); fires.push(fm);
+}
+function fountain(x, z) {
+  reserve(x, z, 3.5);
+  const f = new Frame(x, z, 0);
+  f.put(G.cyl, M.marble2, 0, 0.35, 0, 0, 0, 0, 5, 0.7, 5);
+  f.put(G.cyl, M.water, 0, 0.62, 0, 0, 0, 0, 4.4, 0.1, 4.4);
+  f.put(G.cyl, M.marble, 0, 1.3, 0, 0, 0, 0, 0.6, 2, 0.6);
+  f.put(G.cyl, M.marble, 0, 2.3, 0, 0, 0, 0, 1.8, 0.3, 1.8);
+  circleCol(x, z, 2.6);
+  return f;
+}
+function stoa(f, W, D, n, colH) {
+  reserve(f.x, f.z, W / 2 + 1);
+  f.box(M.marble2, 0, -2, 0, W + 1, 2.5, D + 1);
+  f.platform(0, 0, W + 1, D + 1, 0.5);
+  f.box(M.white, 0, 0.5, -D / 2 + 0.3, W, colH + 0.4, 0.6, true);
+  for (const s of [-1, 1]) f.box(M.white, s * (W / 2 - 0.3), 0.5, 0, 0.6, colH + 0.4, D, true);
+  for (let i = 0; i < n; i++) {
+    const x = -W / 2 + 1 + i * (W - 2) / (n - 1);
+    f.put(G.col, M.marble, x, 0.5 + colH / 2, D / 2 - 0.6, 0, 0, 0, 0.8, colH, 0.8);
+    const [wx, wz] = f.w(x, D / 2 - 0.6); circleCol(wx, wz, 0.5);
+  }
+  f.box(M.marble, 0, 0.5 + colH, 0, W + 0.4, 0.6, D + 0.4);
+  f.put(G.prism, M.terracotta, 0, 1.1 + colH, 0, 0, Math.PI / 2, 0, D + 0.8, 1.8, W + 0.8);
+}
+function theatre(f, R, rows) {
+  reserve(f.x, f.z, R + rows * 1.6);
+  for (let i = 0; i < rows; i++) {
+    const r = R + i * 1.6;
+    const segs = 14;
+    for (let s = 0; s <= segs; s++) {
+      const a = Math.PI * (s / segs), x = Math.cos(a) * r, z = -Math.sin(a) * r;
+      f.put(G.box, M.stone, x, i * 0.55 + 0.3, z, 0, -a + Math.PI / 2, 0, 2 * r * Math.PI / segs + 0.3, 0.6 + i * 0.55 * 2, 1.6);
+    }
+  }
+  f.put(G.cyl, M.marble2, 0, 0.1, 0, 0, 0, 0, R * 1.5, 0.2, R * 1.5);
+}
+function tree(x, z, kind) { TREES.push({ x, z, kind, s: rr(0.8, 1.3), r: rand() * 6.28 }); }
+const TREES = [];
+
+// ============================================================
+// Schatztruhen, Relikte, Ruinen-Tempel
+// ============================================================
+const CHESTS = [], TEMPLE_GUARDS = [], RUINS = [];
+const RELICS = {
+  perseus: { name: 'Schwert des Perseus', desc: '+8 Schaden' },
+  achilles: { name: 'Helm des Achilles', desc: 'Du erleidest 20 % weniger Schaden' },
+  hermes: { name: 'Sandalen des Hermes', desc: '+20 % Laufgeschwindigkeit' },
+  apollon: { name: 'Amulett des Apollon', desc: '+40 maximales Leben' },
+  athene: { name: 'Schild der Athene', desc: 'Dein Schild hält fast jeden Schlag ab' },
+  herakles: { name: 'Gürtel des Herakles', desc: 'Sprinten kostet nur halb so viel Ausdauer' },
+};
+function makeChestMesh(tier) {
+  const g = new THREE.Group();
+  const wood = lam(tier === 2 ? 0x5a2e1a : 0x7a5230), trim = tier === 2 ? M.gold : M.bronze;
+  const add = (geo, mat, x, y, z, p = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; p.add(m); return m; };
+  add(new THREE.BoxGeometry(1.1, 0.6, 0.7), wood, 0, 0.3, 0);
+  for (const x of [-0.42, 0.42]) add(new THREE.BoxGeometry(0.1, 0.62, 0.72), trim, x, 0.3, 0);
+  const lid = new THREE.Group(); lid.position.set(0, 0.6, -0.35); g.add(lid);
+  add(new THREE.BoxGeometry(1.12, 0.24, 0.72), wood, 0, 0.12, 0.36, lid);
+  for (const x of [-0.42, 0.42]) add(new THREE.BoxGeometry(0.1, 0.26, 0.74), trim, x, 0.12, 0.36, lid);
+  add(new THREE.BoxGeometry(0.18, 0.2, 0.06), trim, 0, -0.05, 0.73, lid);
+  const glow = add(new THREE.TorusGeometry(0.95, 0.04, 6, 28), new THREE.MeshBasicMaterial({ color: tier === 2 ? 0xffd24a : 0xe8c46a, transparent: true, opacity: 0.8 }), 0, 0.05, 0);
+  glow.rotation.x = Math.PI / 2; glow.castShadow = false;
+  return { root: g, lid, glow };
+}
+function addChest(x, y, z, rot, tier = 1, ruin) {
+  const m = makeChestMesh(tier);
+  m.root.position.set(x, y, z); m.root.rotation.y = rot; scene.add(m.root);
+  const ch = { id: CHESTS.length, x, y, z, tier, m, opened: false, ruin };
+  CHESTS.push(ch);
+  interactables.push({ pos: () => new V3(ch.x, ch.y, ch.z), label: tier === 2 ? 'Tempelschatz öffnen' : 'Opfertruhe öffnen', r: 2.6, active: () => !ch.opened, fn: () => tryOpenChest(ch) });
+  return ch;
+}
+function markChestOpened(ch) { ch.opened = true; ch.m.lid.rotation.x = -1.9; ch.m.glow.visible = false; }
+function tryOpenChest(ch) {
+  if (ch.opened) return;
+  if (ch.ruin !== undefined) {
+    const alive = enemies.filter(e => e.ruin === ch.ruin && !e.dead).length;
+    if (alive) { toast('Die Tempelwächter bewachen den Schatz! (' + alive + ' übrig)'); sfx('block'); return; }
+  }
+  markChestOpened(ch); if (!S.chests.includes(ch.id)) S.chests.push(ch.id);
+  addMoney(Math.round(ch.tier === 2 ? rr(45, 95) : rr(12, 35)));
+  if (rand() < (ch.tier === 2 ? 0.75 : 0.35)) { const n = ch.tier === 2 ? 2 : 1; player.potions += n; toast('+' + n + ' Ambrosia', 'gold'); }
+  if (ch.tier === 2) {
+    const left = Object.keys(RELICS).filter(k => !player.relics.includes(k));
+    if (left.length) gainRelic(pick(left)); else { addMoney(60); }
+  }
+  sfx('quest'); save();
+}
+function gainRelic(k) {
+  player.relics.push(k);
+  const R = RELICS[k];
+  if (k === 'perseus') player.dmg += 8;
+  if (k === 'apollon') { player.maxHp += 40; player.hp += 40; }
+  banner(R.name, R.desc);
+  toast('Relikt gefunden: ' + R.name + ' (' + player.relics.length + '/6)', 'gold');
+}
+const RUIN_NAMES = ['Tempel des Hermes', 'Tempel des Poseidon', 'Tempel der Artemis', 'Tempel des Ares', 'Tempel der Hera', 'Tempel des Dionysos', 'Tempel des Hephaistos', 'Tempel der Demeter'];
+function buildRuins() {
+  let tries = 0;
+  while (RUINS.length < 8 && tries < 4000) {
+    tries++;
+    const x = rr(-850, 480), z = rr(-850, 820), h = heightAt(x, z);
+    if (h < 4 || h > 90) continue;
+    if (inCity(x, z, 1.8) || roadDist(x, z) < 25 || !isFree(x, z, 22)) continue;
+    let ok = true;
+    for (const [dx, dz] of [[-10, -12], [10, -12], [-10, 12], [10, 12]]) if (Math.abs(heightAt(x + dx, z + dz) - h) > 3.5 || heightAt(x + dx, z + dz) < 2) ok = false;
+    if (!ok || RUINS.some(r => Math.hypot(r.x - x, r.z - z) < 170)) continue;
+    buildRuin(x, z, RUIN_NAMES[RUINS.length]);
+  }
+}
+function buildRuin(x, z, name) {
+  const rot = Math.floor(rand() * 4) * Math.PI / 2;
+  let y0 = 1e9; for (const [dx, dz] of [[-8, -10], [8, -10], [-8, 10], [8, 10], [0, 0]]) y0 = Math.min(y0, heightAt(x + dx, z + dz));
+  const f = new Frame(x, z, rot, y0);
+  reserve(x, z, 16);
+  const W = 10, L = 15, top = 1.2, colH = 5.5, rm = lam(0xd9d0bc), moss = lam(0x9fa884);
+  for (let i = 0; i < 3; i++) f.box(i === 0 ? moss : M.marble2, 0, -4, 0, W + 2.8 - i * 1.4, 4 + 0.4 * (i + 1), L + 2.8 - i * 1.4);
+  f.platform(0, 0, W + 2.8, L + 2.8, top);
+  const ring = [], nx = 4, nz = 6, sx = (W - 1.2) / (nx - 1), sz = (L - 1.2) / (nz - 1);
+  for (let i = 0; i < nx; i++) { ring.push([-W / 2 + 0.6 + i * sx, -L / 2 + 0.6]); ring.push([-W / 2 + 0.6 + i * sx, L / 2 - 0.6]); }
+  for (let j = 1; j < nz - 1; j++) { ring.push([-W / 2 + 0.6, -L / 2 + 0.6 + j * sz]); ring.push([W / 2 - 0.6, -L / 2 + 0.6 + j * sz]); }
+  for (const [cx, cz] of ring) {
+    const r = rand();
+    if (r < 0.18) continue;
+    const h = r < 0.55 ? colH : rr(1, colH * 0.7);
+    f.put(G.col, rand() < 0.3 ? moss : rm, cx, top + h / 2, cz, 0, 0, 0, 1, h, 1);
+    f.box(rm, cx, top - 0.05, cz, 1.3, 0.2, 1.3);
+    if (h === colH) f.box(rm, cx, top + colH, cz, 1.35, 0.3, 1.35);
+    const [wx, wz] = f.w(cx, cz); circleCol(wx, wz, 0.62);
+  }
+  for (let i = 0; i < 5; i++) {
+    const s = rand() < 0.5 ? -1 : 1, lx = s * rr(W / 2 + 2, W / 2 + 5), lz = rr(-L / 2, L / 2), len = rr(1.5, 3.2);
+    f.put(G.col, moss, lx, 0.5, lz, Math.PI / 2, rand() * 6, 0, 1, len, 1);
+    const [wx, wz] = f.w(lx, lz); circleCol(wx, wz, 0.8);
+  }
+  f.box(rm, -W / 2 - 3, 0, L / 2 - 2, 3, 0.8, 1.2, true);
+  f.box(rm, 2, top, -L / 2 + 1.5, 4.5, 0.8, 1.0, true, top + 0.8);
+  // Zerbrochene Götterstatue
+  f.box(M.marble2, 0, top, -L / 2 + 3.5, 1.6, 1.2, 1.6, true);
+  f.put(G.cyl, rm, 0, top + 2.0, -L / 2 + 3.5, 0, 0, 0, 0.8, 1.6, 0.6);
+  f.put(G.sphere, rm, 1.6, top + 0.3, -L / 2 + 4.5, 0, 0, 0, 0.55, 0.6, 0.55);
+  const [cx, cz] = f.w(0, 1);
+  const idx = RUINS.length;
+  const chest = addChest(cx, f.y + top, cz, rot, 2, idx);
+  RUINS.push({ x, z, name, chest, y: f.y + top, guards: [f.w(-2.5, 4.5), f.w(2.5, 4.5), f.w(0, -2.5)] });
+}
+
+// ============================================================
+// Eigene Stadt (Polis) gründen und ausbauen
+// ============================================================
+const TOWN_LEVELS = [
+  { name: 'Siedlungsplatz', income: 0 },
+  { name: 'Siedlung', cost: 50, income: 4, desc: 'drei Häuser, ein Lagerfeuer und die ersten Siedler' },
+  { name: 'Dorf', cost: 150, income: 10, desc: 'mehr Häuser, einen Brunnen und einen Marktstand' },
+  { name: 'Kleinstadt', cost: 300, income: 18, desc: 'einen eigenen Tempel mit Wachen und eine Palisade' },
+  { name: 'Polis', cost: 600, income: 30, desc: 'Wachtürme, eine Säulenhalle und deine goldene Heldenstatue' },
+];
+const TOWN_LINES = ['Danke, dass du uns ein Zuhause gegeben hast!', 'Die Felder hier sind fruchtbar. Bald wird die Stadt wachsen.', 'Wenn wir mehr Drachmen hätten, könnten wir einen Tempel bauen …', 'Ich habe gehört, du hast mit Wölfen gekämpft. Unglaublich!', 'Die Steuern liegen in der Schatzkammer beim Grenzstein bereit.', 'Unsere Stadt wird eines Tages größer als Athen!'];
+const townCap = () => TOWN_LEVELS[S.town.lvl].income * 25;
+function townNPC(name, dx, dz, look, wander = 10) {
+  const L = LOCS.heimat;
+  return addNPC(name, L.x + dx, L.z + dz, look, function () { talk([{ who: this.name, text: pick(TOWN_LINES).replace('Stadt', S.town.name || 'Stadt') }]); }, wander);
+}
+function buildTownBase() {
+  const L = LOCS.heimat;
+  reserve(L.x, L.z, 52);
+  const f = new Frame(L.x, L.z, 0);
+  f.box(M.stone2, 0, -0.5, 0, 1.2, 2.6, 0.7, true);
+  f.box(M.gold, 0, 2.05, 0, 1.25, 0.15, 0.75);
+  interactables.push({ pos: () => new V3(L.x, heightAt(L.x, L.z), L.z), label: 'Deine Stadt verwalten', r: 3.6, fn: talkTown });
+}
+function buildTownLevel(l) {
+  const L = LOCS.heimat, X = L.x, Z = L.z;
+  const vil = { tunic: 0x6a7a4a, pants: 0x3a3024, beard: true };
+  FORCE_BUILD = true;
+  if (l === 1) {
+    house(X - 14, Z + 6, Math.PI / 2, 6, 6, 3.8); house(X + 14, Z + 8, -Math.PI / 2, 6, 6, 3.8); house(X - 4, Z - 14, 0, 7, 6, 4);
+    campfire(X + 7, Z - 5);
+    townNPC('Siedler Kostas', 4, 6, vil); townNPC('Siedlerin Melina', -6, -4, { tunic: 0x9b3b2b, pants: 0x4a2a2a, veil: 0xe8dcc0 });
+  }
+  if (l === 2) {
+    house(X - 24, Z - 8, Math.PI / 2, 6, 6, 4); house(X + 24, Z - 6, -Math.PI / 2, 6, 6, 4); house(X - 16, Z + 22, 0, 7, 6, 4); house(X + 16, Z + 22, 0, 6, 6, 4);
+    fountain(X, Z + 14);
+    SPOTS.townFountain = [X, Z + 14];
+    interactables.push({ pos: () => new V3(X, heightAt(X, Z + 14), Z + 14), label: 'Aus dem Brunnen trinken', r: 4.2, fn: () => { player.hp = player.maxHp; player.stamina = 100; toast('Das Wasser deiner Stadt erfrischt dich.'); sfx('drink'); } });
+    const m = new Frame(X + 12, Z - 20, 0); m.box(M.wood, 0, 0, 0, 4, 1, 1.6, true); for (const [x, z] of [[-1.9, -0.7], [1.9, -0.7], [-1.9, 0.7], [1.9, 0.7]]) m.box(M.wood, x, 0, z, 0.15, 2.8, 0.15); m.put(G.box, M.blue, 0, 2.9, 0, 0.18, 0, 0, 4.6, 0.1, 2.6);
+    townNPC('Händlerin Eirene', 12, -17.5, { tunic: 0x2f6a5a, pants: 0x2a3a30, veil: 0x3a5a8a }, 0).talkFn = function () { talkMerchant(); };
+    townNPC('Bauer Stavros', -10, 18, vil); townNPC('Fischer Alexios', 18, 10, { tunic: 0x3a5a8a, pants: 0x2a2a3a });
+  }
+  if (l === 3) {
+    const tf = new Frame(X, Z - 32, 0);
+    const before = TEMPLE_GUARDS.length;
+    temple(tf, 8, 12, 4, 6, 4.6);
+    for (const [gx, gz, gr] of TEMPLE_GUARDS.splice(before)) addGuardNPC(gx, gz, gr);
+    house(X - 30, Z + 10, Math.PI / 2, 6, 6, 4); house(X + 30, Z + 16, -Math.PI / 2, 6, 6, 4); house(X - 28, Z - 20, Math.PI / 2, 6, 6, 4);
+    for (let i = 0; i < 140; i++) {
+      const a = i / 140 * Math.PI * 2;
+      if (Math.abs(((a + Math.PI) % (Math.PI * 2)) - Math.PI) < 0.13) continue; // Tor im Osten
+      const f = new Frame(X + Math.cos(a) * 48, Z + Math.sin(a) * 48, 0);
+      f.put(G.cone, M.darkwood, 0, 1.6, 0, 0, 0, 0, 0.6, 3.2, 0.6); circleCol(f.x, f.z, 0.4);
+    }
+    townNPC('Priesterin Phoibe', 3, -20, { tunic: 0xf4f0e6, pants: 0xd8d0c0, veil: 0xf4f0e6, wreath: true }, 4);
+  }
+  if (l === 4) {
+    statue(X, Z - 17, 0, 1.4, M.gold);
+    stoa(new Frame(X, Z + 34, Math.PI), 24, 6, 9, 4.2);
+    for (const [dx, dz] of [[48, 8], [48, -8], [-48, 0], [0, -48], [0, 48]]) {
+      const f = new Frame(X + dx, Z + dz, 0);
+      f.box(M.stone, 0, -1, 0, 3.4, 8, 3.4, true); f.box(M.stone2, 0, 7, 0, 4, 0.6, 4);
+      for (const [cx, cz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) f.box(M.stone2, cx, 7.6, cz, 0.7, 0.9, 0.7);
+      f.put(G.cone4, M.roof2, 0, 9.2, 0, 0, Math.PI / 4, 0, 4.6, 2.4, 4.6);
+    }
+    house(X + 30, Z - 24, -Math.PI / 2, 7, 7, 4.5); house(X - 32, Z + 26, Math.PI / 2, 7, 7, 4.5);
+    townNPC('Schatzmeister Theodoros', -4, 4, { tunic: 0x6b2f7a, pants: 0x3a1a4a, beard: true, hair: 0x9a9080 }, 3);
+    townNPC('Bürger Nikolaos', 10, 26, vil); townNPC('Bürgerin Thalia', -12, 28, { tunic: 0xb08a5a, pants: 0x5a4a3a, veil: 0x7a3a5a });
+  }
+  FORCE_BUILD = false;
+  finalizeStatic();
+}
+function talkTown() {
+  const T = S.town, L = TOWN_LEVELS;
+  if (T.lvl === 0) {
+    talk([{ who: 'Grenzstein', text: 'Fruchtbares Land mit einer Quelle und Blick auf die Berge. Hier könntest du deine eigene Stadt gründen! Kosten: 50 Drachmen.', opts: [
+      { label: 'Stadt gründen (50 Drachmen)', fn: foundTown }, { label: 'Später', fn: () => { } }] }]);
+    return;
+  }
+  const next = L[T.lvl + 1], opts = [];
+  if (T.treasury >= 1) opts.push({ label: 'Steuern einsammeln (' + Math.floor(T.treasury) + ' Drachmen)', fn: () => { const n = Math.floor(T.treasury); T.treasury -= n; addMoney(n); save(); talkTown(); } });
+  if (next) opts.push({ label: 'Ausbauen zur ' + next.name + ' (' + next.cost + ' Drachmen)', fn: upgradeTown });
+  opts.push({ label: 'Zurück', fn: () => { } });
+  talk([{ who: T.name, text: T.name + ' – ' + L[T.lvl].name + ' (Stufe ' + T.lvl + '/4). Einnahmen: ' + L[T.lvl].income + ' Drachmen pro Minute. Schatzkammer: ' + Math.floor(T.treasury) + ' / ' + townCap() + '.' + (next ? ' Ausbau bringt: ' + next.desc + ' (+' + (next.income - L[T.lvl].income) + ' Drachmen/Min).' : ' Deine Polis ist vollendet – ganz Hellas spricht von ihr!'), opts }]);
+}
+function foundTown() {
+  if (!spend(TOWN_LEVELS[1].cost)) return;
+  let nm = null;
+  try { if (document.pointerLockElement) document.exitPointerLock(); nm = window.prompt('Wie soll deine Stadt heißen?', 'Neu-Hellas'); } catch (e) { }
+  for (const k in keys) keys[k] = false;
+  S.town.name = (nm && nm.trim().slice(0, 24)) || 'Neu-Hellas';
+  S.town.lvl = 1; applyTownName(); showLoc(LOCS.heimat);
+  buildTownLevel(1);
+  banner(S.town.name + ' gegründet!', 'Baue deine Stadt am Grenzstein aus und sammle Steuern ein.');
+  sfx('quest'); save();
+}
+function upgradeTown() {
+  const next = TOWN_LEVELS[S.town.lvl + 1];
+  if (!next || !spend(next.cost)) return;
+  S.town.lvl++; applyTownName();
+  fadeTo(() => buildTownLevel(S.town.lvl));
+  banner(S.town.name + ' ist jetzt eine ' + next.name + '!', 'Neu: ' + next.desc);
+  sfx('quest'); save();
+}
+function applyTownName() { if (S.town.lvl > 0) { LOCS.heimat.name = S.town.name; LOCS.heimat.sub = TOWN_LEVELS[S.town.lvl].name + ' – deine Stadt'; } }
+const GUARD_LINES = ['Halt! Dies ist heiliger Boden. Benimm dich, Fremder.', 'Die Opfertruhe gehört den Göttern – doch sie belohnen die Mutigen.', 'Man sagt, in vergessenen Tempeln in der Wildnis liegen Relikte der Helden. Aber sie werden bewacht …', 'Ich halte hier Wache, Tag und Nacht.', 'Ruhig bleiben. Keine Waffen im Tempel ziehen.'];
+function addGuardNPC(x, z, rot) {
+  const n = addNPC('Tempelwache', x, z, { tunic: 0x8e1717, armor: 0xb98d3a, helmet: true, crest: 0x1a1a1a, shield: true, shieldEmblem: 0x1a1a1a, weapon: 'spear', greaves: true, pants: 0x3a1a14 }, function () { talk([{ who: 'Tempelwache', text: pick(GUARD_LINES) }]); }, 0);
+  n.yaw = rot;
+  return n;
+}
+
+// ============================================================
+// Gelände erzeugen
+// ============================================================
+let terrainColorsSRGB = null;
+function buildTerrain() {
+  for (let iz = 0; iz < N; iz++) for (let ix = 0; ix < N; ix++) HGT[iz * N + ix] = shapedHeight(-HALF + ix * CELL, -HALF + iz * CELL);
+  const pos = new Float32Array(N * N * 3), col = new Float32Array(N * N * 3);
+  terrainColorsSRGB = new Uint8ClampedArray(N * N * 3);
+  const tc = new THREE.Color();
+  for (let iz = 0; iz < N; iz++) for (let ix = 0; ix < N; ix++) {
+    const i = iz * N + ix, x = -HALF + ix * CELL, z = -HALF + iz * CELL, h = HGT[i];
+    pos[i * 3] = x; pos[i * 3 + 1] = h; pos[i * 3 + 2] = z;
+    const hx = HGT[iz * N + Math.min(SEG, ix + 1)] - HGT[iz * N + Math.max(0, ix - 1)];
+    const hz = HGT[Math.min(SEG, iz + 1) * N + ix] - HGT[Math.max(0, iz - 1) * N + ix];
+    const slope = Math.hypot(hx, hz) / (2 * CELL);
+    const c = terrainColor(x, z, h, slope);
+    const v = 0.94 + hash(ix, iz) * 0.12;
+    tc.setRGB(c[0] * v, c[1] * v, c[2] * v, THREE.SRGBColorSpace);
+    col[i * 3] = tc.r; col[i * 3 + 1] = tc.g; col[i * 3 + 2] = tc.b;
+    terrainColorsSRGB[i * 3] = c[0] * 255; terrainColorsSRGB[i * 3 + 1] = c[1] * 255; terrainColorsSRGB[i * 3 + 2] = c[2] * 255;
+  }
+  const idx = new Uint32Array(SEG * SEG * 6);
+  let k = 0;
+  for (let iz = 0; iz < SEG; iz++) for (let ix = 0; ix < SEG; ix++) {
+    const a = iz * N + ix, b = (iz + 1) * N + ix, c = (iz + 1) * N + ix + 1, d = iz * N + ix + 1;
+    idx[k++] = a; idx[k++] = b; idx[k++] = d; idx[k++] = b; idx[k++] = c; idx[k++] = d;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+}
+function findShore(x, z, dx, dz, maxD = 200) {
+  const l = Math.hypot(dx, dz); dx /= l; dz /= l;
+  let lx = x, lz = z;
+  for (let d = 0; d < maxD; d += 1) { const px = x + dx * d, pz = z + dz * d; if (heightAt(px, pz) < -1.6) return { land: [lx, lz], water: [px, pz], dir: [dx, dz] }; if (heightAt(px, pz) > 0.3) { lx = px; lz = pz; } }
+  return null;
+}
+
+// ============================================================
+// Orte bauen
+// ============================================================
+const SPOTS = {}; // wichtige Positionen
+function buildAthens() {
+  const A = LOCS.athen;
+  // Akropolis
+  const pf = new Frame(-4, -42, 0, 22);
+  temple(pf, 14, 30, 8, 15, 7.2, { friezeMat: lam(0xc9bda5) });
+  statue(-7, -18, Math.PI, 1.6, M.bronze, 22);
+  const er = new Frame(14, -36, Math.PI / 2, 22);
+  temple(er, 7, 11, 4, 5, 5);
+  for (const [x, z] of [[-16, -30], [14, -44], [-18, -46]]) brazier(x, z, 22);
+  // Propyläen-Treppe (nach Süden)
+  for (let i = 0; i < 9; i++) { const f = new Frame(4, -5 + i * 2.2, 0, 22 - i * 1.8 - 1.8); f.box(M.marble2, 0, -4, 0, 7, 5.8, 2.4); f.platform(0, 0, 7, 2.4, 1.8); }
+  reserve(4, 4, 6);
+  // Agora
+  stoa(new Frame(0, 58, Math.PI), 44, 9, 14, 5);
+  SPOTS.agora = [0, 34];
+  SPOTS.respawn = [0, 47];
+  SPOTS.fountain = [-12, 32];
+  fountain(-12, 32);
+  statue(12, 40, 0, 1.1);
+  for (const [x, z] of [[-20, 22], [20, 22], [-20, 46], [20, 46]]) brazier(x, z);
+  // Marktstand
+  { const f = new Frame(13, 27, 0); f.box(M.wood, 0, 0, 0, 4, 1, 1.6, true); for (const [x, z] of [[-1.9, -0.7], [1.9, -0.7], [-1.9, 0.7], [1.9, 0.7]]) f.box(M.wood, x, 0, z, 0.15, 2.8, 0.15); f.put(G.box, M.red, 0, 2.9, 0, 0.18, 0, 0, 4.6, 0.1, 2.6); SPOTS.merchant = [13, 29.2]; for (let i = 0; i < 4; i++) f.put(G.sphere, M.terracotta, -1.4 + i * 0.9, 1.3, 0, 0, 0, 0, 0.5, 0.7, 0.5); }
+  // Häuser
+  for (let gx = -66; gx <= 66; gx += 11) for (let gz = -66; gz <= 72; gz += 11) {
+    const x = gx + rr(-2, 2), z = gz + rr(-2, 2);
+    if (Math.hypot(x, z + 35) < 55) continue;
+    if (Math.abs(x) < 28 && z > 12 && z < 66) continue;
+    if (Math.hypot(x, z) > A.r - 4) continue;
+    if (roadDist(x, z) < 6) continue;
+    if (rand() < 0.22) continue;
+    house(x, z, Math.floor(rand() * 4) * Math.PI / 2, rr(5, 7.5), rr(5, 7.5), rr(3.2, 4.6));
+  }
+  // Olivenhain östlich
+  for (let i = 0; i < 60; i++) { const a = rand() * 6.28, d = rr(90, 150); const x = 40 + Math.cos(a) * d * 0.6, z = -90 + Math.sin(a) * d * 0.5; if (heightAt(x, z) > 1.5 && !inCity(x, z)) tree(x, z, 'olive'); }
+}
+function buildDelphi() {
+  const L = LOCS.delphi;
+  temple(new Frame(L.x, L.z - 14, 0, L.h), 12, 26, 6, 13, 6.5);
+  theatre(new Frame(L.x - 22, L.z - 20, Math.PI / 2, L.h), 8, 7);
+  SPOTS.pythia = [L.x, L.z + 4];
+  // Dreifuß + Feuer
+  brazier(L.x - 3, L.z + 2, L.h); brazier(L.x + 3, L.z + 2, L.h);
+  for (const [dx, dz] of [[18, 10], [22, -4], [-14, 18]]) { const f = new Frame(L.x + dx, L.z + dz, Math.PI / 2, L.h); temple(f, 5, 7, 2, 2, 3.5, { noCella: false }); }
+  for (let i = 0; i < 5; i++) house(L.x + rr(-35, 35), L.z + rr(14, 38), 0, 5, 5, 3.5);
+  statue(L.x + 8, L.z + 14, Math.PI, 1.2);
+}
+function buildOlympia() {
+  const L = LOCS.olympia;
+  temple(new Frame(L.x, L.z - 30, 0, L.h), 13, 28, 6, 13, 7, { friezeMat: lam(0xb9a888) });
+  statue(L.x + 14, L.z - 18, 0, 1.4, M.gold);
+  // Stadion
+  const sf = new Frame(L.x, L.z + 26, 0, L.h);
+  sf.box(lam(0xc9a978), 0, 0.02, 0, 150, 0.06, 22);
+  for (const s of [-1, 1]) for (let i = 0; i < 3; i++) sf.box(M.stone, 0, 0, s * (12.5 + i * 1.6), 154, 0.6 + i * 0.6, 1.6, true, 0.6 + i * 0.6);
+  sf.box(M.white, -68, 0.05, 0, 0.6, 0.08, 21);
+  sf.box(M.white, 68, 0.05, 0, 0.6, 0.08, 21);
+  for (const z of [-10.5, 10.5]) { sf.box(M.marble, -68, 0, z, 0.5, 1.6, 0.5); sf.box(M.marble, 68, 0, z, 0.5, 1.6, 0.5); }
+  SPOTS.raceStart = [L.x - 68, L.z + 26]; SPOTS.raceEnd = [L.x + 68, L.z + 26];
+  SPOTS.judge = [L.x - 72, L.z + 20];
+  stoa(new Frame(L.x - 30, L.z - 4, Math.PI / 2, L.h), 24, 7, 9, 4.5);
+  for (let i = 0; i < 6; i++) house(L.x + rr(20, 55), L.z + rr(-50, 0), Math.floor(rand() * 4) * Math.PI / 2, 6, 6, 4);
+  brazier(L.x - 4, L.z - 10); brazier(L.x + 4, L.z - 10);
+  for (let i = 0; i < 25; i++) tree(L.x + rr(-70, 70), L.z + rr(-70, -45), rand() < 0.5 ? 'olive' : 'cypress');
+}
+function buildSparta() {
+  const L = LOCS.sparta;
+  temple(new Frame(L.x - 30, L.z - 25, Math.PI / 2, L.h), 8, 14, 4, 6, 5, { colMat: M.stone, baseMat: M.stone2, cellaMat: M.stone2 });
+  // Kaserne
+  const bf = new Frame(L.x + 22, L.z - 18, 0, L.h);
+  reserve(bf.x, bf.z, 15);
+  bf.box(M.stone, 0, 0, 0, 26, 4, 8, true); bf.put(G.prism, M.roof2, 0, 4, 0, 0, Math.PI / 2, 0, 9, 2, 27);
+  SPOTS.leonidas = [L.x, L.z + 2];
+  statue(L.x, L.z - 8, 0, 1.4, M.bronze);
+  // Übungspuppen
+  for (let i = 0; i < 5; i++) { const f = new Frame(L.x + 10 + i * 3.5, L.z + 12, 0, L.h); f.put(G.cyl8, M.wood, 0, 1, 0, 0, 0, 0, 0.25, 2, 0.25); f.box(M.cloth, 0, 1.2, 0, 0.7, 0.8, 0.4); f.put(G.cyl, M.bronze, 0, 1.4, 0.3, Math.PI / 2, 0, 0, 1.0, 0.1, 1.0); circleCol(f.x, f.z, 0.5); }
+  for (let gx = -60; gx <= 60; gx += 12) for (let gz = -60; gz <= 60; gz += 12) {
+    const x = L.x + gx + rr(-2, 2), z = L.z + gz + rr(-2, 2);
+    if (Math.hypot(gx, gz) < 30 || Math.hypot(gx, gz) > L.r - 5 || rand() < 0.35 || roadDist(x, z) < 6) continue;
+    house(x, z, Math.floor(rand() * 4) * Math.PI / 2, rr(5, 7), rr(5, 7), rr(3, 4), { wall: lam(0xd9c7a5), roof: M.roof2 });
+  }
+  brazier(L.x - 5, L.z + 6); brazier(L.x + 5, L.z + 6);
+}
+let piraeusDock = null, kretaDock = null;
+function dock(L, dirx, dirz) {
+  const s = findShore(L.x, L.z, dirx, dirz, 260);
+  if (!s) return null;
+  const [lx, lz] = s.land, [dx, dz] = s.dir;
+  const len = 26, rot = Math.atan2(dx, dz);
+  const cx = lx + dx * (len / 2 - 2), cz = lz + dz * (len / 2 - 2);
+  const f = new Frame(cx, cz, rot, 0);
+  reserve(lx, lz, 8);
+  f.box(M.wood, 0, 1.0, 0, 4, 0.35, len);
+  f.platform(0, 0, 4, len, 1.35);
+  for (let i = 0; i < 6; i++) for (const sx of [-1.8, 1.8]) f.put(G.cyl8, M.darkwood, sx, -1.5, -len / 2 + 2 + i * 4.4, 0, 0, 0, 0.35, 5, 0.35);
+  // Trireme
+  const bx = 5.5;
+  const tf = new Frame(...f.w(bx, 3), rot, 0);
+  tf.box(M.darkwood, 0, -0.6, 0, 3.4, 1.6, 20);
+  tf.put(G.prism, M.darkwood, 0, -0.6, 0, Math.PI, 0, 0, 3.4, 1.2, 20);
+  tf.box(M.red, 0, 0.8, 0, 3.5, 0.25, 20.2);
+  tf.put(G.cone4, M.bronze, 0, 0, 11, Math.PI / 2, 0, 0, 0.8, 2.4, 0.8);
+  tf.put(G.cyl8, M.wood, 0, 5, 0, 0, 0, 0, 0.3, 9, 0.3);
+  tf.box(M.sail, 0, 3.2, 0.3, 7, 5, 0.08);
+  tf.box(M.red, 0, 5.2, 0.32, 7.05, 0.7, 0.08);
+  tf.box(M.wood, 0, 8.6, 0.2, 8, 0.25, 0.25);
+  for (let i = 0; i < 8; i++) for (const s of [-1, 1]) tf.put(G.cyl8, M.wood, s * 2.6, 0.1, -7 + i * 2, 0, 0, s * 1.2, 0.12, 3.2, 0.12);
+  tf.colBox(0, 0, 3.6, 20.5);
+  return { land: [lx + dx * 1.5, lz + dz * 1.5], end: f.w(0, len / 2 - 2), boatman: f.w(-1.2, -len / 2 + 3.5), rot };
+}
+function buildPiraeus() {
+  const L = LOCS.piraeus;
+  piraeusDock = dock(L, 1, 0.15);
+  for (let i = 0; i < 12; i++) {
+    const x = L.x + rr(-34, 10), z = L.z + rr(-30, 30);
+    if (roadDist(x, z) < 6 || heightAt(x, z) < 1.2) continue;
+    house(x, z, Math.floor(rand() * 4) * Math.PI / 2, rr(5, 7), rr(5, 7), rr(3, 4));
+  }
+  for (let i = 0; i < 10; i++) { const f = new Frame(L.x + rr(-8, 8), L.z + rr(-14, 14), rand() * 6); if (f.y < 1) continue; f.box(M.wood, 0, 0, 0, 1.2, 1.0, 1.2, true); }
+  for (let i = 0; i < 6; i++) { const f = new Frame(L.x + rr(-10, 10), L.z + rr(-14, 14), 0); if (f.y < 1) continue; f.put(G.sphere, M.terracotta, 0, 0.6, 0, 0, 0, 0, 0.8, 1.3, 0.8); }
+}
+const MAZE = { n: 9, cell: 6, x0: 0, z0: 0 };
+function buildKreta() {
+  const L = LOCS.kreta;
+  kretaDock = dock(L, -0.7, -0.9);
+  const n = MAZE.n, C = MAZE.cell, x0 = L.x - n * C / 2, z0 = L.z + 4 - n * C / 2;
+  MAZE.x0 = x0; MAZE.z0 = z0;
+  const hW = [], vW = [];
+  for (let r = 0; r <= n; r++) { hW.push(Array(n).fill(true)); }
+  for (let r = 0; r < n; r++) { vW.push(Array(n + 1).fill(true)); }
+  const vis = Array.from({ length: n }, () => Array(n).fill(false));
+  const stack = [[0, n - 1]]; vis[n - 1][0] = true;
+  while (stack.length) {
+    const [c, r] = stack[stack.length - 1];
+    const nb = [];
+    if (r > 0 && !vis[r - 1][c]) nb.push([c, r - 1, 'n']);
+    if (r < n - 1 && !vis[r + 1][c]) nb.push([c, r + 1, 's']);
+    if (c > 0 && !vis[r][c - 1]) nb.push([c - 1, r, 'w']);
+    if (c < n - 1 && !vis[r][c + 1]) nb.push([c + 1, r, 'e']);
+    if (!nb.length) { stack.pop(); continue; }
+    const [nc, nr, d] = pick(nb);
+    if (d === 'n') hW[r][c] = false; if (d === 's') hW[r + 1][c] = false;
+    if (d === 'w') vW[r][c] = false; if (d === 'e') vW[r][c + 1] = false;
+    vis[nr][nc] = true; stack.push([nc, nr]);
+  }
+  // Zentralkammer öffnen
+  for (let r = 3; r <= 5; r++) for (let c = 3; c <= 5; c++) { if (r > 3) hW[r][c] = false; if (c > 3) vW[r][c] = false; }
+  hW[n][4] = false; // Eingang Süden
+  const f = new Frame(x0, z0, 0, L.h);
+  const wm = lam(0xc4a676), H = 4.5;
+  for (let r = 0; r <= n; r++) for (let c = 0; c < n; c++) if (hW[r][c]) f.box(wm, c * C + C / 2, 0, r * C, C + 0.8, H, 0.8, true);
+  for (let r = 0; r < n; r++) for (let c = 0; c <= n; c++) if (vW[r][c]) f.box(wm, c * C, 0, r * C + C / 2, 0.8, H, C + 0.8, true);
+  for (let r = 0; r <= n; r++) for (let c = 0; c <= n; c++) f.box(M.minoan, c * C, H - 0.4, r * C, 1.0, 0.5, 1.0);
+  SPOTS.mazeCenter = [x0 + 4.5 * C, z0 + 4.5 * C];
+  reserve(L.x, L.z + 4, 42);
+  SPOTS.mazeEntrance = [x0 + 4.5 * C, z0 + n * C + 4];
+  // Minoische Säulen am Eingang
+  for (const s of [-1, 1]) { const cf = new Frame(SPOTS.mazeEntrance[0] + s * 4, SPOTS.mazeEntrance[1] + 2, 0, L.h); cf.put(G.minoanCol, M.minoan, 0, 2.5, 0, 0, 0, 0, 1, 5, 1); cf.box(M.dark, 0, 5, 0, 1.6, 0.6, 1.6); circleCol(cf.x, cf.z, 0.7); }
+  { const gf = new Frame(SPOTS.mazeEntrance[0], SPOTS.mazeEntrance[1] + 2, 0, L.h); gf.box(M.minoan, 0, 5.5, 0, 10, 0.8, 1.4); for (const s of [-1, 1]) gf.put(G.cone, M.white, s * 2.5, 6.6, 0, 0, 0, s * 0.5, 0.5, 1.6, 0.5); }
+  for (let i = 0; i < 6; i++) house(L.x + rr(-50, 50), L.z + rr(32, 55) * (rand() < 0.5 ? 1 : -1), 0, 6, 6, 4, { wall: lam(0xe9d9b8), roof: M.minoan });
+}
+function buildMisc() {
+  // Theben
+  const T = LOCS.theben;
+  for (let i = 0; i < 14; i++) { const x = T.x + rr(-36, 36), z = T.z + rr(-36, 36); if (roadDist(x, z) < 6 || Math.hypot(x - T.x, z - T.z) < 10) continue; house(x, z, Math.floor(rand() * 4) * Math.PI / 2, rr(5, 7), rr(5, 7), rr(3, 4.2)); }
+  temple(new Frame(T.x + 6, T.z - 18, Math.PI / 2), 7, 12, 4, 6, 4.5);
+  fountain(T.x - 4, T.z + 4);
+  SPOTS.thebenFountain = [T.x - 4, T.z + 4];
+  // Olymp-Gipfel
+  const O = LOCS.olymp;
+  tholos(new Frame(O.x, O.z, 0, O.h), 5, 10, 5);
+  SPOTS.shrine = [O.x, O.z];
+  { const f = new Frame(O.x, O.z, 0, O.h + 1.2); f.box(M.marble2, 0, 0, 0, 1.6, 1.1, 1.6, true); const fm = new THREE.Mesh(G.cone, lam(0x8fd0ff, 0x4aa0ff)); fm.position.set(O.x, O.h + 3.0, O.z); fm.scale.set(0.8, 1.4, 0.8); scene.add(fm); fires.push(fm); }
+  // Banditenlager
+  const B = LOCS.banditen;
+  campfire(B.x, B.z);
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4; const f = new Frame(B.x + Math.cos(a) * 11, B.z + Math.sin(a) * 11, a); f.put(G.cone4, M.tent, 0, 1.6, 0, 0, Math.PI / 4, 0, 4.5, 3.2, 4.5); circleCol(f.x, f.z, 1.8); }
+  for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2; if (Math.abs(a - 1.2) < 0.25) continue; const f = new Frame(B.x + Math.cos(a) * 20, B.z + Math.sin(a) * 20, 0); f.put(G.cone, M.darkwood, 0, 1.3, 0, 0, 0, 0, 0.45, 2.6, 0.45); circleCol(f.x, f.z, 0.35); }
+  for (let i = 0; i < 6; i++) { const f = new Frame(B.x + rr(-8, 8), B.z + rr(-8, 8), rand()); f.box(M.wood, 0, 0, 0, 1.1, 0.9, 1.1, true); }
+  // Bauernhöfe
+  let farms = 0;
+  for (let i = 0; i < 400 && farms < 18; i++) {
+    const x = rr(-800, 300), z = rr(-700, 650), h = heightAt(x, z);
+    if (h < 3 || h > 40 || slopeAt(x, z) > 0.25 || inCity(x, z, 1.8) || roadDist(x, z) < 10 || roadDist(x, z) > 50) continue;
+    house(x, z, rand() * 6.28, 6, 5, 3.5);
+    for (let k = 0; k < 14; k++) tree(x + rr(-25, 25), z + rr(-25, 25), 'olive');
+    farms++;
+  }
+}
+
+// ============================================================
+// Vegetation (InstancedMesh)
+// ============================================================
+function buildVegetation() {
+  // zufällige Verteilung
+  for (let i = 0; i < 26000; i++) {
+    const x = rr(-HALF + 20, HALF - 20), z = rr(-HALF + 20, HALF - 20);
+    const h = heightAt(x, z);
+    if (h < 2 || h > 115) continue;
+    if (inCity(x, z, 1.15) || roadDist(x, z) < 5) continue;
+    const sl = slopeAt(x, z);
+    let dens = fbm(x * 0.006 + 40, z * 0.006, 3) * 0.5 + 0.5;
+    let inF = false;
+    for (const F of FORESTS) if (Math.hypot(x - F.x, z - F.z) < F.r) { dens += 0.6; inF = true; }
+    if (rand() > dens * 0.55) continue;
+    if (!isFree(x, z, 0.5)) continue;
+    if (sl > 0.9) { if (rand() < 0.5) tree(x, z, 'rock'); continue; }
+    const r = rand();
+    if (h > 70) tree(x, z, r < 0.6 ? 'pine' : 'rock');
+    else if (inF) tree(x, z, r < 0.55 ? 'pine' : r < 0.85 ? 'cypress' : 'bush');
+    else tree(x, z, r < 0.35 ? 'olive' : r < 0.55 ? 'cypress' : r < 0.7 ? 'pine' : r < 0.88 ? 'bush' : 'rock');
+  }
+  const kinds = {
+    olive: [{ g: new THREE.CylinderGeometry(0.18, 0.3, 2.2, 6), m: lam(0x6b5236), y: 1.1, s: [1, 1, 1] }, { g: new THREE.IcosahedronGeometry(1.6, 1), m: lam(0x7b8a4c), y: 2.8, s: [1.25, 0.8, 1.25] }],
+    cypress: [{ g: new THREE.CylinderGeometry(0.15, 0.22, 1.5, 5), m: lam(0x5a4430), y: 0.75, s: [1, 1, 1] }, { g: new THREE.ConeGeometry(1.0, 8, 8), m: lam(0x2f4b29), y: 5.2, s: [1, 1, 1] }],
+    pine: [{ g: new THREE.CylinderGeometry(0.2, 0.32, 5, 6), m: lam(0x6a4a30), y: 2.5, s: [1, 1, 1] }, { g: new THREE.IcosahedronGeometry(2.4, 1), m: lam(0x3f5f2f), y: 5.6, s: [1.4, 0.55, 1.4] }],
+    bush: [{ g: new THREE.IcosahedronGeometry(0.9, 0), m: lam(0x5d7036), y: 0.5, s: [1.2, 0.8, 1.2] }],
+    rock: [{ g: new THREE.DodecahedronGeometry(1.2, 0), m: lam(0x9c968a), y: 0.4, s: [1.3, 0.8, 1.1] }],
+  };
+  const dummy = new THREE.Object3D(), col = new THREE.Color();
+  for (const [kind, parts] of Object.entries(kinds)) {
+    const list = TREES.filter(t => t.kind === kind);
+    if (!list.length) continue;
+    for (const p of parts) {
+      const im = new THREE.InstancedMesh(p.g, p.m, list.length);
+      im.castShadow = true; im.receiveShadow = true;
+      list.forEach((t, i) => {
+        const y = heightAt(t.x, t.z);
+        const sc = kind === 'rock' ? t.s * 1.4 : t.s;
+        dummy.position.set(t.x, y + p.y * sc - (kind === 'rock' ? 0.3 : 0.05), t.z);
+        dummy.rotation.set(kind === 'rock' ? t.r : 0, t.r, 0);
+        dummy.scale.set(p.s[0] * sc, p.s[1] * sc, p.s[2] * sc);
+        dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
+        const v = 0.85 + hash(Math.floor(t.x * 10), Math.floor(t.z * 10)) * 0.3;
+        col.setRGB(v, v, v); im.setColorAt(i, col);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      scene.add(im);
+    }
+    for (const t of list) if (kind !== 'bush') circleCol(t.x, t.z, kind === 'rock' ? 1.1 * t.s * 1.4 : 0.45);
+  }
+}
+
+// Wolken
+const clouds = [];
+function buildClouds() {
+  const cm = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x555555, transparent: true, opacity: 0.92, fog: false });
+  for (let i = 0; i < 40; i++) {
+    const g = new THREE.Group();
+    const n = 4 + Math.floor(rand() * 5);
+    for (let k = 0; k < n; k++) { const m = new THREE.Mesh(G.sphere, cm); m.position.set(rr(-25, 25), rr(-3, 5), rr(-12, 12)); const s = rr(14, 28); m.scale.set(s * 1.4, s * 0.6, s); g.add(m); }
+    g.position.set(rr(-1600, 1600), rr(230, 320), rr(-1600, 1600));
+    scene.add(g); clouds.push(g);
+  }
+}
+
+// ============================================================
+// Figuren
+// ============================================================
+function makeHumanoid(o = {}) {
+  const g = new THREE.Group();
+  const skin = lam(o.skin ?? 0xc98f5e), tunic = lam(o.tunic ?? 0xe8e0cc), belt = lam(o.belt ?? 0x5a3a1a);
+  const mesh = (geo, mat, x, y, z, parent = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+  const limb = (w, h, d, mat, x, y) => { const p = new THREE.Group(); p.position.set(x, y, 0); g.add(p); const m = mesh(new THREE.BoxGeometry(w, h, d), mat, 0, -h / 2, 0, p); return p; };
+  const pants = lam(o.pants ?? 0x4a3a2a);
+  const legL = limb(0.2, 0.88, 0.22, skin, -0.13, 0.92), legR = limb(0.2, 0.88, 0.22, skin, 0.13, 0.92);
+  for (const lg of [legL, legR]) mesh(new THREE.BoxGeometry(0.22, 0.08, 0.32), lam(0x5a3a1a), 0, -0.86, 0.04, lg);
+  for (const lg of [legL, legR]) mesh(new THREE.BoxGeometry(0.23, 0.52, 0.25), pants, 0, -0.25, 0, lg);
+  if (o.greaves) for (const lg of [legL, legR]) mesh(new THREE.BoxGeometry(0.23, 0.42, 0.24), M.bronze, 0, -0.55, 0.01, lg);
+  mesh(new THREE.BoxGeometry(0.5, 0.28, 0.3), pants, 0, 0.98, 0);
+  mesh(new THREE.BoxGeometry(0.56, 0.62, 0.32), o.armor ? lam(o.armor) : tunic, 0, 1.39, 0);
+  mesh(new THREE.BoxGeometry(0.58, 0.1, 0.34), belt, 0, 1.12, 0);
+  if (o.cape) { const c = mesh(new THREE.BoxGeometry(0.62, 1.05, 0.05), lam(o.cape), 0, 1.15, -0.2); c.rotation.x = 0.12; }
+  const head = new THREE.Group(); head.position.set(0, 1.88, 0); g.add(head);
+  mesh(new THREE.SphereGeometry(0.19, 12, 10), skin, 0, 0, 0, head);
+  mesh(new THREE.SphereGeometry(0.2, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), lam(o.hair ?? 0x2a1a0e), 0, 0.02, -0.02, head);
+  if (o.beard) mesh(new THREE.BoxGeometry(0.26, 0.18, 0.12), lam(o.beardCol ?? o.hair ?? 0x2a1a0e), 0, -0.13, 0.12, head);
+  if (o.helmet) {
+    mesh(new THREE.SphereGeometry(0.23, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), M.bronze, 0, 0.0, 0, head);
+    mesh(new THREE.BoxGeometry(0.06, 0.24, 0.52), lam(o.crest ?? 0xa01818), 0, 0.27, -0.02, head);
+    for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.05, 0.2, 0.16), M.bronze, s * 0.18, -0.1, 0.08, head);
+  }
+  if (o.veil) mesh(new THREE.SphereGeometry(0.24, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.7), lam(o.veil), 0, 0.02, -0.03, head);
+  if (o.wreath) mesh(new THREE.TorusGeometry(0.19, 0.03, 5, 14), lam(0x5a7a2a), 0, 0.1, 0, head).rotation.x = Math.PI / 2;
+  if (o.bull) {
+    head.scale.set(1.3, 1.3, 1.3);
+    mesh(new THREE.BoxGeometry(0.34, 0.3, 0.42), skin, 0, -0.03, 0.12, head);
+    mesh(new THREE.BoxGeometry(0.26, 0.18, 0.12), lam(0x2a1a10), 0, -0.1, 0.36, head);
+    for (const s of [-1, 1]) { const h = mesh(new THREE.ConeGeometry(0.06, 0.45, 6), lam(0xeee6d0), s * 0.3, 0.16, 0.05, head); h.rotation.z = -s * 1.1; }
+    for (const s of [-1, 1]) mesh(new THREE.SphereGeometry(0.03, 6, 4), lam(0xff3010, 0xff2000), s * 0.1, 0.04, 0.33, head);
+  }
+  const armL = limb(0.15, 0.64, 0.15, skin, -0.37, 1.66), armR = limb(0.15, 0.64, 0.15, skin, 0.37, 1.66);
+  let weapon = null, shield = null;
+  if (o.shield) { shield = mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.07, 18), lam(o.shieldCol ?? 0xb98d3a), -0.05, -0.42, 0.16, armL); shield.rotation.z = Math.PI / 2; shield.rotation.y = Math.PI / 2; mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 10), lam(o.shieldEmblem ?? 0x8a1a1a), 0, 0.04, 0, shield); }
+  if (o.weapon === 'sword') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); mesh(new THREE.BoxGeometry(0.07, 0.04, 0.85), lam(0xd8d8d0), 0, 0, 0.5, weapon); mesh(new THREE.BoxGeometry(0.28, 0.05, 0.06), M.bronze, 0, 0, 0.08, weapon); }
+  if (o.weapon === 'spear') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.6, 6), M.wood, 0, 0, 0.6, weapon).rotation.x = Math.PI / 2; mesh(new THREE.ConeGeometry(0.07, 0.3, 6), lam(0xd8d8d0), 0, 0, 2.0, weapon).rotation.x = Math.PI / 2; }
+  if (o.weapon === 'axe') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), M.wood, 0, 0, 0.5, weapon).rotation.x = Math.PI / 2; for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.04, 0.42, 0.3), lam(0x9a9a9a), 0, s * 0.2, 1.05, weapon); }
+  if (o.weapon === 'staff') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.9, 6), M.darkwood, 0, 0.3, 0.05, weapon); }
+  if (o.scale) g.scale.setScalar(o.scale);
+  return { root: g, legL, legR, armL, armR, head, weapon, shield, phase: rand() * 6 };
+}
+function animateHumanoid(h, speed, dt, opt = {}) {
+  h.phase += dt * (speed > 0.1 ? 2.2 + speed * 0.75 : 0);
+  const amp = Math.min(1, speed / 6) * 0.75;
+  const s = Math.sin(h.phase) * amp;
+  if (!opt.sitting) { h.legL.rotation.x = s; h.legR.rotation.x = -s; h.legL.rotation.z = 0; h.legR.rotation.z = 0; }
+  else { h.legL.rotation.x = -1.3; h.legR.rotation.x = -1.3; h.legL.rotation.z = -0.35; h.legR.rotation.z = 0.35; }
+  h.armL.rotation.x = opt.block ? -1.35 : (opt.sitting ? -0.5 : -s * 0.8);
+  h.armL.rotation.z = opt.block ? 0.5 : 0;
+  if (opt.attack !== undefined && opt.attack > 0) { const t = 1 - opt.attack; h.armR.rotation.x = t < 0.35 ? lerp(-0.3, -2.7, t / 0.35) : lerp(-2.7, -0.4, (t - 0.35) / 0.65); }
+  else h.armR.rotation.x = opt.sitting ? -0.6 : s * 0.8 - (h.weapon ? 0.25 : 0);
+  if (opt.idleTalk) h.armR.rotation.x = -0.6 + Math.sin(performance.now() / 300) * 0.25;
+}
+function makeWolf(col = 0x6e6a64) {
+  const g = new THREE.Group(), m = lam(col), d = lam(0x3c3a36);
+  const add = (geo, mat, x, y, z, p = g) => { const mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); mm.castShadow = true; p.add(mm); return mm; };
+  add(new THREE.BoxGeometry(0.5, 0.5, 1.25), m, 0, 0.8, 0);
+  add(new THREE.BoxGeometry(0.55, 0.58, 0.5), m, 0, 0.88, 0.42);
+  const head = new THREE.Group(); head.position.set(0, 1.0, 0.78); g.add(head);
+  add(new THREE.BoxGeometry(0.36, 0.34, 0.38), m, 0, 0, 0, head);
+  add(new THREE.BoxGeometry(0.2, 0.17, 0.32), d, 0, -0.07, 0.32, head);
+  for (const s of [-1, 1]) add(new THREE.ConeGeometry(0.07, 0.18, 4), d, s * 0.12, 0.24, -0.05, head);
+  for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.035, 6, 4), lam(0xffd040, 0x806000), s * 0.1, 0.05, 0.19, head);
+  const tail = add(new THREE.BoxGeometry(0.12, 0.12, 0.6), m, 0, 0.9, -0.85); tail.rotation.x = 0.6;
+  const legs = [];
+  for (const [x, z] of [[-0.17, 0.45], [0.17, 0.45], [-0.17, -0.45], [0.17, -0.45]]) { const p = new THREE.Group(); p.position.set(x, 0.6, z); g.add(p); add(new THREE.BoxGeometry(0.13, 0.6, 0.13), m, 0, -0.3, 0, p); legs.push(p); }
+  return { root: g, legs, head, tail, phase: 0 };
+}
+function makeHorse() {
+  const g = new THREE.Group(), m = lam(0x6b4325), d = lam(0x2a1a10);
+  const add = (geo, mat, x, y, z, p = g) => { const mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); mm.castShadow = true; p.add(mm); return mm; };
+  add(new THREE.BoxGeometry(0.75, 0.75, 1.9), m, 0, 1.4, 0);
+  const neck = add(new THREE.BoxGeometry(0.38, 0.95, 0.45), m, 0, 2.0, 0.9); neck.rotation.x = 0.55;
+  add(new THREE.BoxGeometry(0.34, 0.36, 0.72), m, 0, 2.38, 1.38);
+  add(new THREE.BoxGeometry(0.1, 0.7, 0.5), d, 0, 2.2, 0.9).rotation.x = 0.55;
+  add(new THREE.BoxGeometry(0.8, 0.12, 0.8), M.red, 0, 1.82, -0.05);
+  const tail = add(new THREE.BoxGeometry(0.15, 0.8, 0.15), d, 0, 1.3, -1.05); tail.rotation.x = 0.35;
+  const legs = [];
+  for (const [x, z] of [[-0.25, 0.75], [0.25, 0.75], [-0.25, -0.75], [0.25, -0.75]]) { const p = new THREE.Group(); p.position.set(x, 1.1, z); g.add(p); add(new THREE.BoxGeometry(0.16, 1.1, 0.16), m, 0, -0.55, 0, p); add(new THREE.BoxGeometry(0.18, 0.12, 0.2), d, 0, -1.06, 0.01, p); legs.push(p); }
+  return { root: g, legs, tail, phase: 0 };
+}
+function animateQuad(q, speed, dt, k = 2.2) {
+  q.phase += dt * (speed > 0.1 ? 3 + speed * 0.5 : 0);
+  const a = Math.min(1, speed / 8) * 0.8, s = Math.sin(q.phase) * a;
+  q.legs[0].rotation.x = s; q.legs[3].rotation.x = s; q.legs[1].rotation.x = -s; q.legs[2].rotation.x = -s;
+  if (q.tail) q.tail.rotation.z = Math.sin(performance.now() / 250) * 0.2;
+}
+
+// ============================================================
+// Spielzustand
+// ============================================================
+const player = {
+  pos: new V3(0, 10, 26), vy: 0, yaw: Math.PI, onGround: false, hp: 100, maxHp: 100, stamina: 100,
+  money: 20, potions: 1, dmg: 14, blessed: false, mounted: false, blocking: false, atkCd: 0, atkAnim: 0,
+  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [],
+};
+const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], town: { lvl: 0, name: '', treasury: 0 } };
+let hero, horse;
+const npcs = [], enemies = [], pickups = [], floaters = [], bolts = [];
+let race = null, dialog = null, started = false, paused = false, mapOpen = false;
+const keys = {};
+let camYaw = 0, camPitch = 0.32, camZoom = 1;
+const mouse = { left: false, right: false };
+
+// ---------- UI ----------
+function toast(msg, cls = '') { const d = document.createElement('div'); d.className = 'toast panel ' + cls; d.textContent = msg; $('toasts').appendChild(d); setTimeout(() => { d.style.transition = 'opacity .5s'; d.style.opacity = 0; setTimeout(() => d.remove(), 500); }, 3200); while ($('toasts').children.length > 5) $('toasts').firstChild.remove(); }
+let locTimer = 0;
+function showLoc(L) { $('locName').innerHTML = L.name + (L.sub ? '<small>' + L.sub + '</small>' : ''); $('locName').style.opacity = 1; locTimer = 3.2; }
+let bannerTimer = 0;
+function banner(title, sub) { $('banner').querySelector('h2').textContent = title; $('banner').querySelector('div').textContent = sub; $('banner').style.opacity = 1; bannerTimer = 4.5; }
+function fadeTo(fn) { $('fade').style.opacity = 1; setTimeout(() => { fn(); setTimeout(() => { $('fade').style.opacity = 0; }, 250); }, 650); }
+function floatText(x, y, z, text, color = '#fff', big = false) { floaters.push({ p: new V3(x, y, z), text, color, t: 1.2, big }); }
+
+// ---------- Audio ----------
+let actx = null;
+function sfx(type) {
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    const P = { hit: [200, 60, 0.15, 'sawtooth', 0.12], swing: [500, 140, 0.12, 'triangle', 0.05], coin: [880, 1400, 0.14, 'square', 0.035], quest: [523, 1046, 0.7, 'triangle', 0.1], hurt: [140, 50, 0.25, 'square', 0.08], zap: [1800, 60, 0.6, 'sawtooth', 0.12], block: [900, 700, 0.08, 'square', 0.05], drink: [300, 700, 0.3, 'sine', 0.1] }[type];
+    if (!P) return;
+    const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain();
+    o.type = P[3]; o.frequency.setValueAtTime(P[0], t); o.frequency.exponentialRampToValueAtTime(P[1], t + P[2]);
+    g.gain.setValueAtTime(P[4], t); g.gain.exponentialRampToValueAtTime(0.0008, t + P[2]);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t + P[2] + 0.05);
+  } catch (e) { /* kein Audio */ }
+}
+
+// ---------- Dialog ----------
+// Ein Dialog ist eine Liste von Seiten: { who, text, opts:[{label, fn}] }
+function talk(pages) { dialog = { pages, i: 0 }; renderDialog(); }
+function renderDialog() {
+  if (!dialog) { $('dialog').classList.add('hidden'); return; }
+  const p = dialog.pages[dialog.i];
+  $('dialog').classList.remove('hidden');
+  $('dlgName').textContent = p.who || '';
+  $('dlgText').textContent = p.text;
+  const o = $('dlgOpts'); o.innerHTML = '';
+  if (p.opts) {
+    p.opts.forEach((op, i) => { const b = document.createElement('button'); b.textContent = (i + 1) + '. ' + op.label; b.onclick = (e) => { e.stopPropagation(); chooseOpt(i); }; o.appendChild(b); });
+    $('dlgHint').textContent = 'Wähle mit 1–' + p.opts.length;
+  } else $('dlgHint').textContent = '[E] Weiter';
+}
+function advanceDialog() {
+  if (!dialog) return;
+  const p = dialog.pages[dialog.i];
+  if (p.opts) return;
+  if (p.fn) p.fn();
+  if (!dialog || dialog.pages[dialog.i] !== p) return; // fn hat neuen Dialog gestartet
+  dialog.i++;
+  if (dialog.i >= dialog.pages.length) dialog = null;
+  renderDialog();
+}
+function chooseOpt(i) {
+  if (!dialog) return;
+  const p = dialog.pages[dialog.i];
+  if (!p.opts || !p.opts[i]) return;
+  const before = dialog;
+  dialog = null;
+  p.opts[i].fn && p.opts[i].fn();
+  if (dialog === null && before) renderDialog();
+}
+
+// ---------- Quests ----------
+const STAGES = [
+  () => 'Sprich mit dem Ältesten Perikles auf der Agora von Athen.',
+  () => `Sammle heilige Oliven im Hain nordöstlich von Athen (${S.olives}/5).`,
+  () => 'Bringe die Oliven zu Perikles auf der Agora.',
+  () => 'Reise nach Delphi (Nordwesten) und befrage die Pythia.',
+  () => `Besiege Wölfe in den Wäldern (${S.wolves}/5).`,
+  () => 'Kehre zur Pythia in Delphi zurück.',
+  () => 'Reise nach Sparta (Süden) und sprich mit Leonidas.',
+  () => `Vertreibe die Banditen aus ihrem Lager östlich von Sparta (${S.bandits}/4).`,
+  () => 'Berichte Leonidas in Sparta von deinem Sieg.',
+  () => 'Erklimme den Olymp (Norden) und bete am Schrein des Zeus.',
+  () => 'Segle von Piräus nach Kreta und besiege den Minotauros im Labyrinth.',
+  () => 'Kehre als Held zu Perikles nach Athen zurück.',
+  () => 'Hellas gehört dir. Erkunde die Welt, sammle Amphoren und lauf in Olympia um die Wette!',
+];
+function setStage(s) { S.stage = s; $('questText').textContent = STAGES[s](); sfx('quest'); if (s === 1) spawnOlives(); save(); }
+function updateQuestText() { $('questText').textContent = STAGES[S.stage](); }
+function questTarget() {
+  const nearestOf = (arr) => { let b = null, bd = 1e9; for (const a of arr) { const d = Math.hypot(a.x - player.pos.x, a.z - player.pos.z); if (d < bd) { bd = d; b = a; } } return b; };
+  switch (S.stage) {
+    case 0: case 2: case 11: return { x: SPOTS.agora[0], z: SPOTS.agora[1] };
+    case 1: { const o = nearestOf(pickups.filter(p => p.kind === 'olive' && !p.taken)); return o ? { x: o.x, z: o.z } : null; }
+    case 3: case 5: return { x: SPOTS.pythia[0], z: SPOTS.pythia[1] };
+    case 4: { const w = nearestOf(enemies.filter(e => e.type === 'wolf' && !e.dead)); return w ? { x: w.x, z: w.z } : null; }
+    case 6: case 8: return { x: SPOTS.leonidas[0], z: SPOTS.leonidas[1] };
+    case 7: return { x: LOCS.banditen.x, z: LOCS.banditen.z };
+    case 9: return { x: SPOTS.shrine[0], z: SPOTS.shrine[1] };
+    case 10: {
+      const onCrete = Math.hypot(player.pos.x - LOCS.kreta.x, player.pos.z - LOCS.kreta.z) < 260;
+      if (!onCrete) return piraeusDock ? { x: piraeusDock.boatman[0], z: piraeusDock.boatman[1] } : null;
+      const inMaze = player.pos.x > MAZE.x0 - 2 && player.pos.x < MAZE.x0 + 56 && player.pos.z > MAZE.z0 - 2 && player.pos.z < MAZE.z0 + 56;
+      return inMaze ? { x: SPOTS.mazeCenter[0], z: SPOTS.mazeCenter[1] } : { x: SPOTS.mazeEntrance[0], z: SPOTS.mazeEntrance[1] };
+    }
+  }
+  return null;
+}
+
+// ---------- Speichern ----------
+function save() {
+  try {
+    localStorage.setItem('hellas-save', JSON.stringify({ S, p: { x: player.pos.x, z: player.pos.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics } }));
+  } catch (e) { /* ignorieren */ }
+}
+function loadSave() { try { const s = localStorage.getItem('hellas-save'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+
+// ============================================================
+// NPCs
+// ============================================================
+const VILLAGER_LINES = [
+  'Chaire, Fremder! Die Götter seien mit dir.', 'Hast du die neue Statue der Athene gesehen? Ganz aus Bronze!',
+  'Man sagt, auf Kreta haust ein Ungeheuer, halb Mensch, halb Stier.', 'Die Oliven sind dieses Jahr prächtig.',
+  'Pass auf in den Wäldern – die Wölfe sind hungrig geworden.', 'In Olympia laufen die schnellsten Männer von Hellas.',
+  'Sokrates stellt schon wieder allen Leuten Fragen …', 'Nimm die Straße, Wanderer. Abseits lauern Banditen.',
+  'Zeus wohnt auf dem Olymp, ganz im Norden. Kein Sterblicher hat den Gipfel erklommen.',
+  'Ein Schluck aus dem Brunnen erfrischt Körper und Geist.', 'Die Spartaner? Harte Leute. Sie essen schwarze Suppe!',
+  'Ich hätte gern ein Pferd wie deins. Pfeif einfach, und es kommt.',
+];
+function addNPC(name, x, z, look, talkFn, wander = 0) {
+  const h = makeHumanoid(look);
+  h.root.position.set(x, groundAt(x, z), z);
+  scene.add(h.root);
+  const n = { name, h, x, z, home: [x, z], wander, tx: x, tz: z, wt: rr(1, 5), talkFn, yaw: rand() * 6.28, talking: 0 };
+  npcs.push(n);
+  interactables.push({ pos: () => n.h.root.position, label: 'Sprechen: ' + name.split(',')[0], fn: () => { n.talking = 2.5; n.talkFn.call(n); }, npc: n });
+  return n;
+}
+function buildNPCs() {
+  for (const [gx, gz, gr] of TEMPLE_GUARDS) addGuardNPC(gx, gz, gr);
+  TEMPLE_GUARDS.length = 0;
+  const [ax, az] = SPOTS.agora;
+  addNPC('Perikles, der Älteste', ax, az, { tunic: 0xf2ecdc, beard: true, hair: 0xb8b0a0, cape: 0x6b2f7a, weapon: 'staff' }, talkPerikles);
+  addNPC('Kleon, der Händler', SPOTS.merchant[0], SPOTS.merchant[1], { tunic: 0x2f6a5a, beard: true, hair: 0x2a1a0e }, talkMerchant);
+  addNPC('Pythia, das Orakel', SPOTS.pythia[0], SPOTS.pythia[1], { tunic: 0xf4f0e6, veil: 0xf4f0e6, skin: 0xe0b08a, wreath: true }, talkPythia);
+  addNPC('Leonidas', SPOTS.leonidas[0], SPOTS.leonidas[1], { tunic: 0x8e1717, armor: 0xb98d3a, helmet: true, crest: 0xa01818, beard: true, shield: true, shieldEmblem: 0x8a1a1a, weapon: 'spear', cape: 0x8e1717, greaves: true, pants: 0x4a1414, scale: 1.08 }, talkLeonidas);
+  addNPC('Kampfrichter', SPOTS.judge[0], SPOTS.judge[1], { tunic: 0x3a5a9a, beard: true, hair: 0x6a5a4a, wreath: true, weapon: 'staff' }, talkJudge);
+  if (piraeusDock) addNPC('Fährmann Nikias', piraeusDock.boatman[0], piraeusDock.boatman[1], { tunic: 0x6a5a3a, beard: true, hair: 0x3a2a1a }, () => talkFerry(true));
+  if (kretaDock) addNPC('Fährmann Minos', kretaDock.boatman[0], kretaDock.boatman[1], { tunic: 0xa8302a, beard: true }, () => talkFerry(false));
+  const tunics = [0xe8e0cc, 0x9b3b2b, 0x3a5a8a, 0x7a6a3a, 0xcfc4a8, 0x5a7a4a, 0xb08a5a];
+  for (const [key, n] of [['athen', 9], ['sparta', 4], ['delphi', 3], ['piraeus', 4], ['olympia', 4], ['theben', 4], ['kreta', 3]]) {
+    const L = LOCS[key];
+    for (let i = 0; i < n; i++) {
+      let x, z, t = 0; do { x = L.x + rr(-L.r * 0.6, L.r * 0.6); z = L.z + rr(-L.r * 0.6, L.r * 0.6); t++; } while (t < 20 && (heightAt(x, z) < 1 || (key === 'athen' && Math.hypot(x, z + 35) < 30)));
+      const female = rand() < 0.45;
+      const line = pick(VILLAGER_LINES);
+      addNPC(female ? pick(['Ariadne', 'Phoibe', 'Kalliope', 'Thalia', 'Eirene', 'Melina']) : pick(['Demetrios', 'Nikolaos', 'Alexios', 'Kostas', 'Theodoros', 'Stavros']),
+        x, z, { tunic: pick(tunics), hair: pick([0x2a1a0e, 0x4a2a1a, 0x1a1008, 0x6a4a2a]), beard: !female && rand() < 0.6, veil: female && rand() < 0.5 ? pick([0xe8dcc0, 0x7a3a5a, 0x3a5a8a]) : null, skin: pick([0xc98f5e, 0xb57a4c, 0xd9a577]) },
+        function () { talk([{ who: this.name, text: line }]); }, 14);
+    }
+  }
+}
+function talkPerikles() {
+  const W = 'Perikles';
+  if (S.stage === 0) talk([
+    { who: W, text: 'Chaire, junger Held! Endlich bist du da. Hellas braucht jemanden mit Mut und starkem Arm.' },
+    { who: W, text: 'Die Götter sind unruhig. Bevor wir sie um Rat fragen, müssen wir ihnen ein Opfer bringen.' },
+    { who: W, text: 'Sammle fünf heilige Oliven im Hain nordöstlich der Akropolis. Sie leuchten golden im Licht der Athene.', fn: () => setStage(1) },
+  ]);
+  else if (S.stage === 1) talk([{ who: W, text: `Du hast ${S.olives} von 5 Oliven. Der Hain liegt nordöstlich – folge dem goldenen Zeichen.` }]);
+  else if (S.stage === 2) talk([
+    { who: W, text: 'Wunderbar! Athene wird zufrieden sein. Hier, nimm diese Drachmen für deine Mühe.', fn: () => { addMoney(30); player.potions += 1; toast('+1 Ambrosia', 'gold'); } },
+    { who: W, text: 'Nun reise nach Delphi im Nordwesten, hinter Theben. Die Pythia wird dir sagen, was die Götter verlangen.' },
+    { who: W, text: 'Tipp: Drücke R, um dein Pferd zu rufen. Und Kleon dort am Markt verkauft nützliche Dinge.' },
+    { who: W, text: 'Noch etwas: Südwestlich von Athen liegt freies Land. Dort kannst du am Grenzstein deine eigene Stadt gründen. Und in den Tempeln von Hellas warten Opfergaben auf Helden!', fn: () => setStage(3) },
+  ]);
+  else if (S.stage === 11) talk([
+    { who: W, text: 'Bei Zeus! Der Minotauros ist tot? Ganz Athen wird deinen Namen besingen!' },
+    { who: W, text: 'Du bist nun ein wahrer Held von Hellas. Nimm diesen Lorbeerkranz – und diese Truhe voller Drachmen.', fn: () => { addMoney(200); setStage(12); banner('HELD VON HELLAS', 'Die Sage ist vollbracht – doch die Welt wartet auf dich.'); } },
+  ]);
+  else talk([{ who: W, text: pick(['Die Götter beobachten dich, Held.', 'Vergiss nicht: Mut ohne Weisheit ist wie ein Schiff ohne Steuer.', 'Athen ist stolz auf dich.']) }]);
+}
+function talkMerchant() {
+  const W = 'Kleon';
+  const opts = [
+    { label: 'Ambrosia-Trank kaufen (15 Drachmen)', fn: () => { if (spend(15)) { player.potions++; toast('+1 Ambrosia', 'gold'); } talkMerchant(); } },
+    { label: player.hasArmor ? 'Bronzepanzer (bereits gekauft)' : 'Bronzepanzer: +50 Leben (80 Drachmen)', fn: () => { if (!player.hasArmor && spend(80)) { player.hasArmor = true; player.maxHp += 50; player.hp = player.maxHp; toast('Bronzepanzer angelegt! Max. Leben +50', 'gold'); refreshHeroLook(); } talkMerchant(); } },
+    { label: player.hasBlade ? 'Geschliffene Klinge (bereits gekauft)' : 'Geschliffene Klinge: +6 Schaden (60 Drachmen)', fn: () => { if (!player.hasBlade && spend(60)) { player.hasBlade = true; player.dmg += 6; toast('Deine Klinge ist schärfer! Schaden +6', 'gold'); } talkMerchant(); } },
+    { label: 'Auf Wiedersehen', fn: () => { } },
+  ];
+  talk([{ who: W, text: `Willkommen an meinem Stand! Du hast ${player.money} Drachmen. Was darf es sein?`, opts }]);
+}
+function talkPythia() {
+  const W = 'Pythia';
+  if (S.stage === 3) talk([
+    { who: W, text: '… Die Dämpfe sprechen … Ich sehe dich, Wanderer aus Athen.' },
+    { who: W, text: 'Apollon verlangt einen Beweis deiner Stärke. Die Wölfe in den dunklen Wäldern bedrohen die Pilger.' },
+    { who: W, text: 'Besiege fünf von ihnen. Dann kehre zurück, und ich werde dir dein Schicksal enthüllen.', fn: () => setStage(4) },
+  ]);
+  else if (S.stage === 4) talk([{ who: W, text: `Noch streifen Wölfe umher … (${S.wolves}/5). Die Wälder um Delphi und im Westen sind voll von ihnen.` }]);
+  else if (S.stage === 5) talk([
+    { who: W, text: 'Apollon ist zufrieden. Höre nun die Prophezeiung:' },
+    { who: W, text: '„Wo Bronze singt und Männer nicht weichen, dort lernst du Mut. Wo der Göttervater thront, empfängst du Macht. Wo der Stier im Dunkeln brüllt, wirst du zum Helden.“' },
+    { who: W, text: 'Geh zuerst nach Sparta im Süden. Leonidas wird dich prüfen.', fn: () => { addMoney(40); setStage(6); } },
+  ]);
+  else talk([{ who: W, text: pick(['Erkenne dich selbst.', 'Nichts im Übermaß.', 'Die Zukunft ist wie Rauch – sie zeigt sich nur dem, der geduldig ist.']) }]);
+}
+function talkLeonidas() {
+  const W = 'Leonidas';
+  if (S.stage === 6) talk([
+    { who: W, text: 'Ein Athener? Hier in Sparta zählen keine Worte, nur Taten.' },
+    { who: W, text: 'Östlich der Stadt haben sich Banditen verschanzt. Sie überfallen unsere Händler.' },
+    { who: W, text: 'Vertreibe vier von ihnen, und ich nenne dich einen Krieger. Halte dein Schild hoch – rechte Maustaste!', fn: () => { S.bandits = 0; setStage(7); } },
+  ]);
+  else if (S.stage === 7) talk([{ who: W, text: `Ich höre noch keine Siegesrufe. (${S.bandits}/4)` }]);
+  else if (S.stage === 8) talk([
+    { who: W, text: 'Ha! Du kämpfst wie ein Spartaner. Nimm diesen Speerschliff – deine Waffe wird tödlicher sein.', fn: () => { player.dmg += 8; toast('Spartanische Ausbildung: Schaden +8', 'gold'); addMoney(50); } },
+    { who: W, text: 'Doch gegen das Ungeheuer auf Kreta brauchst du mehr als Stahl. Erklimme den Olymp im fernen Norden und bitte Zeus um seinen Segen.', fn: () => setStage(9) },
+  ]);
+  else talk([{ who: W, text: pick(['Komm mit deinem Schild zurück – oder auf ihm.', 'Ein Spartaner fragt nicht, wie viele Feinde es sind, sondern wo sie sind.', 'Trainiere hart. Der Kampf verzeiht keine Schwäche.']) }]);
+}
+function talkJudge() {
+  const W = 'Kampfrichter';
+  if (race) { talk([{ who: W, text: 'Lauf! Die Zeit läuft!' }]); return; }
+  talk([{ who: W, text: `Willkommen im Stadion von Olympia! Lauf zum Ziel am anderen Ende und wieder zurück – in unter 32 Sekunden. Zu Fuß, versteht sich!${S.raceBest ? ' Deine Bestzeit: ' + S.raceBest.toFixed(1) + ' s.' : ''}`, opts: [
+    { label: 'Ich bin bereit!', fn: startRace },
+    { label: 'Vielleicht später.', fn: () => { } },
+  ] }]);
+}
+function startRace() {
+  if (player.mounted) dismount();
+  player.pos.set(SPOTS.raceStart[0] + 1, groundAt(SPOTS.raceStart[0], SPOTS.raceStart[1]), SPOTS.raceStart[1]);
+  race = { t: 0, half: false, limit: 32 };
+  player.stamina = 100;
+  toast('Los! Lauf zum Ziel am Ostende!', 'gold'); sfx('quest');
+}
+function talkFerry(fromPiraeus) {
+  const W = fromPiraeus ? 'Fährmann Nikias' : 'Fährmann Minos';
+  talk([{ who: W, text: fromPiraeus ? 'Mein Schiff fährt nach Kreta, zur Insel des Königs Minos. Die Überfahrt kostet 10 Drachmen.' : 'Zurück zum Festland, nach Piräus? 10 Drachmen.', opts: [
+    { label: 'Segeln (10 Drachmen)', fn: () => { if (spend(10)) fadeTo(() => { const d = fromPiraeus ? kretaDock : piraeusDock; if (player.mounted) dismount(); player.pos.set(d.land[0], groundAt(d.land[0], d.land[1]) + 0.5, d.land[1]); player.vy = 0; camYaw = d.rot + Math.PI; toast(fromPiraeus ? 'Du erreichst Kreta.' : 'Du erreichst Piräus.'); }); } },
+    { label: 'Nein danke.', fn: () => { } },
+  ] }]);
+}
+function prayShrine() {
+  if (S.stage === 9) talk([
+    { who: 'Stimme des Zeus', text: 'STERBLICHER. Du hast den Gipfel erklommen, den nur Götter betreten.' },
+    { who: 'Stimme des Zeus', text: 'Deine Taten sind mir nicht verborgen geblieben. Nimm meinen Blitz – drücke Q, und der Himmel wird für dich sprechen.', fn: () => { player.blessed = true; player.maxHp += 30; player.hp = player.maxHp; flash = 1; sfx('zap'); toast('Segen des Zeus: Blitz (Q) & +30 Leben', 'gold'); } },
+    { who: 'Stimme des Zeus', text: 'Nun geh nach Kreta. Der Fährmann in Piräus bringt dich hin. Töte das Ungeheuer, das Minos im Labyrinth verbirgt.', fn: () => setStage(10) },
+  ]);
+  else if (player.blessed) talk([{ who: 'Schrein des Zeus', text: 'Die blaue Flamme brennt ewig. Du fühlst dich gestärkt.', fn: () => { player.hp = player.maxHp; } }]);
+  else talk([{ who: 'Schrein des Zeus', text: 'Eine blaue Flamme brennt auf dem Altar. Du spürst eine gewaltige Macht … doch die Götter schweigen noch.' }]);
+}
+function addMoney(n) { player.money += n; toast('+' + n + ' Drachmen', 'gold'); sfx('coin'); }
+function spend(n) { if (player.money < n) { toast('Nicht genug Drachmen!'); return false; } player.money -= n; sfx('coin'); return true; }
+
+const interactables = [];
+function buildInteractables() {
+  interactables.push({ pos: () => new V3(SPOTS.shrine[0], LOCS.olymp.h + 1.2, SPOTS.shrine[1] + 0.0), label: 'Am Schrein beten', fn: prayShrine, r: 4.5 });
+  for (const f of [SPOTS.fountain, SPOTS.thebenFountain]) interactables.push({ pos: () => new V3(f[0], heightAt(f[0], f[1]), f[1]), label: 'Aus dem Brunnen trinken', r: 4.2, fn: () => { player.hp = player.maxHp; player.stamina = 100; toast('Du fühlst dich erfrischt. Leben voll.'); sfx('drink'); } });
+}
+
+// ============================================================
+// Gegner
+// ============================================================
+const EDEF = {
+  wolf: { hp: 38, dmg: 7, speed: 9.5, range: 1.9, aggro: 26, cd: 1.2, name: 'Wolf', money: [0, 3], r: 0.6 },
+  bandit: { hp: 65, dmg: 11, speed: 6.5, range: 2.1, aggro: 24, cd: 1.4, name: 'Bandit', money: [6, 16], r: 0.5 },
+  guard: { hp: 110, dmg: 14, speed: 6.2, range: 2.6, aggro: 22, cd: 1.5, name: 'Tempelwächter', money: [12, 25], r: 0.5 },
+  minotaur: { hp: 650, dmg: 26, speed: 6.5, range: 3.6, aggro: 21, cd: 1.8, name: 'Minotauros', money: [150, 150], r: 1.0 },
+};
+function spawnEnemy(type, x, z) {
+  let model;
+  if (type === 'wolf') model = makeWolf(pick([0x6e6a64, 0x5a5550, 0x7d7468]));
+  else if (type === 'bandit') model = makeHumanoid({ tunic: pick([0x3a2a1a, 0x4a3a2a, 0x2a2a2a]), hair: 0x1a1008, beard: true, weapon: 'sword', armor: 0x5a4a3a, veil: 0x3a2a1a });
+  else if (type === 'guard') model = makeHumanoid({ tunic: 0x2a2a3a, armor: 0x8a7a5a, helmet: true, crest: 0x2a2a2a, shield: true, shieldCol: 0x6a5a3a, shieldEmblem: 0x2a2a2a, weapon: 'spear', greaves: true, pants: 0x1e1e26, scale: 1.12 });
+  else model = makeHumanoid({ skin: 0x5a3b25, tunic: 0x2a1a10, belt: 0xb98d3a, weapon: 'axe', bull: true, scale: 1.75, hair: 0x2a1a10 });
+  scene.add(model.root);
+  const e = { type, def: EDEF[type], m: model, x, z, home: [x, z], hp: EDEF[type].hp, maxHp: EDEF[type].hp, state: 'idle', cd: 0, wind: 0, wt: rr(0, 4), tx: x, tz: z, yaw: rand() * 6.28, dead: false, respawn: 0, flashT: 0, atkAnim: 0, chargeT: 0, chargeCd: 4, speedNow: 0, y: groundAt(x, z), deadT: 0 };
+  model.root.position.set(x, e.y, z);
+  enemies.push(e);
+  return e;
+}
+function buildEnemies() {
+  for (const F of FORESTS) {
+    const n = 4;
+    for (let i = 0; i < n; i++) { let x, z, t = 0; do { x = F.x + rr(-F.r * 0.6, F.r * 0.6); z = F.z + rr(-F.r * 0.6, F.r * 0.6); t++; } while (t < 30 && heightAt(x, z) < 1.5); spawnEnemy('wolf', x, z); }
+  }
+  const B = LOCS.banditen;
+  for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; spawnEnemy('bandit', B.x + Math.cos(a) * 6, B.z + Math.sin(a) * 6); }
+  for (const [x, z] of [[-320, 75], [-300, 90], [-100, 255], [-85, 262], [-480, 270]]) spawnEnemy('bandit', x, z);
+  spawnEnemy('minotaur', SPOTS.mazeCenter[0], SPOTS.mazeCenter[1]);
+  RUINS.forEach((r, i) => { for (const [gx, gz] of r.guards) { const e = spawnEnemy('guard', gx, gz); e.ruin = i; } });
+}
+function hurtPlayer(dmg, from) {
+  if (player.dead) return;
+  if (player.blocking) {
+    const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
+    const dx = from.x - player.pos.x, dz = from.z - player.pos.z, d = Math.hypot(dx, dz) || 1;
+    if ((dx * fx + dz * fz) / d > 0.3) { dmg *= player.relics.includes('athene') ? 0.05 : 0.2; sfx('block'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, 'Geblockt', '#e8c46a'); if (player.stamina > 10) player.stamina -= 10; }
+  }
+  if (player.hasArmor) dmg *= 0.85;
+  if (player.relics.includes('achilles')) dmg *= 0.8;
+  dmg = Math.round(dmg);
+  player.hp -= dmg; player.lastHurt = clock.elapsedTime;
+  $('damageFlash').style.opacity = 1; setTimeout(() => $('damageFlash').style.opacity = 0, 120);
+  sfx('hurt');
+  if (player.hp <= 0) die();
+}
+function die() {
+  player.hp = 0; player.dead = true; race = null;
+  if (player.mounted) dismount();
+  banner('Du bist gefallen', 'Hermes geleitet dich zurück nach Athen …');
+  setTimeout(() => fadeTo(() => {
+    const lost = Math.floor(player.money * 0.2); player.money -= lost;
+    player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]) + 0.5, SPOTS.respawn[1]);
+    player.hp = player.maxHp; player.dead = false; player.vy = 0;
+    for (const e of enemies) if (!e.dead) { e.state = 'idle'; e.hp = e.maxHp; }
+    if (lost) toast('-' + lost + ' Drachmen verloren');
+  }), 1800);
+}
+function damageEnemy(e, dmg, crit = false) {
+  e.hp -= dmg; e.flashT = 0.15; e.state = 'chase';
+  floatText(e.x, e.y + (e.type === 'minotaur' ? 4.2 : e.type === 'wolf' ? 1.7 : 2.4), e.z, String(Math.round(dmg)) + (crit ? '!' : ''), crit ? '#ffd24a' : '#ffffff', crit);
+  sfx('hit');
+  if (e.hp <= 0) killEnemy(e);
+}
+function killEnemy(e) {
+  e.dead = true; e.deadT = 0; e.respawn = 100;
+  const [a, b] = e.def.money; const m = Math.round(rr(a, b));
+  if (m > 0) { player.money += m; floatText(e.x, e.y + 1.5, e.z, '+' + m + ' Dr', '#e8c46a'); sfx('coin'); }
+  if (e.type === 'wolf' && S.stage === 4) { S.wolves++; updateQuestText(); if (S.wolves >= 5) { toast('Genug Wölfe besiegt! Zurück zur Pythia.', 'gold'); setStage(5); } }
+  if (e.type === 'bandit' && S.stage === 7 && Math.hypot(e.home[0] - LOCS.banditen.x, e.home[1] - LOCS.banditen.z) < 40) { S.bandits++; updateQuestText(); if (S.bandits >= 4) { toast('Das Lager ist befreit! Zurück zu Leonidas.', 'gold'); setStage(8); } }
+  if (e.type === 'minotaur') { banner('DER MINOTAUROS IST BESIEGT', 'Kehre nach Athen zurück, Held!'); if (S.stage === 10) setStage(11); S.minoDead = true; save(); }
+}
+function updateEnemy(e, dt) {
+  const P = player.pos;
+  const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz);
+  if (d > 320) { e.m.root.visible = false; if (e.dead) { e.respawn -= dt; if (e.respawn <= 0 && canRevive(e)) revive(e); } return; }
+  e.m.root.visible = true;
+  if (e.dead) {
+    e.deadT += dt;
+    e.m.root.rotation.z = Math.min(Math.PI / 2, e.deadT * 4) * (e.type === 'wolf' ? 1 : 1);
+    e.m.root.position.y = e.y - Math.max(0, e.deadT - 2) * 0.5;
+    if (e.deadT > 6) e.m.root.visible = false;
+    e.respawn -= dt;
+    if (e.respawn <= 0 && d > 120 && canRevive(e)) revive(e);
+    return;
+  }
+  const D = e.def;
+  let mvx = 0, mvz = 0, spd = 0;
+  e.cd -= dt; e.atkAnim = Math.max(0, e.atkAnim - dt * 2.5);
+  if (e.state === 'idle') {
+    e.wt -= dt;
+    if (e.wt <= 0) { e.wt = rr(3, 8); const a = rand() * 6.28, r = rand() * (e.type === 'minotaur' ? 5 : 14); e.tx = e.home[0] + Math.cos(a) * r; e.tz = e.home[1] + Math.sin(a) * r; }
+    const tx = e.tx - e.x, tz = e.tz - e.z, td = Math.hypot(tx, tz);
+    if (td > 0.8) { mvx = tx / td; mvz = tz / td; spd = D.speed * 0.3; }
+    const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
+    if (d < D.aggro && !player.dead && !(player.swimming && e.type !== 'minotaur') && homeD < 90) e.state = 'chase';
+  } else if (e.state === 'chase') {
+    const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
+    if (player.dead || d > D.aggro * 2.5 || homeD > (e.type === 'minotaur' ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
+    else {
+      if (e.type === 'minotaur') {
+        e.chargeCd -= dt;
+        if (e.chargeT > 0) { e.chargeT -= dt; mvx = Math.sin(e.yaw); mvz = Math.cos(e.yaw); spd = 17; if (d < 2.6 && !e.chargeHit) { e.chargeHit = true; hurtPlayer(D.dmg * 1.2, e); player.knock = { x: mvx * 18, z: mvz * 18, t: 0.25 }; } }
+        else if (e.chargeCd <= 0 && d > 7 && d < 20) { e.chargeT = 1.0; e.chargeCd = 6; e.chargeHit = false; e.yaw = Math.atan2(dx, dz); floatText(e.x, e.y + 4.5, e.z, 'BRÜLL!', '#ff7050', true); }
+      }
+      if (e.chargeT <= 0) {
+        e.yaw = angLerp(e.yaw, Math.atan2(dx, dz), Math.min(1, dt * 8));
+        if (d > D.range * 0.85) { mvx = dx / d; mvz = dz / d; spd = D.speed; }
+        else if (e.cd <= 0 && e.wind <= 0) { e.wind = 0.42; e.atkAnim = 1; }
+        if (e.wind > 0) { e.wind -= dt; spd *= 0.3; if (e.wind <= 0) { e.cd = D.cd; if (d < D.range * 1.35) hurtPlayer(D.dmg * rr(0.85, 1.15), e); } }
+      }
+    }
+  }
+  if (spd > 0) {
+    const ox = e.x, oz = e.z;
+    const nx = e.x + mvx * spd * dt, nz = e.z + mvz * spd * dt;
+    if (heightAt(nx, nz) > -0.6) {
+      const p = { x: nx, z: nz }; resolveCollisions(p, D.r); e.x = p.x; e.z = p.z;
+      // Feind nicht in andere Feinde schieben
+    }
+    if (e.state === 'idle') e.yaw = angLerp(e.yaw, Math.atan2(mvx, mvz), Math.min(1, dt * 5));
+    e.speedNow = Math.hypot(e.x - ox, e.z - oz) / dt;
+  } else e.speedNow = 0;
+  e.y = groundAt(e.x, e.z);
+  const r = e.m.root; r.position.set(e.x, e.y, e.z); r.rotation.y = e.yaw;
+  const fs = e.flashT > 0 ? 1.12 : 1; e.flashT -= dt;
+  const base = e.type === 'minotaur' ? 1.75 : e.type === 'guard' ? 1.12 : 1; r.scale.setScalar(base * fs);
+  if (e.type === 'wolf') { animateQuad(e.m, e.speedNow, dt); e.m.head.rotation.x = e.atkAnim > 0 ? -Math.sin(e.atkAnim * Math.PI) * 0.6 : 0; }
+  else animateHumanoid(e.m, e.speedNow, dt, { attack: e.atkAnim });
+}
+function canRevive(e) { return e.type !== 'minotaur' && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
+function revive(e) { e.dead = false; e.hp = e.maxHp; e.x = e.home[0]; e.z = e.home[1]; e.state = 'idle'; e.m.root.rotation.z = 0; e.m.root.visible = true; }
+
+// ---------- Spieler-Angriffe ----------
+function playerAttack() {
+  if (player.atkCd > 0 || dialog || player.dead || player.swimming || player.blocking) return;
+  player.atkCd = 0.55; player.atkAnim = 1;
+  let fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
+  const reach = player.mounted ? 3.8 : 3.0;
+  // Sanftes Auto-Zielen: nächsten Gegner im weiten Kegel vor der Kamera anvisieren
+  let tgt = null, best = 1e9;
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const dx = e.x - player.pos.x, dz = e.z - player.pos.z, d = Math.hypot(dx, dz);
+    const er = e.type === 'minotaur' ? 1.4 : 0.3;
+    if (d < reach + er + 1.2 && (d < 1 || (dx * fx + dz * fz) / d > -0.15) && d < best) { best = d; tgt = e; }
+  }
+  if (tgt) { const d = Math.hypot(tgt.x - player.pos.x, tgt.z - player.pos.z) || 1; fx = (tgt.x - player.pos.x) / d; fz = (tgt.z - player.pos.z) / d; }
+  player.yaw = Math.atan2(fx, fz);
+  sfx('swing');
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const dx = e.x - player.pos.x, dz = e.z - player.pos.z, d = Math.hypot(dx, dz);
+    const er = e.type === 'minotaur' ? 1.4 : 0.3;
+    if (d < reach + er && Math.abs(e.y - player.pos.y) < 3 && (d < 1 || (dx * fx + dz * fz) / d > 0.4)) {
+      const crit = rand() < 0.15;
+      damageEnemy(e, player.dmg * rr(0.85, 1.15) * (crit ? 2 : 1), crit);
+      if (!e.dead && e.type !== 'minotaur') { const k = 1.2 / (d || 1); const p = { x: e.x + dx * k, z: e.z + dz * k }; if (heightAt(p.x, p.z) > -0.5) { resolveCollisions(p, e.def.r); e.x = p.x; e.z = p.z; } }
+    }
+  }
+}
+let flash = 0;
+function zeusBolt() {
+  if (!player.blessed) { toast('Du hast den Segen des Zeus noch nicht.'); return; }
+  if (player.zapCd > 0) { toast('Der Blitz lädt noch … (' + Math.ceil(player.zapCd) + ' s)'); return; }
+  const targets = enemies.filter(e => !e.dead && Math.hypot(e.x - player.pos.x, e.z - player.pos.z) < 30);
+  player.zapCd = 9; flash = 1; sfx('zap');
+  if (!targets.length) { makeBolt(player.pos.x - Math.sin(camYaw) * 12, player.pos.z - Math.cos(camYaw) * 12); return; }
+  for (const e of targets) { makeBolt(e.x, e.z); damageEnemy(e, 85 + player.dmg, false); }
+}
+function makeBolt(x, z) {
+  const y0 = groundAt(x, z); const pts = []; let px = x, pz = z;
+  for (let i = 0; i <= 12; i++) { pts.push(new V3(px, y0 + 60 - i * 5, pz)); px = x + rr(-2.5, 2.5) * (12 - i) / 12; pz = z + rr(-2.5, 2.5) * (12 - i) / 12; }
+  pts[pts.length - 1].set(x, y0, z);
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xcfe8ff, transparent: true, fog: false }));
+  scene.add(line); bolts.push({ line, t: 0.35 });
+  const glow = new THREE.PointLight(0x9fd0ff, 60, 40, 2); glow.position.set(x, y0 + 3, z); scene.add(glow); bolts.push({ line: glow, t: 0.35 });
+}
+
+// ---------- Pferd ----------
+function mount() {
+  if (player.swimming || race) { toast(race ? 'Beim Wettlauf kein Pferd!' : 'Im Wasser kann dein Pferd nicht kommen.'); return; }
+  player.mounted = true; horse.root.visible = true; toast('Dein Pferd ist da. (R zum Absteigen)'); sfx('coin');
+}
+function dismount() { player.mounted = false; horse.root.visible = false; }
+function refreshHeroLook() {
+  const p = hero.root.position.clone(), r = hero.root.rotation.y;
+  scene.remove(hero.root);
+  hero = makeHumanoid(heroLook());
+  hero.root.position.copy(p); hero.root.rotation.y = r; scene.add(hero.root);
+}
+function heroLook() { return { tunic: 0x9b1c1c, armor: player.hasArmor ? 0xb98d3a : 0x7a5a3a, helmet: true, crest: 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: 'sword', cape: 0x1c3a7a, pants: 0x3a2a1e, greaves: player.hasArmor, hair: 0x2a1a0e }; }
+
+// ---------- Sammelobjekte ----------
+const ampGeo = (() => { const pts = []; const prof = [[0, 0], [0.18, 0.02], [0.3, 0.25], [0.36, 0.55], [0.3, 0.85], [0.14, 1.0], [0.1, 1.15], [0.16, 1.22], [0.0, 1.22]]; for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y)); return new THREE.LatheGeometry(pts, 12); })();
+const ampMat = new THREE.MeshLambertMaterial({ color: 0xb5553a, emissive: 0x2a0a00 });
+const oliveMat = new THREE.MeshLambertMaterial({ color: 0xe8c46a, emissive: 0xb08020 });
+function buildPickups() {
+  let n = 0, tries = 0;
+  rand = mulberry32(777);
+  while (n < 40 && tries < 5000) {
+    tries++;
+    const x = rr(-850, 600), z = rr(-850, 850), h = heightAt(x, z);
+    if (h < 2 || h > 120 || inCity(x, z, 0.5)) continue;
+    const m = new THREE.Mesh(ampGeo, ampMat); m.scale.setScalar(1.4); m.position.set(x, h, z); m.castShadow = true; scene.add(m);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.05, 6, 24), oliveMat); ring.rotation.x = Math.PI / 2; ring.position.set(x, h + 0.1, z); scene.add(ring);
+    pickups.push({ kind: 'amph', id: n, x, z, y: h, mesh: m, ring, taken: S.amph.includes(n) });
+    if (S.amph.includes(n)) { m.visible = false; ring.visible = false; }
+    n++;
+  }
+}
+function spawnOlives() {
+  for (const p of pickups.filter(p => p.kind === 'olive')) { scene.remove(p.mesh); }
+  for (let i = pickups.length - 1; i >= 0; i--) if (pickups[i].kind === 'olive') pickups.splice(i, 1);
+  const spots = TREES.filter(t => t.kind === 'olive' && Math.hypot(t.x - 40, t.z + 90) < 110 && Math.hypot(t.x, t.z) > 60);
+  for (let i = 0; i < 5; i++) {
+    const t = spots.length ? spots[Math.floor(rand() * spots.length)] : { x: 40 + rr(-40, 40), z: -90 + rr(-40, 40) };
+    const x = t.x + 1.4, z = t.z + 1.4, y = heightAt(x, z) + 1.2;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), oliveMat); m.scale.set(1, 1.3, 1); m.position.set(x, y, z); scene.add(m);
+    pickups.push({ kind: 'olive', x, z, y, mesh: m, taken: false });
+  }
+}
+function updatePickups(dt, t) {
+  for (const p of pickups) {
+    if (p.taken) continue;
+    if (p.kind === 'olive') { p.mesh.position.y = p.y + Math.sin(t * 3 + p.x) * 0.2; p.mesh.rotation.y += dt * 2; }
+    else p.ring.scale.setScalar(1 + Math.sin(t * 3 + p.x) * 0.12);
+    const d = Math.hypot(p.x - player.pos.x, p.z - player.pos.z);
+    if (d < (player.mounted ? 2.8 : 1.8) && Math.abs(player.pos.y - p.y) < 3) {
+      p.taken = true; p.mesh.visible = false; if (p.ring) p.ring.visible = false;
+      if (p.kind === 'amph') { S.amph.push(p.id); const m = Math.round(rr(8, 20)); addMoney(m); toast('Amphore gefunden! (' + S.amph.length + '/40)'); if (rand() < 0.3) { player.potions++; toast('+1 Ambrosia', 'gold'); } save(); }
+      else if (S.stage === 1) { S.olives++; sfx('coin'); toast('Heilige Olive (' + S.olives + '/5)', 'gold'); updateQuestText(); if (S.olives >= 5) setStage(2); }
+    }
+  }
+}
+
+// ============================================================
+// Karte
+// ============================================================
+let mapCanvas;
+function buildMapCanvas() {
+  mapCanvas = document.createElement('canvas'); mapCanvas.width = N; mapCanvas.height = N;
+  const ctx = mapCanvas.getContext('2d'), img = ctx.createImageData(N, N);
+  for (let i = 0; i < N * N; i++) {
+    const h = HGT[i];
+    let r = terrainColorsSRGB[i * 3], g = terrainColorsSRGB[i * 3 + 1], b = terrainColorsSRGB[i * 3 + 2];
+    if (h < 0) { const t = clamp(-h / 30, 0, 1); r = lerp(70, 22, t); g = lerp(140, 70, t); b = lerp(170, 120, t); }
+    else { const sh = clamp(h / 150, 0, 1) * 30; r += sh; g += sh; b += sh; }
+    img.data[i * 4] = r; img.data[i * 4 + 1] = g; img.data[i * 4 + 2] = b; img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+const w2m = (x) => (x + HALF) / CELL; // Welt -> Kartenpixel
+function drawMinimap() {
+  const c = $('minimap'), ctx = c.getContext('2d'), S2 = c.width;
+  const range = 320, scale = S2 / (range / CELL);
+  const px = w2m(player.pos.x), pz = w2m(player.pos.z);
+  ctx.fillStyle = '#16465e'; ctx.fillRect(0, 0, S2, S2);
+  ctx.save(); ctx.translate(S2 / 2, S2 / 2); ctx.scale(scale, scale); ctx.translate(-px, -pz);
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(mapCanvas, 0, 0);
+  ctx.restore();
+  const toMini = (x, z) => [S2 / 2 + (w2m(x) - px) * scale, S2 / 2 + (w2m(z) - pz) * scale];
+  ctx.font = '600 10px Alegreya Sans, sans-serif'; ctx.textAlign = 'center';
+  for (const L of LOC_LIST) { if (L.hidden) continue; const [mx, my] = toMini(L.x, L.z); if (mx < -40 || my < -20 || mx > S2 + 40 || my > S2 + 20) continue; ctx.fillStyle = '#1b140c'; ctx.fillRect(mx - 2.5, my - 2.5, 5, 5); ctx.fillStyle = '#fff3d0'; ctx.fillText(L.name, mx, my - 6); }
+  const q = questTarget();
+  if (q) {
+    let [mx, my] = toMini(q.x, q.z);
+    const dx = mx - S2 / 2, dy = my - S2 / 2, dd = Math.hypot(dx, dy), maxR = S2 / 2 - 10;
+    if (dd > maxR) { mx = S2 / 2 + dx / dd * maxR; my = S2 / 2 + dy / dd * maxR; }
+    ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(mx, my - 7); ctx.lineTo(mx + 5, my); ctx.lineTo(mx, my + 7); ctx.lineTo(mx - 5, my); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  for (const ch of CHESTS) { if (ch.opened) continue; const [mx, my] = toMini(ch.x, ch.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = ch.tier === 2 ? '#ffd24a' : '#d8b860'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 1; ctx.fillRect(mx - 3, my - 2.5, 6, 5); ctx.strokeRect(mx - 3, my - 2.5, 6, 5); }
+  for (const e of enemies) { if (e.dead) continue; const [mx, my] = toMini(e.x, e.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 4) continue; ctx.fillStyle = e.type === 'minotaur' ? '#ff3a1a' : '#c0392b'; ctx.beginPath(); ctx.arc(mx, my, e.type === 'minotaur' ? 4 : 2.2, 0, 7); ctx.fill(); }
+  ctx.save(); ctx.translate(S2 / 2, S2 / 2); ctx.rotate(-player.yaw + Math.PI);
+  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(5.5, 6); ctx.lineTo(0, 3); ctx.lineTo(-5.5, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function drawBigMap() {
+  const c = $('bigmapCanvas'), ctx = c.getContext('2d'), W = c.width, k = W / N;
+  ctx.drawImage(mapCanvas, 0, 0, W, W);
+  ctx.strokeStyle = 'rgba(232,196,106,.5)'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, W - 2, W - 2);
+  ctx.textAlign = 'center';
+  for (const L of LOC_LIST) {
+    if (L.hidden) continue;
+    const x = w2m(L.x) * k, y = w2m(L.z) * k;
+    ctx.fillStyle = '#1b140c'; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); ctx.fillStyle = '#e8c46a'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill();
+    ctx.font = '700 17px Cinzel, serif'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(L.name, x, y - 10); ctx.fillStyle = '#fff3d0'; ctx.fillText(L.name, x, y - 10);
+  }
+  const q = questTarget();
+  if (q) { const x = w2m(q.x) * k, y = w2m(q.z) * k; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x + 8, y); ctx.lineTo(x, y + 12); ctx.lineTo(x - 8, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  const x = w2m(player.pos.x) * k, y = w2m(player.pos.z) * k;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-player.yaw + Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(8, 9); ctx.lineTo(0, 4); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('HELLAS', 20, 36);
+  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen', 20, 58);
+  ctx.textAlign = 'center';
+  S.found.forEach(i => { const r = RUINS[i]; if (!r) return; const x = w2m(r.x) * k, y = w2m(r.z) * k; ctx.fillStyle = r.chest.opened ? '#8a8070' : '#ffd24a'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(r.name, x, y + 20); ctx.fillStyle = '#fff3d0'; ctx.fillText(r.name, x, y + 20); });
+  ctx.textAlign = 'center'; ctx.font = '700 18px Cinzel, serif'; ctx.fillText('N', W / 2, 24);
+}
+
+// ============================================================
+// Overlay: Lebensbalken, Namen, Schadenszahlen, Questmarker
+// ============================================================
+const overlay = $('overlay'), octx = overlay.getContext('2d');
+function resizeOverlay() { overlay.width = innerWidth * devicePixelRatio; overlay.height = innerHeight * devicePixelRatio; octx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); }
+const _v = new V3();
+function project(x, y, z) { _v.set(x, y, z).project(camera); return { x: (_v.x * 0.5 + 0.5) * innerWidth, y: (-_v.y * 0.5 + 0.5) * innerHeight, behind: _v.z > 1 }; }
+function drawOverlay(dt) {
+  octx.clearRect(0, 0, innerWidth, innerHeight);
+  if (!started) return;
+  octx.textAlign = 'center';
+  for (const e of enemies) {
+    if (e.dead || !e.m.root.visible) continue;
+    const d = Math.hypot(e.x - player.pos.x, e.z - player.pos.z);
+    if (d > 38 || (e.state !== 'chase' && e.hp >= e.maxHp && d > 14)) continue;
+    const top = e.type === 'minotaur' ? 4.4 : e.type === 'wolf' ? 1.6 : 2.4;
+    const s = project(e.x, e.y + top, e.z); if (s.behind) continue;
+    const w = e.type === 'minotaur' ? 90 : 46;
+    octx.fillStyle = 'rgba(0,0,0,.6)'; octx.fillRect(s.x - w / 2 - 1, s.y - 1, w + 2, 7);
+    octx.fillStyle = '#c0392b'; octx.fillRect(s.x - w / 2, s.y, w * Math.max(0, e.hp / e.maxHp), 5);
+    if (e.type === 'minotaur' || d < 14) { octx.font = '600 12px Alegreya Sans, sans-serif'; octx.fillStyle = '#ffdcd0'; octx.fillText(e.def.name, s.x, s.y - 4); }
+  }
+  for (const n of npcs) {
+    const p = n.h.root.position, d = Math.hypot(p.x - player.pos.x, p.z - player.pos.z);
+    if (d > 18) continue;
+    const s = project(p.x, p.y + 2.45 * n.h.root.scale.y, p.z); if (s.behind) continue;
+    octx.font = '600 13px Alegreya Sans, sans-serif'; octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.6)';
+    const nm = n.name.split(',')[0];
+    octx.strokeText(nm, s.x, s.y); octx.fillStyle = n.wander ? '#efe2c2' : '#ffd24a'; octx.fillText(nm, s.x, s.y);
+  }
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i]; f.t -= dt; f.p.y += dt * 1.4;
+    if (f.t <= 0) { floaters.splice(i, 1); continue; }
+    const s = project(f.p.x, f.p.y, f.p.z); if (s.behind) continue;
+    octx.globalAlpha = Math.min(1, f.t * 2); octx.font = (f.big ? '700 24px' : '700 17px') + ' Cinzel, serif';
+    octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.7)'; octx.strokeText(f.text, s.x, s.y); octx.fillStyle = f.color; octx.fillText(f.text, s.x, s.y);
+    octx.globalAlpha = 1;
+  }
+  // Questmarker
+  const q = questTarget();
+  if (q && !mapOpen) {
+    const qy = groundAt(q.x, q.z) + 3.5;
+    const s = project(q.x, qy, q.z);
+    let x = s.x, y = s.y; const m = 40;
+    if (s.behind) { x = innerWidth - x; y = innerHeight - m; }
+    const off = x < m || x > innerWidth - m || y < m || y > innerHeight - m || s.behind;
+    x = clamp(x, m, innerWidth - m); y = clamp(y, m, innerHeight - m);
+    const d = Math.hypot(q.x - player.pos.x, q.z - player.pos.z);
+    if (d > 4) {
+      octx.globalAlpha = off ? 0.75 : 1;
+      octx.fillStyle = '#ffd24a'; octx.strokeStyle = '#2a1a00'; octx.lineWidth = 2;
+      octx.beginPath(); octx.moveTo(x, y - 11); octx.lineTo(x + 8, y); octx.lineTo(x, y + 11); octx.lineTo(x - 8, y); octx.closePath(); octx.fill(); octx.stroke();
+      octx.font = '600 13px Alegreya Sans, sans-serif'; octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.6)';
+      const t = Math.round(d) + ' m'; octx.strokeText(t, x, y + 26); octx.fillStyle = '#fff3d0'; octx.fillText(t, x, y + 26);
+      octx.globalAlpha = 1;
+    }
+  }
+  if (race) {
+    octx.font = '700 30px Cinzel, serif'; octx.lineWidth = 4; octx.strokeStyle = 'rgba(0,0,0,.7)';
+    const t = (race.limit - race.t).toFixed(1) + ' s'; octx.strokeText(t, innerWidth / 2, 80); octx.fillStyle = race.limit - race.t < 6 ? '#ff7a5a' : '#ffd24a'; octx.fillText(t, innerWidth / 2, 80);
+    octx.font = '600 15px Alegreya Sans, sans-serif'; octx.fillStyle = '#fff3d0'; octx.fillText(race.half ? 'Zurück zum Start!' : 'Zum Ziel am Ostende!', innerWidth / 2, 104);
+  }
+}
+
+// ============================================================
+// Eingabe
+// ============================================================
+addEventListener('keydown', (e) => {
+  if (!started) return;
+  const k = e.code;
+  keys[k] = true;
+  if (k === 'KeyE') { if (dialog) advanceDialog(); else interact(); }
+  if (dialog && /^Digit[1-9]$/.test(k)) chooseOpt(+k.slice(5) - 1);
+  if (dialog) return;
+  if (k === 'KeyR') { player.mounted ? dismount() : mount(); }
+  if (k === 'KeyF') { if (player.potions > 0 && player.hp < player.maxHp) { player.potions--; player.hp = Math.min(player.maxHp, player.hp + 60); sfx('drink'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, '+60', '#7aff8a'); } else if (player.potions <= 0) toast('Keine Ambrosia mehr. Kleon in Athen verkauft welche.'); }
+  if (k === 'KeyQ') zeusBolt();
+  if (k === 'KeyM') { mapOpen = !mapOpen; $('bigmap').classList.toggle('hidden', !mapOpen); }
+  if (k === 'Space') e.preventDefault();
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+canvas.addEventListener('mousedown', (e) => {
+  if (!started) return;
+  if (document.pointerLockElement !== canvas) { canvas.requestPointerLock && canvas.requestPointerLock(); }
+  if (e.button === 0) { mouse.left = true; if (dialog) { if (!dialog.pages[dialog.i].opts) advanceDialog(); } else playerAttack(); }
+  if (e.button === 2) mouse.right = true;
+});
+addEventListener('mouseup', (e) => { if (e.button === 0) mouse.left = false; if (e.button === 2) mouse.right = false; });
+addEventListener('contextmenu', (e) => e.preventDefault());
+addEventListener('mousemove', (e) => {
+  if (!started) return;
+  const locked = document.pointerLockElement === canvas;
+  if (locked || mouse.left) { const mx = e.movementX || 0, my = e.movementY || 0; if (Math.abs(mx) > 300 || Math.abs(my) > 300) return; camYaw -= mx * 0.0026; camPitch = clamp(camPitch + my * 0.0022, -0.35, 1.25); }
+});
+addEventListener('wheel', (e) => { camZoom = clamp(camZoom * (e.deltaY > 0 ? 1.1 : 0.9), 0.45, 2.2); }, { passive: true });
+document.addEventListener('pointerlockchange', () => { paused = started && document.pointerLockElement !== canvas && !dialog && !mapOpen; $('pause').classList.toggle('hidden', !paused); });
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeOverlay(); });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.left = mouse.right = false; });
+
+let nearInter = null;
+function interact() { if (nearInter && !player.dead) nearInter.fn(); }
+function findInteractable() {
+  let best = null, bd = 1e9;
+  for (const it of interactables) {
+    if (it.active && !it.active()) continue;
+    const p = it.pos(); const d = Math.hypot(p.x - player.pos.x, p.z - player.pos.z);
+    if (d < (it.r || 3.4) && Math.abs(p.y - player.pos.y) < 4 && d < bd) { bd = d; best = it; }
+  }
+  return best;
+}
+
+// ============================================================
+// Update
+// ============================================================
+const clock = new THREE.Clock();
+const _fwd = new V3(), _right = new V3(), _mv = new V3();
+function updatePlayer(dt) {
+  const P = player.pos;
+  player.atkCd -= dt; player.atkAnim = Math.max(0, player.atkAnim - dt * 2.6); player.zapCd = Math.max(0, player.zapCd - dt);
+  _fwd.set(-Math.sin(camYaw), 0, -Math.cos(camYaw)); _right.set(Math.cos(camYaw), 0, -Math.sin(camYaw));
+  _mv.set(0, 0, 0);
+  const canMove = !dialog && !player.dead && !mapOpen;
+  if (canMove) {
+    if (keys.KeyW || keys.ArrowUp) _mv.add(_fwd);
+    if (keys.KeyS || keys.ArrowDown) _mv.sub(_fwd);
+    if (keys.KeyD || keys.ArrowRight) _mv.add(_right);
+    if (keys.KeyA || keys.ArrowLeft) _mv.sub(_right);
+  }
+  player.blocking = canMove && mouse.right && !player.mounted && !player.swimming;
+  const moving = _mv.lengthSq() > 0;
+  if (moving) _mv.normalize();
+  const sprint = (keys.ShiftLeft || keys.ShiftRight) && moving && player.stamina > 1 && !player.blocking;
+  let speed = player.mounted ? (sprint ? 30 : 19) : (sprint ? 12.5 : 7);
+  if (player.swimming) speed = sprint ? 6 : 4;
+  if (player.blocking) speed = 3.2;
+  if (player.relics.includes('hermes')) speed *= 1.2;
+  const stMul = player.relics.includes('herakles') ? 0.5 : 1;
+  if (sprint && !player.mounted) player.stamina = Math.max(0, player.stamina - dt * 22 * stMul);
+  else if (sprint && player.mounted) player.stamina = Math.max(0, player.stamina - dt * 10 * stMul);
+  else player.stamina = Math.min(100, player.stamina + dt * 16);
+  const ox = P.x, oz = P.z;
+  if (moving) {
+    P.x += _mv.x * speed * dt; P.z += _mv.z * speed * dt;
+    if (player.atkAnim <= 0 && !player.blocking) player.yaw = angLerp(player.yaw, Math.atan2(_mv.x, _mv.z), Math.min(1, dt * 12));
+  }
+  if (player.blocking) player.yaw = angLerp(player.yaw, Math.atan2(_fwd.x, _fwd.z), Math.min(1, dt * 12));
+  if (player.knock && player.knock.t > 0) { P.x += player.knock.x * dt; P.z += player.knock.z * dt; player.knock.t -= dt; }
+  P.x = clamp(P.x, -HALF + 10, HALF - 10); P.z = clamp(P.z, -HALF + 10, HALF - 10);
+  resolveCollisions(P, player.mounted ? 0.9 : 0.45);
+  player.speedNow = Math.hypot(P.x - ox, P.z - oz) / Math.max(dt, 1e-4);
+  // Vertikal
+  const g = groundAt(P.x, P.z);
+  const SWIM_Y = -1.35;
+  player.swimming = g < SWIM_Y - 0.05 && P.y <= SWIM_Y + 0.4;
+  if (player.swimming) {
+    if (player.mounted) { dismount(); toast('Dein Pferd schwimmt zurück ans Ufer.'); }
+    P.y = lerp(P.y, SWIM_Y + Math.sin(clock.elapsedTime * 2) * 0.08, Math.min(1, dt * 6)); player.vy = 0; player.onGround = false;
+    if (keys.Space) P.y = SWIM_Y + 0.15;
+  } else {
+    player.vy -= 32 * dt; P.y += player.vy * dt;
+    if (P.y <= g) {
+      // Stufen: kleine Höhen automatisch hochsteigen
+      P.y = g; if (player.vy < -28) { hurtPlayer(Math.round((-player.vy - 28) * 2.5), { x: P.x, z: P.z }); }
+      player.vy = 0; player.onGround = true;
+    } else if (player.onGround && player.vy <= 0 && P.y - g < (player.mounted ? 1.4 : 0.8)) { P.y = g; player.vy = 0; }
+    else player.onGround = false;
+    if (canMove && keys.Space && player.onGround) { player.vy = player.mounted ? 12 : 10.5; player.onGround = false; }
+  }
+  // Regeneration
+  if (!player.dead && clock.elapsedTime - player.lastHurt > 6 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * 4);
+  // Modell
+  const hy = player.mounted ? 1.3 : 0;
+  hero.root.position.set(P.x, P.y + hy + (player.swimming ? -0.85 : 0), P.z);
+  hero.root.rotation.y = player.yaw;
+  animateHumanoid(hero, player.mounted ? 0 : player.speedNow, dt, { attack: player.atkAnim, block: player.blocking, sitting: player.mounted });
+  if (player.swimming) { hero.armL.rotation.x = -2.6 + Math.sin(clock.elapsedTime * 4) * 0.6; hero.armR.rotation.x = -2.6 - Math.sin(clock.elapsedTime * 4) * 0.6; }
+  if (player.mounted) { horse.root.position.set(P.x, P.y, P.z); horse.root.rotation.y = player.yaw; animateQuad(horse, player.speedNow * 0.6, dt); }
+  // Rennen
+  if (race) {
+    race.t += dt;
+    const [ex, ez] = SPOTS.raceEnd, [sx, sz] = SPOTS.raceStart;
+    if (!race.half && Math.abs(P.x - ex) < 2.5 && Math.abs(P.z - ez) < 11) { race.half = true; toast('Wende! Zurück zum Start!', 'gold'); sfx('coin'); }
+    if (race.half && Math.abs(P.x - sx) < 2.5 && Math.abs(P.z - sz) < 11) {
+      const t = race.t; race = null;
+      const first = !S.raceBest;
+      if (!S.raceBest || t < S.raceBest) S.raceBest = t;
+      banner('SIEG IN OLYMPIA!', 'Deine Zeit: ' + t.toFixed(1) + ' Sekunden');
+      addMoney(first ? 50 : 20); save();
+    } else if (race && race.t > race.limit) { race = null; toast('Zu langsam! Sprich erneut mit dem Kampfrichter.'); }
+    if (race && player.mounted) { race = null; toast('Disqualifiziert – kein Pferd im Stadion!'); }
+  }
+}
+function updateNPCs(dt) {
+  for (const n of npcs) {
+    const p = n.h.root.position;
+    const d = Math.hypot(p.x - player.pos.x, p.z - player.pos.z);
+    if (d > 220) { n.h.root.visible = false; continue; }
+    n.h.root.visible = true;
+    let spd = 0;
+    n.talking -= dt;
+    if (d < 5 || n.talking > 0) n.yaw = angLerp(n.yaw, Math.atan2(player.pos.x - p.x, player.pos.z - p.z), Math.min(1, dt * 4));
+    else if (n.wander) {
+      n.wt -= dt;
+      if (n.wt <= 0) { n.wt = rr(4, 10); const a = rand() * 6.28, r = rand() * n.wander; n.tx = n.home[0] + Math.cos(a) * r; n.tz = n.home[1] + Math.sin(a) * r; if (heightAt(n.tx, n.tz) < 1) { n.tx = n.home[0]; n.tz = n.home[1]; } }
+      const dx = n.tx - p.x, dz = n.tz - p.z, dd = Math.hypot(dx, dz);
+      if (dd > 0.6) {
+        spd = 1.8; const q = { x: p.x + dx / dd * spd * dt, z: p.z + dz / dd * spd * dt };
+        if (resolveCollisions(q, 0.4)) { n.wt = Math.min(n.wt, 0.5); }
+        p.x = q.x; p.z = q.z; n.yaw = angLerp(n.yaw, Math.atan2(dx, dz), Math.min(1, dt * 5));
+      }
+    }
+    p.y = groundAt(p.x, p.z);
+    n.h.root.rotation.y = n.yaw;
+    animateHumanoid(n.h, spd, dt, { idleTalk: n.talking > 0 && dialog });
+  }
+}
+const SKY = {
+  day: { top: new THREE.Color(0x3d7fd0), bottom: new THREE.Color(0xcfe3f2) },
+  dusk: { top: new THREE.Color(0x3a4a8a), bottom: new THREE.Color(0xf0a060) },
+  night: { top: new THREE.Color(0x040a1c), bottom: new THREE.Color(0x14203a) },
+};
+const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _sunDir = new V3();
+function updateSky(dt) {
+  S.time = (S.time + dt / 480) % 1; // 8 Minuten pro Tag
+  const a = (S.time - 0.25) * Math.PI * 2;
+  const elev = Math.sin(a);
+  _sunDir.set(Math.cos(a) * 0.8, elev, 0.35).normalize();
+  const dayT = smooth(-0.12, 0.25, elev), duskT = Math.max(0, 1 - Math.abs(elev) / 0.3) * smooth(-0.25, 0.0, elev);
+  _c1.copy(SKY.night.top).lerp(SKY.day.top, dayT); _c2.copy(SKY.night.bottom).lerp(SKY.day.bottom, dayT);
+  _c1.lerp(SKY.dusk.top, duskT * 0.5); _c2.lerp(SKY.dusk.bottom, duskT * 0.8);
+  skyMat.uniforms.top.value.copy(_c1); skyMat.uniforms.bottom.value.copy(_c2);
+  skyMat.uniforms.sunDir.value.copy(_sunDir);
+  skyMat.uniforms.sunCol.value.setRGB(1, 0.85 + 0.1 * dayT, 0.6 + 0.3 * dayT).multiplyScalar(smooth(-0.1, 0.05, elev));
+  scene.fog.color.copy(_c2);
+  starMat.opacity = smooth(0.0, -0.2, elev);
+  const P = player.pos;
+  if (elev > -0.05) { sun.position.set(P.x + _sunDir.x * 250, P.y + _sunDir.y * 250, P.z + _sunDir.z * 250); sun.intensity = 2.2 * smooth(-0.05, 0.2, elev); sun.color.setRGB(1, 0.8 + 0.15 * dayT, 0.6 + 0.3 * dayT); }
+  else { sun.position.set(P.x - _sunDir.x * 250, P.y - _sunDir.y * 250, P.z - _sunDir.z * 250); sun.intensity = 0.45 * smooth(-0.05, -0.3, elev); sun.color.setRGB(0.6, 0.7, 1.0); }
+  sun.target.position.set(P.x, P.y, P.z);
+  hemi.intensity = 0.3 + 0.75 * dayT + flash * 3;
+  hemi.color.setRGB(0.6 + 0.2 * dayT, 0.7 + 0.2 * dayT, 1.0);
+  hemi.groundColor.setRGB(0.35 * dayT + 0.08, 0.3 * dayT + 0.08, 0.2 * dayT + 0.12);
+  flash = Math.max(0, flash - dt * 3);
+  sky.position.copy(camera.position); stars.position.copy(camera.position);
+  const hrs = (S.time * 24 + 0) % 24;
+  $('clock').textContent = (elev > 0 ? '☀ ' : '☾ ') + String(Math.floor(hrs)).padStart(2, '0') + ':' + String(Math.floor((hrs % 1) * 60)).padStart(2, '0');
+}
+function updateCamera(dt) {
+  const P = player.pos;
+  const tgt = new V3(P.x, P.y + (player.mounted ? 3.0 : 1.75) + (player.swimming ? -0.6 : 0), P.z);
+  const dist = (player.mounted ? 9 : 6.5) * camZoom;
+  const cx = tgt.x + Math.sin(camYaw) * Math.cos(camPitch) * dist, cz = tgt.z + Math.cos(camYaw) * Math.cos(camPitch) * dist;
+  let cy = tgt.y + Math.sin(camPitch) * dist;
+  cy = Math.max(cy, heightAt(cx, cz) + 0.6, 0.4);
+  camera.position.set(cx, cy, cz);
+  camera.lookAt(tgt);
+}
+let lastLoc = null, saveT = 0;
+function updateHUD() {
+  $('hpFill').style.width = (player.hp / player.maxHp * 100) + '%';
+  $('hpText').textContent = Math.ceil(player.hp) + ' / ' + player.maxHp;
+  $('stFill').style.width = player.stamina + '%';
+  $('money').textContent = player.money; $('potions').textContent = player.potions;
+  const ab = [];
+  ab.push(player.mounted ? '[R] Absteigen' : '[R] Pferd');
+  if (player.relics.length) ab.push('Relikte ' + player.relics.length + '/6');
+  if (player.blessed) ab.push(player.zapCd > 0 ? 'Blitz: ' + Math.ceil(player.zapCd) + ' s' : '[Q] Blitz des Zeus bereit');
+  $('abilities').textContent = ab.join('  ·  ');
+  nearInter = dialog ? null : findInteractable();
+  $('prompt').innerHTML = nearInter ? '<b>E</b>' + nearInter.label : '';
+  // Ortsnamen
+  let cur = null;
+  for (const L of LOC_LIST) if (!L.hidden && Math.hypot(player.pos.x - L.x, player.pos.z - L.z) < L.r + 10) cur = L;
+  RUINS.forEach((r, i) => { if (Math.hypot(player.pos.x - r.x, player.pos.z - r.z) < 26) { cur = r; if (!S.found.includes(i)) { S.found.push(i); toast('Entdeckt: ' + r.name, 'gold'); } } });
+  if (cur && cur !== lastLoc) showLoc(cur.sub ? cur : { name: cur.name, sub: cur.chest && cur.chest.opened ? 'Geplündert' : 'Vergessener Tempel – bewacht' });
+  lastLoc = cur;
+}
+
+function animateWorld(dt, t) {
+  for (const f of fires) { f.scale.y = (f.userData.base || (f.userData.base = f.scale.y)) * (1 + Math.sin(t * 13 + f.position.x) * 0.15 + Math.sin(t * 7.3) * 0.08); f.rotation.y += dt * 2; }
+  for (const c of clouds) { c.position.x += dt * 4; if (c.position.x > player.pos.x + 1700) c.position.x -= 3400; }
+  water.position.set(player.pos.x, Math.sin(t * 0.6) * 0.08, player.pos.z);
+  for (let i = bolts.length - 1; i >= 0; i--) { const b = bolts[i]; b.t -= dt; if (b.line.material) b.line.material.opacity = Math.max(0, b.t / 0.35); else b.line.intensity = 60 * Math.max(0, b.t / 0.35); if (b.t <= 0) { scene.remove(b.line); bolts.splice(i, 1); } }
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, clock.getDelta());
+  const t = clock.elapsedTime;
+  if (started && !paused) {
+    updatePlayer(dt);
+    for (const e of enemies) updateEnemy(e, dt);
+    updateNPCs(dt);
+    updatePickups(dt, t);
+    updateSky(dt);
+    animateWorld(dt, t);
+    S.played += dt;
+    if (S.town.lvl > 0) S.town.treasury = Math.min(townCap(), S.town.treasury + TOWN_LEVELS[S.town.lvl].income / 60 * dt);
+    saveT += dt; if (saveT > 15) { saveT = 0; save(); }
+    if (locTimer > 0) { locTimer -= dt; if (locTimer <= 0) $('locName').style.opacity = 0; }
+    if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) $('banner').style.opacity = 0; }
+  } else if (!started) {
+    // Menü: langsamer Kameraflug um die Akropolis
+    const a = t * 0.05;
+    camera.position.set(Math.sin(a) * 90, 55, -35 + Math.cos(a) * 90); camera.lookAt(0, 22, -35);
+    updateSky(0); sky.position.copy(camera.position); stars.position.copy(camera.position);
+    sun.position.set(camera.position.x + _sunDir.x * 250, 22 + _sunDir.y * 250, -35 + _sunDir.z * 250); sun.target.position.set(0, 22, -35);
+    animateWorld(dt, t);
+  }
+  if (started) { updateCamera(dt); updateHUD(); if (!paused) drawMinimap(); if (mapOpen) drawBigMap(); }
+  renderer.render(scene, camera);
+  drawOverlay(started && !paused ? dt : 0);
+}
+
+// ============================================================
+// Start
+// ============================================================
+function startGame(fromSave) {
+  const sv = fromSave ? loadSave() : null;
+  if (sv) {
+    Object.assign(S, sv.S);
+    Object.assign(player, sv.p);
+    player.pos.set(sv.p.x, groundAt(sv.p.x, sv.p.z) + 0.5, sv.p.z);
+    for (const p of pickups) if (p.kind === 'amph' && S.amph.includes(p.id)) { p.taken = true; p.mesh.visible = false; p.ring.visible = false; }
+    if (S.stage === 1) { S.olives = 0; spawnOlives(); }
+    if (S.minoDead) { const m = enemies.find(e => e.type === 'minotaur'); if (m) { m.dead = true; m.respawn = 1e9; m.m.root.visible = false; m.deadT = 99; } }
+    if (player.hasArmor) refreshHeroLook();
+    if (!player.relics) player.relics = [];
+    S.chests = S.chests || []; S.found = S.found || []; S.town = S.town || { lvl: 0, name: '', treasury: 0 };
+    applyTownName();
+    for (let l = 1; l <= S.town.lvl; l++) buildTownLevel(l);
+    for (const ch of CHESTS) if (S.chests.includes(ch.id)) markChestOpened(ch);
+    for (const e of enemies) if (e.ruin !== undefined && RUINS[e.ruin].chest.opened) { e.dead = true; e.respawn = 1e9; e.deadT = 99; e.m.root.visible = false; }
+  } else {
+    try { localStorage.removeItem('hellas-save'); } catch (e) { }
+    player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]), SPOTS.respawn[1]);
+  }
+  started = true;
+  $('menu').classList.add('hidden'); $('hud').classList.remove('hidden');
+  updateQuestText();
+  camYaw = 0; camPitch = 0.3; if (!sv) player.yaw = Math.PI;
+  canvas.requestPointerLock && canvas.requestPointerLock();
+  showLoc(LOCS.athen);
+  if (!sv) setTimeout(() => toast('Folge dem goldenen Zeichen zu deiner ersten Aufgabe.'), 1500);
+  clock.getDelta();
+}
+
+function init() {
+  const t0 = performance.now();
+  buildTerrain();
+  buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
+  buildTownBase(); buildRuins();
+  buildVegetation();
+  finalizeStatic();
+  buildClouds();
+  hero = makeHumanoid(heroLook()); scene.add(hero.root);
+  horse = makeHorse(); horse.root.visible = false; scene.add(horse.root);
+  buildNPCs(); buildInteractables(); buildEnemies();
+  buildPickups();
+  buildMapCanvas();
+  resizeOverlay();
+  console.log('Welt erschaffen in ' + Math.round(performance.now() - t0) + ' ms');
+  $('loading').textContent = '';
+  $('btnNew').disabled = false;
+  if (loadSave()) $('btnLoad').classList.remove('hidden');
+  $('btnNew').onclick = () => startGame(false);
+  $('btnLoad').onclick = () => startGame(true);
+  window.__hellas = { CHESTS, RUINS, talkTown, foundTown, upgradeTown, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  loop();
+}
+setTimeout(init, 30);
+})();
