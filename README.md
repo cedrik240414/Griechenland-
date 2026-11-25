@@ -32,12 +32,24 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
   bringt neue Bewohner und mehr Steuereinnahmen, die du am Grenzstein einsammelst
 - Händler, Wettlauf in Olympia, 40 Amphoren zum Sammeln, Minikarte & Weltkarte, automatisches Speichern
 
+## Tavernen, Händler & Nebenmissionen
+
+- **10 Tavernen** (🍺 auf der Karte): Essen & Bett zum Heilen, **Söldner anheuern** (Speerträger, Hoplit, Spartanischer Veteran – bis zu 4 folgen dir und kämpfen mit), **Kopfgeldbrett** mit Gesetzlosen zum Jagen, Gerüchte und das eigene Kopfgeld begleichen
+- **Fahndung**: Wer Stadtsoldaten erschlägt oder Städte erobert, wird gesucht (★–★★★★★) und von Stadtwachen gejagt. Abhauen, warten oder in der Taverne bezahlen.
+- **Pferdeställe**: Thessalischer Rappe, Arabischer Schimmel und der **Streitwagen**
+- **Schmiede**: Waffen (bis Xiphos des Champions) und Rüstungen (bis Hoplitenrüstung)
+- **Schiffsbauer** in Piräus, Kreta und Ithaka: Fischerboot, Handelsschiff, Trireme
+- **3 Mythenwälder**: Hain der Dryaden, Wald von Nemea (Nemeischer Löwe), Kalydonischer Wald (Kalydonischer Eber) – mit Satyrn, Dryaden und einem Schatz
+- **30 Gelehrte** (❓ auf der Karte) überall in Hellas stellen je **5 leichte Fragen über Griechenland**
+- **Eigene Stadt**: Bürger zu Soldaten ausbilden (Gefolge) und die Stadtwache trainieren (mehr Verteidiger gegen Eroberer)
+
 ## Mehrspieler & Städte
 
 - **Lobbys mit bis zu 10 Helden**: Im Menü eine Lobby wählen (automatisch, bestehende oder neue). Andere Spieler, ihre Reittiere und Schiffe sind in der Welt sichtbar, mit **Enter** wird gechattet.
 - **7 Stadtplätze**: 4 freie Bauplätze (Heimat, Eleusis, Lebadeia, Chalkis) und 3 feindliche Poleis (Megara, Argos, Korinth).
 - **Städte erobern**: Besiege die Garnison einer fremden Stadt und erobere sie am Grenzstein. Du erhältst ihre Schatzkammer, ihre Steuern und kannst sie weiter ausbauen. Im Mehrspieler können andere Helden auch deine Städte erobern!
-- **Cloud-Speicher & Rangliste** über die Server-Datenbank. Mit dem Spielstand-Code (Weltkarte **M**) lädst du deinen Helden auf einem anderen Gerät.
+- **Konto mit Name und Passwort**: Spielstand liegt in der Cloud – auf jedem Gerät weiterspielen. Rangliste auf der Weltkarte (**M**).
+- **Admins** haben ein Admin-Menü (**P**): Spieler bannen/entbannen und frei herumfliegen.
 
 Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code liegt im Ordner [`server/`](server/README.md) (Cloudflare Worker). Ist er nicht erreichbar, läuft das Spiel als Einzelspieler.
 
@@ -60,4 +72,6 @@ Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code lie
 | G | Haupt der Medusa |
 | M | Weltkarte & Rangliste |
 | Enter | Chat (online) |
+| Esc | Gespräch schließen |
+| P | Admin-Menü (nur Admins) |
 | 1–9 | Antwort wählen |

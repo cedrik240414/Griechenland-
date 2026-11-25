@@ -98,6 +98,7 @@ function roadDist(x, z) { let m = 1e9; for (const s of ROAD_SEGS) { const d = se
 const FORESTS = [
   { x: -250, z: -150, r: 85 }, { x: -540, z: -170, r: 90 }, { x: -60, z: -380, r: 80 },
   { x: -430, z: 330, r: 80 }, { x: -680, z: -360, r: 90 }, { x: 160, z: -470, r: 70 },
+  { x: -220, z: -680, r: 85, myth: true }, { x: -580, z: 420, r: 80, myth: true }, { x: -740, z: -140, r: 85, myth: true },
 ];
 
 function rawHeight(x, z) {
@@ -594,7 +595,7 @@ const TOWN_SITES = [
 const SITE = Object.fromEntries(TOWN_SITES.map(s => [s.key, s]));
 const builtLvl = {};
 function defaultTowns() { const o = {}; for (const s of TOWN_SITES) o[s.key] = s.def ? Object.assign({ collected: Date.now() }, s.def) : null; return o; }
-function myCid() { return cloudCreds().id; }
+function myCid() { return NET.account ? 'acc:' + NET.account.name.toLowerCase() : 'me'; }
 function townsState() { return NET.towns || S.towns; }
 function isMine(T) { return !!T && (T.owner === 'me' || T.owner === myCid()); }
 const townCap = (T) => TOWN_LEVELS[T.lvl].income * 25;
@@ -674,10 +675,10 @@ function syncTowns() {
 }
 function garrison(site) { return enemies.filter(e => e.site === site); }
 function syncGarrison(site, T) {
-  const want = T && !isMine(T) && T.lvl > 0 ? Math.min(10, 2 + T.lvl * 2) : 0;
+  const want = T && !isMine(T) && T.lvl > 0 ? Math.min(18, 2 + T.lvl * 2 + (T.def || 0)) : 0;
   const cur = garrison(site);
   const owner = T ? T.ownerName : '';
-  if (cur.length && (cur.length !== want || cur[0].owner !== owner)) { for (const e of cur) removeEnemy(e); }
+  if (cur.length && (cur.length !== want || cur[0].owner !== owner) && !(cur.some(e => e.dead) && cur.length === want)) { for (const e of cur) removeEnemy(e); }
   if (want && garrison(site).length === 0) {
     const L = LOCS[site], col = SITE[site].col || 0x8a1a1a;
     for (let i = 0; i < want; i++) {
@@ -694,7 +695,8 @@ function townAction(site, action, extra = {}) {
   if (action === 'found') S.towns[site] = { owner: 'me', ownerName: heroName(), name: extra.name, lvl: 1, collected: now };
   if (action === 'upgrade') T.lvl++;
   if (action === 'collect') T.collected = now;
-  if (action === 'conquer') { T.owner = 'me'; T.ownerName = heroName(); T.collected = now; }
+  if (action === 'conquer') { T.owner = 'me'; T.ownerName = heroName(); T.collected = now; T.def = 0; }
+  if (action === 'train') T.def = Math.min(10, (T.def || 0) + 2);
   syncTowns(); save();
 }
 function talkTown(site) {
@@ -709,13 +711,15 @@ function talkTown(site) {
     const loot = townTreasury(T) + (T.owner === 'npc' ? T.lvl * 60 : 0);
     if (alive) { talk([{ who: 'Grenzstein von ' + T.name, text: T.name + ' gehört ' + (T.owner === 'npc' ? 'den ' : '') + T.ownerName + ' (' + L[T.lvl].name + '). Noch verteidigen ' + alive + ' Soldaten die Stadt. Besiege die Garnison, dann kannst du ' + T.name + ' erobern!' }]); return; }
     talk([{ who: 'Grenzstein von ' + T.name, text: 'Die Garnison ist geschlagen! ' + T.name + ' liegt dir zu Füßen. In der Schatzkammer liegen ' + loot + ' Drachmen.', opts: [
-      { label: '⚔ ' + T.name + ' erobern!', fn: () => { if (loot) addMoney(loot); townAction(site, 'conquer'); banner(T.name + ' erobert!', 'Die Stadt gehört jetzt dir – baue sie aus und sammle Steuern ein.'); sfx('quest'); } },
+      { label: '⚔ ' + T.name + ' erobern!', fn: () => { if (loot) addMoney(loot); townAction(site, 'conquer'); addCrime(2); banner(T.name + ' erobert!', 'Die Stadt gehört jetzt dir – baue sie aus und sammle Steuern ein.'); sfx('quest'); } },
       { label: 'Noch nicht', fn: () => { } }] }]);
     return;
   }
   const next = L[T.lvl + 1], opts = [], tr = townTreasury(T);
   if (tr >= 1) opts.push({ label: 'Steuern einsammeln (' + tr + ' Drachmen)', fn: () => { addMoney(tr); townAction(site, 'collect'); } });
   if (next) opts.push({ label: 'Ausbauen zur ' + next.name + ' (' + next.cost + ' Drachmen)', fn: () => upgradeTown(site) });
+  opts.push({ label: 'Bürger zu Soldaten ausbilden (60 Drachmen) – Gefolge ' + allies.length + '/' + MAX_ALLIES, fn: () => { if (allies.length >= MAX_ALLIES) { toast('Dein Gefolge ist voll (' + MAX_ALLIES + ').'); return; } if (spend(60)) { spawnAlly('buerger'); toast('Ein Bürgersoldat aus ' + T.name + ' folgt dir!', 'gold'); save(); } } });
+  if ((T.def || 0) < 10) opts.push({ label: 'Stadtwache trainieren (100 Drachmen) – Verteidiger ' + (T.def || 0) + '/10', fn: () => { if (spend(100)) { townAction(site, 'train'); toast('Die Stadtwache von ' + T.name + ' wird stärker!', 'gold'); } } });
   opts.push({ label: 'Zurück', fn: () => { } });
   const all = Object.values(townsState()).filter(isMine);
   talk([{ who: T.name, text: T.name + ' – ' + L[T.lvl].name + ' (Stufe ' + T.lvl + '/4). Einnahmen: ' + L[T.lvl].income + ' Drachmen pro Minute. Schatzkammer: ' + tr + ' / ' + townCap(T) + '.' + (next ? ' Ausbau bringt: ' + next.desc + '.' : ' Deine Polis ist vollendet!') + (all.length > 1 ? ' Du herrschst über ' + all.length + ' Städte.' : '') + ' Vorsicht: Andere Helden können deine Stadt erobern!', opts }]);
@@ -1068,6 +1072,7 @@ function makeHumanoid(o = {}) {
   mesh(new THREE.SphereGeometry(0.2, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), lam(o.hair ?? 0x2a1a0e), 0, 0.02, -0.02, head);
   if (o.beard) mesh(new THREE.BoxGeometry(0.26, 0.18, 0.12), lam(o.beardCol ?? o.hair ?? 0x2a1a0e), 0, -0.13, 0.12, head);
   if (o.eyes) for (const sx of [-1, 1]) mesh(new THREE.BoxGeometry(0.06, 0.05, 0.03), lam(o.eyes, o.eyes), sx * 0.07, 0.03, 0.18, head);
+  if (o.horns) for (const sx of [-1, 1]) { const hn = mesh(new THREE.ConeGeometry(0.05, 0.28, 6), lam(0xe8dcc0), sx * 0.13, 0.2, -0.02, head); hn.rotation.z = -sx * 0.5; }
   if (o.cyclops) { mesh(new THREE.SphereGeometry(0.08, 10, 8), lam(0xffffff), 0, 0.04, 0.16, head); mesh(new THREE.SphereGeometry(0.04, 8, 6), lam(0x101010), 0, 0.04, 0.23, head); }
   if (o.snakes) for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; const sn = mesh(new THREE.ConeGeometry(0.035, 0.3, 5), lam(0x3a7a2a), Math.cos(a) * 0.17, 0.12, Math.sin(a) * 0.17 - 0.02, head); sn.rotation.z = -Math.cos(a) * 1.0; sn.rotation.x = Math.sin(a) * 1.0; }
   if (o.helmet) {
@@ -1156,9 +1161,9 @@ function animateQuad(q, speed, dt, k = 2.2) {
 const player = {
   pos: new V3(0, 10, 26), vy: 0, yaw: Math.PI, onGround: false, hp: 100, maxHp: 100, stamina: 100,
   money: 20, potions: 1, dmg: 14, blessed: false, mounted: false, blocking: false, atkCd: 0, atkAnim: 0,
-  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [], gear: [], hasShip: false, chiron: false, flying: false, sailing: false, stoned: 0, medCd: 0,
+  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [], gear: [], hasShip: false, chiron: false, wTier: 0, aTier: 0, horse: 'gaul', horses: ['gaul'], shipTier: 0, wanted: 0, adminFly: false, flying: false, sailing: false, stoned: 0, medCd: 0,
 };
-const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], towns: defaultTowns(), bossDead: [], foundD: [] };
+const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], towns: defaultTowns(), bossDead: [], foundD: [], quiz: [], bounty: null };
 let hero, horse;
 const npcs = [], enemies = [], pickups = [], floaters = [], bolts = [];
 let race = null, dialog = null, started = false, paused = false, mapOpen = false;
@@ -1201,7 +1206,7 @@ function renderDialog() {
   const o = $('dlgOpts'); o.innerHTML = '';
   if (p.opts) {
     p.opts.forEach((op, i) => { const b = document.createElement('button'); b.textContent = (i + 1) + '. ' + op.label; b.onclick = (e) => { e.stopPropagation(); chooseOpt(i); }; o.appendChild(b); });
-    $('dlgHint').textContent = 'Wähle mit 1–' + p.opts.length;
+    $('dlgHint').textContent = 'Wähle mit 1–' + p.opts.length + ' · Esc schließen';
   } else $('dlgHint').textContent = '[E] Weiter';
 }
 function advanceDialog() {
@@ -1266,13 +1271,13 @@ function questTarget() {
 // ---------- Speichern ----------
 function saveData() {
     const sp = curD ? { x: curD.out[0], z: curD.out[1] } : player.pos;
-  return ({ S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron } });
+  return ({ S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })) } });
 }
 function save() {
-  try { localStorage.setItem('hellas-save', JSON.stringify(saveData())); } catch (e) { /* ignorieren */ }
+  try { localStorage.setItem(saveKey(), JSON.stringify(saveData())); } catch (e) { /* ignorieren */ }
   cloudSave(false);
 }
-function loadSave() { try { const s = localStorage.getItem('hellas-save'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function loadSave() { try { const s = localStorage.getItem(saveKey()); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 
 // ============================================================
 // NPCs
@@ -1419,6 +1424,13 @@ const EDEF = {
   bandit: { hp: 65, dmg: 11, speed: 6.5, range: 2.1, aggro: 24, cd: 1.4, name: 'Bandit', money: [6, 16], r: 0.5 },
   guard: { hp: 110, dmg: 14, speed: 6.2, range: 2.6, aggro: 22, cd: 1.5, name: 'Tempelwächter', money: [12, 25], r: 0.5 },
   minotaur: { hp: 650, dmg: 26, speed: 6.5, range: 3.6, aggro: 21, cd: 1.8, name: 'Minotauros', money: [150, 150], r: 1.0, hitR: 1.4, top: 4.4, charge: true, bossLike: true },
+  satyr: { hp: 70, dmg: 12, speed: 8.5, range: 2.2, aggro: 24, cd: 1.2, name: 'Satyr', money: [5, 12], r: 0.5 },
+  dryade: { hp: 60, dmg: 14, speed: 7, range: 2.4, aggro: 22, cd: 1.5, name: 'Dryade', money: [6, 14], r: 0.45 },
+  eber: { hp: 90, dmg: 14, speed: 10, range: 2.0, aggro: 24, cd: 1.3, name: 'Wildeber', money: [4, 10], r: 0.8, top: 2.0 },
+  eber_boss: { hp: 650, dmg: 26, speed: 9, range: 3.2, aggro: 26, cd: 1.6, name: 'Kalydonischer Eber', money: [180, 180], r: 1.6, hitR: 1.8, top: 4.0, charge: true, bossLike: true },
+  loewe: { hp: 700, dmg: 28, speed: 9, range: 3.2, aggro: 26, cd: 1.5, name: 'Nemeischer Löwe', money: [200, 200], r: 1.4, hitR: 1.6, top: 3.4, charge: true, bossLike: true },
+  kopfgeld: { hp: 170, dmg: 16, speed: 7, range: 2.4, aggro: 30, cd: 1.2, name: 'Gesetzloser', money: [20, 40], r: 0.55, bossLike: true },
+  jaeger: { hp: 95, dmg: 13, speed: 8.5, range: 2.5, aggro: 400, cd: 1.4, name: 'Stadtwache', money: [5, 10], r: 0.5, hunter: true },
   soldat: { hp: 90, dmg: 13, speed: 6.5, range: 2.6, aggro: 26, cd: 1.4, name: 'Soldat', money: [8, 18], r: 0.5 },
   skelett: { hp: 55, dmg: 10, speed: 6.5, range: 2.1, aggro: 22, cd: 1.3, name: 'Skelettkrieger', money: [3, 10], r: 0.45 },
   schatten: { hp: 50, dmg: 13, speed: 8.5, range: 2.0, aggro: 24, cd: 1.1, name: 'Schatten', money: [4, 12], r: 0.45 },
@@ -1439,6 +1451,13 @@ function spawnEnemy(type, x, z, over) {
   else if (type === 'bandit') model = makeHumanoid({ tunic: pick([0x3a2a1a, 0x4a3a2a, 0x2a2a2a]), hair: 0x1a1008, beard: true, weapon: 'sword', armor: 0x5a4a3a, veil: 0x3a2a1a });
   else if (type === 'guard') model = makeHumanoid({ tunic: 0x2a2a3a, armor: 0x8a7a5a, helmet: true, crest: 0x2a2a2a, shield: true, shieldCol: 0x6a5a3a, shieldEmblem: 0x2a2a2a, weapon: 'spear', greaves: true, pants: 0x1e1e26, scale: 1.12 });
   else if (type === 'soldat') model = makeHumanoid({ tunic: (over && over.col) || 0x8a1a1a, armor: 0x9a8a5a, helmet: true, crest: (over && over.col) || 0x8a1a1a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: (over && over.col) || 0x8a1a1a, cape: (over && over.col) || 0x8a1a1a, weapon: 'spear', greaves: true, pants: 0x2a2a2a });
+  else if (type === 'satyr') model = makeHumanoid({ skin: 0xc99a6e, tunic: 0xc99a6e, pants: 0x5a3a22, hair: 0x3a2a1a, beard: true, horns: true, weapon: 'club' });
+  else if (type === 'dryade') model = makeHumanoid({ skin: 0x7aa060, glow: 0x1a3a10, tunic: 0x4a7a3a, pants: 0x3a6a2a, hair: 0x2a6a1a, wreath: true, eyes: 0xb0ff80, weapon: 'staff' });
+  else if (type === 'eber') model = makeBoar(0x4a3424, false);
+  else if (type === 'eber_boss') model = makeBoar(0x3a2418, true);
+  else if (type === 'loewe') model = makeLion();
+  else if (type === 'kopfgeld') model = makeHumanoid({ tunic: 0x2a1a1a, armor: 0x4a3a2a, helmet: true, helmetCol: 0x3a3a3a, crest: 0x111111, weapon: 'axe', cape: 0x3a0a0a, beard: true, pants: 0x1a1a1a, scale: 1.15 });
+  else if (type === 'jaeger') model = makeHumanoid({ tunic: 0x2a3a6a, armor: 0x9a8a5a, helmet: true, crest: 0x2a3a6a, shield: true, shieldEmblem: 0x2a3a6a, weapon: 'spear', cape: 0x2a3a6a, greaves: true, pants: 0x1a1a2a });
   else if (type === 'skelett') model = makeHumanoid({ skin: 0xe6dfc8, tunic: 0xd8d0b8, pants: 0xcfc6ac, hair: 0xe6dfc8, belt: 0x6a5a4a, weapon: 'sword', eyes: 0x101010, shield: rand() < 0.5, shieldCol: 0x6a5a4a });
   else if (type === 'schatten') model = makeHumanoid({ skin: 0x1a1a26, tunic: 0x14141c, pants: 0x101018, hair: 0x0a0a10, veil: 0x14141c, weapon: 'sword', eyes: 0x60ffd0 });
   else if (type === 'feuergeist') model = makeHumanoid({ skin: 0xff6a20, glow: 0xb02a00, tunic: 0x3a1a10, pants: 0x2a1008, hair: 0xffb040, weapon: 'fireSword', eyes: 0xffff80 });
@@ -1461,6 +1480,7 @@ function spawnEnemy(type, x, z, over) {
 }
 function buildEnemies() {
   for (const F of FORESTS) {
+    if (F.myth) continue;
     const n = 4;
     for (let i = 0; i < n; i++) { let x, z, t = 0; do { x = F.x + rr(-F.r * 0.6, F.r * 0.6); z = F.z + rr(-F.r * 0.6, F.r * 0.6); t++; } while (t < 30 && heightAt(x, z) < 1.5); spawnEnemy('wolf', x, z); }
   }
@@ -1468,10 +1488,10 @@ function buildEnemies() {
   for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; spawnEnemy('bandit', B.x + Math.cos(a) * 6, B.z + Math.sin(a) * 6); }
   for (const [x, z] of [[-430, 190], [-440, 205], [-100, 255], [-85, 262], [-480, 270]]) spawnEnemy('bandit', x, z);
   spawnEnemy('minotaur', SPOTS.mazeCenter[0], SPOTS.mazeCenter[1]);
-  RUINS.forEach((r, i) => { for (const [gx, gz] of r.guards) { const e = spawnEnemy(r.kind === 'old' ? 'skelett' : 'guard', gx, gz); e.ruin = i; } });
+  RUINS.forEach((r, i) => { r.guards.forEach(([gx, gz], k) => { const e = spawnEnemy(r.kind === 'old' ? 'skelett' : r.kind === 'forest' ? r.guardTypes[k] : 'guard', gx, gz); e.ruin = i; }); });
 }
 function hurtPlayer(dmg, from) {
-  if (player.dead) return;
+  if (player.dead || player.adminFly) return;
   if (player.blocking) {
     const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
     const dx = from.x - player.pos.x, dz = from.z - player.pos.z, d = Math.hypot(dx, dz) || 1;
@@ -1480,6 +1500,7 @@ function hurtPlayer(dmg, from) {
   if (player.hasArmor) dmg *= 0.85;
   if (player.relics.includes('achilles')) dmg *= 0.8;
   if (player.gear.includes('hadeshelm')) dmg *= 0.7;
+  dmg *= 1 - ARMORS[player.aTier || 0].red;
   dmg = Math.round(dmg);
   player.hp -= dmg; player.lastHurt = clock.elapsedTime;
   $('damageFlash').style.opacity = 1; setTimeout(() => $('damageFlash').style.opacity = 0, 120);
@@ -1492,7 +1513,7 @@ function die() {
   banner('Du bist gefallen', 'Hermes geleitet dich zurück nach Athen …');
   setTimeout(() => fadeTo(() => {
     const lost = Math.floor(player.money * 0.2); player.money -= lost;
-    curD = null; player.flying = false; player.sailing = false; player.stoned = 0;
+    curD = null; player.flying = false; player.sailing = false; player.stoned = 0; setWanted(Math.floor((player.wanted || 0) / 2));
     player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]) + 0.5, SPOTS.respawn[1]);
     player.hp = player.maxHp; player.dead = false; player.vy = 0;
     for (const e of enemies) if (!e.dead) { e.state = 'idle'; e.hp = e.maxHp; }
@@ -1507,6 +1528,9 @@ function damageEnemy(e, dmg, crit = false) {
 }
 function killEnemy(e) {
   e.dead = true; e.deadT = 0; e.respawn = 100;
+  if (e.site && !isMine(townsState()[e.site])) { player.crimeKills = (player.crimeKills || 0) + 1; if (player.crimeKills % 2 === 0) addCrime(1); }
+  if (e.def.hunter) { player.hunterKills = (player.hunterKills || 0) + 1; if (player.hunterKills % 3 === 0) addCrime(1); setTimeout(() => removeEnemy(e), 6000); }
+  if (e.isBountyBoss && S.bounty) { const rw = S.bounty.reward; banner('Kopfgeld kassiert!', e.def.name + ' ist erledigt – ' + rw + ' Drachmen'); addMoney(rw); S.bounty = null; updateQuestText(); save(); }
   const [a, b] = e.def.money; const m = Math.round(rr(a, b));
   if (m > 0) { player.money += m; floatText(e.x, e.y + 1.5, e.z, '+' + m + ' Dr', '#e8c46a'); sfx('coin'); }
   if (e.type === 'wolf' && S.stage === 4) { S.wolves++; updateQuestText(); if (S.wolves >= 5) { toast('Genug Wölfe besiegt! Zurück zur Pythia.', 'gold'); setStage(5); } }
@@ -1516,7 +1540,9 @@ function killEnemy(e) {
 }
 function updateEnemy(e, dt) {
   const P = player.pos;
-  const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz);
+  let tgtAlly = null;
+  if (allies.length && !e.dead && e.state === 'chase') { let best = Math.hypot(P.x - e.x, P.z - e.z); for (const a of allies) { const da = Math.hypot(a.x - e.x, a.z - e.z); if (da < best - 1 && da < 25) { best = da; tgtAlly = a; } } }
+  const dx = (tgtAlly ? tgtAlly.x : P.x) - e.x, dz = (tgtAlly ? tgtAlly.z : P.z) - e.z, d = Math.hypot(dx, dz);
   if (d > 320) { e.m.root.visible = false; if (e.dead) { e.respawn -= dt; if (e.respawn <= 0 && canRevive(e)) revive(e); } return; }
   e.m.root.visible = true;
   if (e.dead) {
@@ -1538,14 +1564,14 @@ function updateEnemy(e, dt) {
     const tx = e.tx - e.x, tz = e.tz - e.z, td = Math.hypot(tx, tz);
     if (td > 0.8) { mvx = tx / td; mvz = tz / td; spd = D.speed * 0.3; }
     const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
-    if (d < D.aggro && !player.dead && !player.flying && !player.sailing && !(player.swimming && !D.fly) && homeD < 90 && Math.abs(P.y - e.y) < 12) e.state = 'chase';
+    if (d < D.aggro && !player.dead && !player.flying && !player.adminFly && !player.sailing && !(player.swimming && !D.fly) && homeD < 90 && Math.abs(P.y - e.y) < 12) e.state = 'chase';
   } else if (e.state === 'chase') {
     const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
-    if (player.dead || player.flying || player.sailing || d > D.aggro * 2.5 || homeD > (D.boss ? 40 : D.charge ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
+    if (player.dead || player.flying || player.adminFly || player.sailing || d > D.aggro * 2.5 || homeD > (D.hunter ? 1e9 : D.boss ? 40 : D.charge ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
     else {
       if (D.charge) {
         e.chargeCd -= dt;
-        if (e.chargeT > 0) { e.chargeT -= dt; mvx = Math.sin(e.yaw); mvz = Math.cos(e.yaw); spd = 17; if (d < 2.6 && !e.chargeHit) { e.chargeHit = true; hurtPlayer(D.dmg * 1.2, e); player.knock = { x: mvx * 18, z: mvz * 18, t: 0.25 }; } }
+        if (e.chargeT > 0) { e.chargeT -= dt; mvx = Math.sin(e.yaw); mvz = Math.cos(e.yaw); spd = 17; if (d < 2.6 && !e.chargeHit) { e.chargeHit = true; if (tgtAlly) hurtAlly(tgtAlly, D.dmg * 1.2); else hurtPlayer(D.dmg * 1.2, e); player.knock = { x: mvx * 18, z: mvz * 18, t: 0.25 }; } }
         else if (e.chargeCd <= 0 && d > 7 && d < 20) { e.chargeT = 1.0; e.chargeCd = 6; e.chargeHit = false; e.yaw = Math.atan2(dx, dz); floatText(e.x, e.y + (D.top || 4) + 0.3, e.z, 'BRÜLL!', '#ff7050', true); }
       }
       if (D.gaze) {
@@ -1564,7 +1590,7 @@ function updateEnemy(e, dt) {
         e.yaw = angLerp(e.yaw, Math.atan2(dx, dz), Math.min(1, dt * 8));
         if (d > D.range * 0.85) { mvx = dx / d; mvz = dz / d; spd = D.speed; }
         else if (e.cd <= 0 && e.wind <= 0) { e.wind = 0.42; e.atkAnim = 1; }
-        if (e.wind > 0) { e.wind -= dt; spd *= 0.3; if (e.wind <= 0) { e.cd = D.cd; if (d < D.range * 1.35) hurtPlayer(D.dmg * rr(0.85, 1.15), e); } }
+        if (e.wind > 0) { e.wind -= dt; spd *= 0.3; if (e.wind <= 0) { e.cd = D.cd; if (d < D.range * 1.35) { if (tgtAlly && allies.includes(tgtAlly)) hurtAlly(tgtAlly, D.dmg * rr(0.85, 1.15)); else hurtPlayer(D.dmg * rr(0.85, 1.15), e); } } }
       }
     }
   }
@@ -1588,7 +1614,7 @@ function updateEnemy(e, dt) {
   else if (m.legs) { animateQuad(m, e.speedNow, dt); for (const h of (m.heads || [m.head])) h.rotation.x = e.atkAnim > 0 ? -Math.sin(e.atkAnim * Math.PI) * 0.6 : 0; }
   else animateHumanoid(m, e.speedNow, dt, { attack: e.atkAnim });
 }
-function canRevive(e) { return e.type !== 'minotaur' && !e.def.boss && !(e.site && isMine(townsState()[e.site])) && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
+function canRevive(e) { return e.type !== 'minotaur' && !e.def.boss && !e.def.hunter && !e.bountyOf && !(e.site && isMine(townsState()[e.site])) && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
 function revive(e) { e.dead = false; e.hp = e.maxHp; e.x = e.home[0]; e.z = e.home[1]; e.state = 'idle'; e.m.root.rotation.z = 0; e.m.root.visible = true; }
 
 // ---------- Spieler-Angriffe ----------
@@ -1596,7 +1622,7 @@ function playerAttack() {
   if (player.atkCd > 0 || dialog || player.dead || (player.swimming && !player.gear.includes('poseidon')) || player.blocking || player.stoned > 0 || player.sailing) return;
   player.atkCd = 0.55; player.atkAnim = 1;
   let fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
-  const reach = (player.mounted ? 3.8 : 3.0) + (player.gear.includes('poseidon') ? 1.2 : 0);
+  const reach = (player.mounted ? (HORSES[player.horse].chariot ? 4.6 : 3.8) : 3.0) + (player.gear.includes('poseidon') ? 1.2 : 0);
   // Sanftes Auto-Zielen: nächsten Gegner im weiten Kegel vor der Kamera anvisieren
   let tgt = null, best = 1e9;
   for (const e of enemies) {
@@ -1614,7 +1640,7 @@ function playerAttack() {
     const er = e.def.hitR || 0.3;
     if (d < reach + er && Math.abs(e.y - player.pos.y) < (player.flying ? 6 : 3.5) && (d < 1 || (dx * fx + dz * fz) / d > 0.4)) {
       const crit = rand() < 0.15;
-      damageEnemy(e, player.dmg * rr(0.85, 1.15) * (crit ? 2 : 1), crit);
+      damageEnemy(e, playerDamage() * rr(0.85, 1.15) * (crit ? 2 : 1), crit);
       if (!e.dead && !e.def.charge && !e.def.boss) { const k = 1.2 / (d || 1); const p = { x: e.x + dx * k, z: e.z + dz * k }; if (e.def.fly || groundAt(p.x, p.z) > -0.5) { resolveCollisions(p, e.def.r); e.x = p.x; e.z = p.z; } }
     }
   }
@@ -1653,7 +1679,7 @@ function refreshHeroLook() {
   hero.root.position.copy(p); hero.root.rotation.y = r; scene.add(hero.root);
   netSendLook();
 }
-function heroLook() { const gr = player.gear || []; return { tunic: 0x9b1c1c, armor: player.hasArmor ? 0xb98d3a : 0x7a5a3a, helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : 'sword', cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x3a2a1e, greaves: player.hasArmor, hair: 0x2a1a0e }; }
+function heroLook() { const gr = player.gear || []; return { tunic: 0x9b1c1c, armor: (player.aTier ? ARMORS[player.aTier].col : null) || (player.hasArmor ? 0xb98d3a : 0x7a5a3a), helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : 'sword', cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x3a2a1e, greaves: player.hasArmor || player.aTier >= 2, hair: 0x2a1a0e }; }
 
 // ---------- Sammelobjekte ----------
 const ampGeo = (() => { const pts = []; const prof = [[0, 0], [0.18, 0.02], [0.3, 0.25], [0.36, 0.55], [0.3, 0.85], [0.14, 1.0], [0.1, 1.15], [0.16, 1.22], [0.0, 1.22]]; for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y)); return new THREE.LatheGeometry(pts, 12); })();
@@ -1746,6 +1772,10 @@ function drawMinimap() {
     ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(mx, my - 7); ctx.lineTo(mx + 5, my); ctx.lineTo(mx, my + 7); ctx.lineTo(mx - 5, my); ctx.closePath(); ctx.fill(); ctx.stroke();
   }
+  ctx.font = '700 12px Alegreya Sans, sans-serif'; ctx.textAlign = 'center';
+  for (const q2 of QUIZZERS) { if (S.quiz.includes(q2.id)) continue; const [mx, my] = toMini(q2.x, q2.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = '#1a3a5a'; ctx.beginPath(); ctx.arc(mx, my, 6, 0, 7); ctx.fill(); ctx.fillStyle = '#8fe0ff'; ctx.fillText('?', mx, my + 4); }
+  for (const tv of TAVERNS) { const [mx, my] = toMini(tv.x, tv.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = '#c08040'; ctx.fillText('🍺', mx, my + 4); }
+  if (S.bounty) { let [mx, my] = toMini(S.bounty.x, S.bounty.z); const ddx = mx - S2 / 2, ddy = my - S2 / 2, dd = Math.hypot(ddx, ddy), mr = S2 / 2 - 10; if (dd > mr) { mx = S2 / 2 + ddx / dd * mr; my = S2 / 2 + ddy / dd * mr; } ctx.fillStyle = '#e0402a'; ctx.beginPath(); ctx.arc(mx, my, 5, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.stroke(); }
   for (const ch of CHESTS) { if (ch.opened) continue; const [mx, my] = toMini(ch.x, ch.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = ch.tier === 2 ? '#ffd24a' : '#d8b860'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 1; ctx.fillRect(mx - 3, my - 2.5, 6, 5); ctx.strokeRect(mx - 3, my - 2.5, 6, 5); }
   for (const e of enemies) { if (e.dead) continue; const [mx, my] = toMini(e.x, e.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 4) continue; ctx.fillStyle = e.type === 'minotaur' ? '#ff3a1a' : '#c0392b'; ctx.beginPath(); ctx.arc(mx, my, e.type === 'minotaur' ? 4 : 2.2, 0, 7); ctx.fill(); }
   for (const r of NET.others.values()) { if (!r.st) continue; const [mx, my] = toMini(r.pos.x, r.pos.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 5) continue; ctx.fillStyle = '#4ab0ff'; ctx.strokeStyle = '#002'; ctx.beginPath(); ctx.arc(mx, my, 4, 0, 7); ctx.fill(); ctx.stroke(); }
@@ -1771,8 +1801,12 @@ function drawBigMap() {
   ctx.save(); ctx.translate(x, y); ctx.rotate(-player.yaw + Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(8, 9); ctx.lineTo(0, 4); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
   ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('HELLAS', 20, 36);
-  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen', 20, 58);
+  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Rätsel: ' + S.quiz.length + '/30   ·   Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen', 20, 58);
   ctx.textAlign = 'center';
+  ctx.textAlign = 'center'; ctx.font = '700 14px Alegreya Sans, sans-serif';
+  for (const q2 of QUIZZERS) { const x = w2m(q2.x) * k, y = w2m(q2.z) * k; ctx.fillStyle = S.quiz.includes(q2.id) ? '#4a5a6a' : '#1a3a5a'; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.fillStyle = S.quiz.includes(q2.id) ? '#9aa' : '#8fe0ff'; ctx.fillText(S.quiz.includes(q2.id) ? '✓' : '?', x, y + 5); }
+  for (const tv of TAVERNS) { const x = w2m(tv.x) * k, y = w2m(tv.z) * k; ctx.fillText('🍺', x + 12, y + 14); }
+  if (S.bounty) { const x = w2m(S.bounty.x) * k, y = w2m(S.bounty.z) * k; ctx.fillStyle = '#e0402a'; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText('☠', x, y + 5); }
   for (const st of TOWN_SITES) { const L = LOCS[st.key], T = townsState()[st.key], x = w2m(L.x) * k, y = w2m(L.z) * k; ctx.strokeStyle = !T ? '#ffffff' : isMine(T) ? '#ffd24a' : '#ff4a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.stroke(); }
   DUNGEONS.forEach(d => { if (!d.reward && !S.foundD.includes(d.idx)) return; const x = w2m(d.at[0]) * k, y = w2m(d.at[1]) * k; ctx.fillStyle = S.bossDead.includes(d.key) || (d.chest && d.chest.opened) ? '#6a5a70' : '#b05aff'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(d.name, x, y - 10); ctx.fillStyle = '#e8d0ff'; ctx.fillText(d.name, x, y - 10); });
   S.found.forEach(i => { const r = RUINS[i]; if (!r) return; const x = w2m(r.x) * k, y = w2m(r.z) * k; ctx.fillStyle = r.chest.opened ? '#8a8070' : '#ffd24a'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(r.name, x, y + 20); ctx.fillStyle = '#fff3d0'; ctx.fillText(r.name, x, y + 20); });
@@ -1825,6 +1859,17 @@ function drawOverlay(dt) {
     octx.globalAlpha = Math.min(1, f.t * 2); octx.font = (f.big ? '700 24px' : '700 17px') + ' Cinzel, serif';
     octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.7)'; octx.strokeText(f.text, s.x, s.y); octx.fillStyle = f.color; octx.fillText(f.text, s.x, s.y);
     octx.globalAlpha = 1;
+  }
+  // Kopfgeld-Marker
+  if (S.bounty && !curD && !mapOpen) {
+    const b = S.bounty, s2 = project(b.x, groundAt(b.x, b.z) + 4, b.z), m2 = 40;
+    let x = s2.behind ? innerWidth - s2.x : s2.x, y = s2.behind ? innerHeight - m2 : s2.y;
+    x = clamp(x, m2, innerWidth - m2); y = clamp(y, m2, innerHeight - m2);
+    const d = Math.hypot(b.x - player.pos.x, b.z - player.pos.z);
+    octx.fillStyle = '#e0402a'; octx.strokeStyle = '#2a0000'; octx.lineWidth = 2;
+    octx.beginPath(); octx.moveTo(x, y - 11); octx.lineTo(x + 8, y); octx.lineTo(x, y + 11); octx.lineTo(x - 8, y); octx.closePath(); octx.fill(); octx.stroke();
+    octx.font = '600 12px Alegreya Sans, sans-serif'; octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.6)'; const lb = '☠ ' + Math.round(d) + ' m';
+    octx.strokeText(lb, x, y + 26); octx.fillStyle = '#ffb0a0'; octx.fillText(lb, x, y + 26);
   }
   // Questmarker
   const q = questTarget();
@@ -2145,14 +2190,14 @@ function toggleShip() {
     for (let r = 4; r <= 18; r += 2) for (let a = 0; a < 6.28; a += 0.4) { const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (heightAt(x, z) > 0.4) { player.sailing = false; ship.root.visible = false; player.pos.set(x, groundAt(x, z) + 0.3, z); player.vy = 0; toast('Du gehst an Land.'); return; } }
     toast('Kein Land in der Nähe zum Anlegen.'); return;
   }
-  if (!player.hasShip) { toast('Du hast noch kein Schiff. Kauf eines beim Fährmann in Piräus.'); return; }
+  if (!player.hasShip) { toast('Du hast noch kein Schiff. Der Schiffsbauer in Piräus verkauft welche.'); return; }
   const P = player.pos;
   for (let r = 0; r <= 14; r += 2) for (let a = 0; a < 6.28; a += 0.4) { const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (heightAt(x, z) < -2.2) {
     if (player.mounted) dismount(); if (player.flying) stopFlying(true);
     player.sailing = true; player.shipSpeed = 0; player.pos.set(x, 0.9, z); ship.root.visible = true; toast('An Bord! WASD steuern, B zum Anlegen.'); sfx('quest'); return; } }
   toast('Stell dich ans Ufer, um dein Schiff zu rufen.');
 }
-function buyShip() { if (player.hasShip) return; if (spend(120)) { player.hasShip = true; banner('Dein eigenes Schiff!', 'Drücke B am Ufer, um damit über die Ägäis zu segeln.'); save(); } }
+function buyShip() { talkShipwright(); }
 function sailTo(k, price) {
   if (!spend(price)) return;
   fadeTo(() => { const d = DOCKS[k]; if (player.mounted) dismount(); player.sailing = false; ship.root.visible = false; player.pos.set(d.land[0], groundAt(d.land[0], d.land[1]) + 0.5, d.land[1]); player.vy = 0; camYaw = d.rot + Math.PI; toast('Du erreichst ' + DOCK_TITLES[k] + '.'); });
@@ -2161,7 +2206,7 @@ function talkFerry(from) {
   const D = DOCKS[from]; if (!D) return;
   const opts = [];
   for (const k of Object.keys(DOCK_TITLES)) { if (k === from || !DOCKS[k]) continue; opts.push({ label: 'Nach ' + DOCK_TITLES[k] + ' segeln (' + DOCK_PRICE[k] + ' Drachmen)', fn: () => sailTo(k, DOCK_PRICE[k]) }); }
-  if (!player.hasShip) opts.push({ label: 'Eigenes Schiff kaufen (120 Drachmen)', fn: buyShip });
+  if (!player.hasShip) opts.push({ label: 'Eigenes Schiff kaufen (Schiffsbauer)', fn: buyShip });
   opts.push({ label: 'Nein danke.', fn: () => { } });
   talk([{ who: 'Fährmann', text: from === 'piraeus' ? 'Meine Schiffe fahren zu allen Inseln der Ägäis: Kreta, Thera, Seriphos, die Sireneninsel und Ithaka. Wohin soll es gehen?' : 'Wohin soll ich dich bringen, Wanderer?', opts }]);
 }
@@ -2244,29 +2289,22 @@ const CAPE_COLORS = [0x1c3a7a, 0x7a1c1c, 0x1c6a3a, 0x6a1c6a, 0x8a6a1c, 0x1c6a7a,
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
 function serverBase() { return (lsGet('hellas-server') || window.HELLAS_SERVER || '').trim().replace(/\/$/, ''); }
-function mpEnabled() { return !!serverBase() && lsGet('hellas-mp') !== 'off'; }
-function heroName() { return (lsGet('hellas-name') || 'Held').slice(0, 20); }
+function mpEnabled() { return !!serverBase() && !!NET.account && !NET.banned; }
+function heroName() { return NET.account ? NET.account.name : (lsGet('hellas-name') || 'Held').slice(0, 20); }
 function nameHash(n) { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); }
-function cloudCreds() {
-  let c = null; try { c = JSON.parse(lsGet('hellas-cloud') || 'null'); } catch (e) { }
-  if (!c || !c.id || !c.secret) {
-    const hex = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, '0')).join('');
-    c = { id: hex(8), secret: hex(16) }; lsSet('hellas-cloud', JSON.stringify(c));
-  }
-  return c;
-}
 function lookForNet() { const l = heroLook(); return { tunic: l.tunic, cape: l.cape, crest: l.crest, armor: l.armor, helmetCol: l.helmetCol || undefined, shieldEmblem: l.shieldEmblem, weapon: l.weapon }; }
 function netConnect() {
   if (!mpEnabled() || NET.ws) return;
   let ws;
   try { ws = new WebSocket(serverBase().replace(/^http/, 'ws') + '/ws?room=' + encodeURIComponent(NET.room)); } catch (e) { return; }
   NET.ws = ws;
-  ws.onopen = () => { NET.online = true; NET.retry = 2; ws.send(JSON.stringify({ t: 'hello', name: heroName(), cid: myCid(), look: lookForNet() })); updateOnlineBadge(); };
+  ws.onopen = () => { NET.online = true; NET.retry = 2; ws.send(JSON.stringify({ t: 'hello', token: NET.account.token, look: lookForNet() })); updateOnlineBadge(); };
   ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } netHandle(m); };
   ws.onclose = () => {
     const was = NET.online; NET.ws = null; NET.online = false; NET.id = null;
     for (const id of [...NET.others.keys()]) removeRemote(id);
     updateOnlineBadge();
+    if (NET.banned || NET.noRetry) return;
     if (was) toast('Verbindung zum Server verloren – versuche erneut …');
     if (NET.fullHop) { NET.fullHop = false; NET.retry = 0.5; } else NET.retry = Math.min(60, NET.retry * 2);
     setTimeout(netConnect, NET.retry * 1000);
@@ -2280,6 +2318,7 @@ function netHandle(m) {
     NET.towns = m.towns; syncTowns();
     toast(lobbyLabel(NET.room) + ': ' + (m.players.length ? m.players.length + ' weitere Helden' : 'du bist der erste Held hier'), 'gold');
   }
+  else if (m.t === 'denied' || m.t === 'banned') { NET.noRetry = true; if (m.t === 'banned') { NET.banned = true; banner('Du wurdest gebannt', 'Ein Admin hat dein Konto gesperrt.'); } else toast('Verbindung abgelehnt: ' + m.reason); }
   else if (m.t === 'full') { toast(lobbyLabel(NET.room) + ' ist voll (' + m.max + '/' + m.max + ') – wechsle in die nächste Lobby …'); NET.room = 'lobby-' + (+NET.room.split('-')[1] + 1); NET.fullHop = true; }
   else if (m.t === 'towns') {
     const before = NET.towns || {};
@@ -2292,7 +2331,7 @@ function netHandle(m) {
   else if (m.t === 'leave') { removeRemote(m.id); toast(m.name + ' hat Hellas verlassen.'); }
   else if (m.t === 'st') { const r = NET.others.get(m.id); if (r) { r.st = m; if (!r.seen) { r.seen = true; r.pos.set(m.x, m.y, m.z); r.yaw = m.yaw; } } }
   else if (m.t === 'look') { const r = NET.others.get(m.id); if (r) { r.look = m.look; rebuildRemote(r); } }
-  else if (m.t === 'chat') { chatLine(m.name, m.text, m.id === NET.id); const r = NET.others.get(m.id); if (r) r.bubble = { text: m.text, t: 6 }; }
+  else if (m.t === 'chat') { chatLine((m.admin ? '★ ' : '') + m.name, m.text, m.id === NET.id); const r = NET.others.get(m.id); if (r) r.bubble = { text: m.text, t: 6 }; }
   updateOnlineBadge();
 }
 function remoteLook(look) { return Object.assign({ tunic: 0x9b1c1c, armor: 0x7a5a3a, helmet: true, crest: 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: 'sword', cape: 0x1c3a7a, pants: 0x3a2a1e, hair: 0x2a1a0e }, look || {}); }
@@ -2366,37 +2405,6 @@ function closeChat(send) {
   if (send && text && NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({ t: 'chat', text: text.slice(0, 160) }));
   inp.blur(); inp.classList.add('hidden'); NET.chatOpen = false;
 }
-// ---------- Cloud-Spielstand & Rangliste ----------
-function cloudSave(force) {
-  if (!serverBase() || lsGet('hellas-mp') === 'off') return;
-  const now = Date.now(); if (!force && now - NET.lastCloud < 30000) return; NET.lastCloud = now;
-  const c = cloudCreds();
-  fetch(serverBase() + '/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id, secret: c.secret, name: heroName(), data: saveData() }) }).catch(() => { });
-}
-async function cloudLoad(code) {
-  const [id, secret] = (code || '').trim().split('.');
-  const r = await fetch(serverBase() + '/api/save?id=' + encodeURIComponent(id || '') + '&secret=' + encodeURIComponent(secret || ''));
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || 'Fehler');
-  lsSet('hellas-cloud', JSON.stringify({ id, secret }));
-  lsSet('hellas-save', JSON.stringify(j.data));
-  if (j.name) lsSet('hellas-name', j.name);
-  return j;
-}
-async function showLeaderboard() {
-  const el = $('leader'); if (!el) return;
-  if (!serverBase()) { el.classList.add('hidden'); return; }
-  el.classList.remove('hidden'); el.innerHTML = '<h3>Heldenrangliste</h3><div>Lade …</div>';
-  try {
-    const j = await (await fetch(serverBase() + '/api/leaderboard')).json();
-    el.innerHTML = '<h3>Heldenrangliste</h3>';
-    const ol = document.createElement('ol');
-    for (const row of j.top || []) { const li = document.createElement('li'); li.textContent = row.name + ' – ' + row.score; ol.appendChild(li); }
-    if (!(j.top || []).length) ol.textContent = 'Noch keine Helden eingetragen.';
-    el.appendChild(ol);
-    const c = cloudCreds(); const code = document.createElement('div'); code.className = 'code'; code.textContent = 'Dein Spielstand-Code: ' + c.id + '.' + c.secret; el.appendChild(code);
-  } catch (e) { el.innerHTML = '<h3>Heldenrangliste</h3><div>Server nicht erreichbar.</div>'; }
-}
 async function loadLobbies() {
   const sel = $('lobbySel'); sel.classList.remove('hidden');
   try { const j = await (await fetch(serverBase() + '/api/lobbies')).json(); NET.lobbies = j.lobbies || []; NET.max = j.max || 10; } catch (e) { NET.lobbies = []; }
@@ -2414,25 +2422,550 @@ function chooseRoom() {
   if (v === 'auto') { const free = NET.lobbies.find(l => l.count < l.max); return free ? free.room : fresh(); }
   return v;
 }
+// ---------- Konto (Name + Passwort), Cloud-Spielstand & Rangliste ----------
+function saveKey() { return 'hellas-save' + (NET.account ? '-' + NET.account.name.toLowerCase() : ''); }
+async function accCall(body, path = '/api/account') {
+  const r = await fetch(serverBase() + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({ error: 'Serverfehler' }));
+  if (!r.ok || j.error) { const e = new Error(j.error || 'Fehler'); e.banned = j.banned; throw e; }
+  return j;
+}
+function setAccount(j) {
+  NET.account = { name: j.name, token: j.token, admin: !!j.admin };
+  lsSet('hellas-session', JSON.stringify(NET.account));
+  if (j.data) lsSet(saveKey(), JSON.stringify(j.data));
+  updateMenuAccount();
+}
+function logout() {
+  if (NET.account) accCall({ op: 'logout', token: NET.account.token }).catch(() => { });
+  NET.account = null; try { localStorage.removeItem('hellas-session'); } catch (e) { }
+  updateMenuAccount();
+}
+function updateMenuAccount() {
+  const acc = NET.account, has = !!serverBase();
+  $('loginBox').classList.toggle('hidden', !!acc || !has);
+  $('accInfo').classList.toggle('hidden', !acc);
+  $('lobbySel').classList.toggle('hidden', !acc);
+  if (acc) $('accLabel').textContent = acc.name + (acc.admin ? ' (Admin)' : '');
+  $('btnLoad').classList.toggle('hidden', !loadSave());
+  $('btnNew').textContent = acc ? 'Neues Spiel (online)' : 'Neues Spiel (offline)';
+  $('mpStatus').textContent = !has ? 'Einzelspieler (kein Server eingerichtet)' : acc ? '🌐 Angemeldet – Mehrspieler, Cloud-Speicher und Rangliste aktiv' : 'Melde dich an, um online zu spielen – oder spiel offline.';
+  if (acc) loadLobbies();
+}
+function cloudSave(force) {
+  if (!NET.account || !serverBase()) return;
+  const now = Date.now(); if (!force && now - NET.lastCloud < 30000) return; NET.lastCloud = now;
+  accCall({ op: 'save', token: NET.account.token, data: saveData() }).catch(() => { });
+}
+async function showLeaderboard() {
+  const el = $('leader'); if (!el) return;
+  if (!serverBase()) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden'); el.textContent = 'Lade …';
+  try {
+    const j = await (await fetch(serverBase() + '/api/leaderboard')).json();
+    el.textContent = '';
+    const h = document.createElement('h3'); h.textContent = 'Heldenrangliste'; el.appendChild(h);
+    const ol = document.createElement('ol');
+    for (const row of j.top || []) { const li = document.createElement('li'); li.textContent = row.name + ' – ' + row.score; ol.appendChild(li); }
+    if (!(j.top || []).length) ol.textContent = 'Noch keine Helden eingetragen.';
+    el.appendChild(ol);
+    const c = document.createElement('div'); c.className = 'code'; c.textContent = NET.account ? 'Angemeldet als ' + NET.account.name + ' – dein Spielstand wird automatisch in der Cloud gespeichert.' : 'Offline – melde dich an, um in die Rangliste zu kommen.'; el.appendChild(c);
+  } catch (e) { el.textContent = 'Server nicht erreichbar.'; }
+}
 function setupMenuNet() {
   const q = new URLSearchParams(location.search);
   if (q.get('server') !== null) lsSet('hellas-server', q.get('server'));
-  $('heroName').value = heroName() === 'Held' && !lsGet('hellas-name') ? '' : heroName();
-  $('heroName').oninput = () => lsSet('hellas-name', $('heroName').value.trim().slice(0, 20) || 'Held');
   const has = !!serverBase();
-  $('mpRow').classList.toggle('hidden', !has);
-  $('btnCloud').classList.toggle('hidden', !has);
-  $('mpOn').checked = lsGet('hellas-mp') !== 'off';
-  $('mpOn').onchange = () => lsSet('hellas-mp', $('mpOn').checked ? 'on' : 'off');
-  $('mpStatus').textContent = has ? '' : 'Einzelspieler (kein Server eingerichtet)';
-  if (has) fetch(serverBase() + '/').then(r => r.json()).then(() => { $('mpStatus').textContent = '🌐 Server erreichbar – Mehrspieler & Cloud-Speicher aktiv'; loadLobbies(); }).catch(() => { $('mpStatus').textContent = '⚠ Server nicht erreichbar – Einzelspieler'; });
-  $('btnCloud').onclick = async () => {
-    const c = cloudCreds();
-    const code = window.prompt('Spielstand-Code eingeben (z. B. von einem anderen Gerät):', c.id + '.' + c.secret);
-    if (!code) return;
-    try { await cloudLoad(code); $('btnLoad').classList.remove('hidden'); $('mpStatus').textContent = '☁ Cloud-Spielstand geladen – klicke „Fortsetzen“.'; }
+  $('accName').value = lsGet('hellas-name') || '';
+  const doAcc = async (register) => {
+    const name = $('accName').value.trim(), password = $('accPw').value;
+    if (!name || !password) { $('mpStatus').textContent = '⚠ Bitte Name und Passwort eingeben.'; return; }
+    $('mpStatus').textContent = register ? 'Registriere …' : 'Melde an …';
+    try { setAccount(await accCall({ op: register ? 'register' : 'login', name, password })); lsSet('hellas-name', name); $('accPw').value = ''; }
     catch (e) { $('mpStatus').textContent = '⚠ ' + e.message; }
   };
+  $('btnLogin').onclick = () => doAcc(false);
+  $('btnRegister').onclick = () => doAcc(true);
+  $('accPw').onkeydown = (e) => { if (e.key === 'Enter') doAcc(false); };
+  $('accName').oninput = () => lsSet('hellas-name', $('accName').value.trim().slice(0, 20));
+  $('btnLogout').onclick = (e) => { e.preventDefault(); logout(); };
+  updateMenuAccount();
+  if (!has) return;
+  fetch(serverBase() + '/').then(r => r.json()).then(() => {
+    let s = null; try { s = JSON.parse(lsGet('hellas-session') || 'null'); } catch (e) { }
+    if (s && s.token) accCall({ op: 'session', token: s.token }).then(j => setAccount(Object.assign(j, { token: s.token }))).catch(() => { try { localStorage.removeItem('hellas-session'); } catch (e) { } updateMenuAccount(); });
+  }).catch(() => { $('loginBox').classList.add('hidden'); $('mpStatus').textContent = '⚠ Server nicht erreichbar – Einzelspieler'; });
+}
+
+// ---------- Admin-Menü ----------
+let adminOpen = false;
+function toggleAdmin() {
+  if (!NET.account || !NET.account.admin) return;
+  adminOpen = !adminOpen;
+  $('adminPanel').classList.toggle('hidden', !adminOpen);
+  if (adminOpen) { for (const k in keys) keys[k] = false; if (document.pointerLockElement) document.exitPointerLock(); renderAdmin(); }
+}
+function adminBtn(label, fn, cls = '') { const b = document.createElement('button'); b.textContent = label; b.className = 'abtn ' + cls; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; }
+async function adminBan(name, ban) {
+  try { const j = await accCall({ op: ban ? 'ban' : 'unban', token: NET.account.token, name }, '/api/admin'); toast((ban ? 'Gebannt: ' : 'Entbannt: ') + j.name, 'gold'); }
+  catch (e) { toast('⚠ ' + e.message); }
+  renderAdmin();
+}
+async function renderAdmin() {
+  const body = $('adminBody'); body.textContent = '';
+  const sec = (t) => { const h = document.createElement('h4'); h.textContent = t; body.appendChild(h); };
+  sec('Bewegung');
+  body.appendChild(adminBtn(player.adminFly ? '✈ Fliegen: AN (klicken zum Ausschalten)' : '✈ Fliegen: AUS (klicken zum Einschalten)', () => { player.adminFly = !player.adminFly; if (player.adminFly) { if (player.mounted) dismount(); player.flying = false; player.sailing = false; toast('Admin-Flug: WASD, Leertaste hoch, C runter, Shift schnell'); } else player.vy = 0; renderAdmin(); }, player.adminFly ? 'on' : ''));
+  const hint = document.createElement('div'); hint.className = 'ahint'; hint.textContent = 'Im Flug: Leertaste = hoch, C = runter, Shift = schnell. Du bist unverwundbar und unsichtbar für Gegner.'; body.appendChild(hint);
+  sec('Spieler in dieser Lobby');
+  if (!NET.others.size) { const d = document.createElement('div'); d.className = 'ahint'; d.textContent = NET.online ? 'Niemand sonst online.' : 'Nicht verbunden.'; body.appendChild(d); }
+  for (const r of NET.others.values()) {
+    const row = document.createElement('div'); row.className = 'arow';
+    const n = document.createElement('span'); n.textContent = r.name; row.appendChild(n);
+    row.appendChild(adminBtn('Hin teleportieren', () => { if (r.st) { player.pos.set(r.pos.x + 2, r.pos.y + 1, r.pos.z); toast('Teleportiert zu ' + r.name); } }));
+    row.appendChild(adminBtn('Bannen', () => { if (confirm(r.name + ' wirklich bannen?')) adminBan(r.name, true); }, 'danger'));
+    body.appendChild(row);
+  }
+  sec('Spieler suchen');
+  const row = document.createElement('div'); row.className = 'arow';
+  const inp = document.createElement('input'); inp.placeholder = 'Spielername'; inp.className = 'ainp'; row.appendChild(inp);
+  row.appendChild(adminBtn('Bannen', () => inp.value.trim() && adminBan(inp.value.trim(), true), 'danger'));
+  row.appendChild(adminBtn('Entbannen', () => inp.value.trim() && adminBan(inp.value.trim(), false)));
+  body.appendChild(row);
+  sec('Alle Konten');
+  const list = document.createElement('div'); list.className = 'alist'; list.textContent = 'Lade …'; body.appendChild(list);
+  try {
+    const j = await accCall({ op: 'list', token: NET.account.token }, '/api/admin');
+    list.textContent = '';
+    for (const a of j.accounts) {
+      const r = document.createElement('div'); r.className = 'arow';
+      const n = document.createElement('span'); n.textContent = a.name + (a.admin ? ' ★ Admin' : '') + (a.banned ? ' – GEBANNT' : ''); if (a.banned) n.style.color = '#ff7a6a'; r.appendChild(n);
+      if (!a.admin) r.appendChild(a.banned ? adminBtn('Entbannen', () => adminBan(a.name, false)) : adminBtn('Bannen', () => { if (confirm(a.name + ' wirklich bannen?')) adminBan(a.name, true); }, 'danger'));
+      list.appendChild(r);
+    }
+  } catch (e) { list.textContent = '⚠ ' + e.message; }
+}
+function updateAdminFly(dt, moving, sprint, canMove) {
+  const P = player.pos, sp = sprint ? 160 : 55;
+  if (moving) { P.x += _mv.x * sp * dt; P.z += _mv.z * sp * dt; player.yaw = angLerp(player.yaw, Math.atan2(_mv.x, _mv.z), Math.min(1, dt * 8)); }
+  if (canMove && keys.Space) P.y += sp * 0.6 * dt;
+  if (canMove && (keys.KeyC || keys.ControlLeft)) P.y -= sp * 0.6 * dt;
+  P.y = Math.max(P.y, curD ? curD.O.y : -30);
+  player.speedNow = 0; player.swimming = false; player.vy = 0; player.hp = player.maxHp;
+  hero.root.position.set(P.x, P.y, P.z); hero.root.rotation.y = player.yaw;
+  animateHumanoid(hero, 0, dt, {});
+  pegasus.root.visible = false; hippo.root.visible = false; ship.root.visible = false; horse.root.visible = false;
+}
+
+// ============================================================
+// Tavernen, Söldner, Kopfgelder, Fahndung, Ställe, Schmiede, Schiffsbauer,
+// Mythenwälder und Quiz-Nebenmissionen
+// ============================================================
+const HORSES = {
+  gaul: { name: 'Brauner Ackergaul', cost: 0, speed: [19, 30], col: 0x6b4325 },
+  rappe: { name: 'Thessalischer Rappe', cost: 150, speed: [24, 37], col: 0x1e1a18 },
+  schimmel: { name: 'Arabischer Schimmel', cost: 300, speed: [28, 43], col: 0xece6dc },
+  wagen: { name: 'Streitwagen', cost: 450, speed: [30, 46], col: 0xece6dc, chariot: true },
+};
+const WEAPONS = [
+  { name: 'Bronzeschwert', cost: 0, dmg: 0 }, { name: 'Eisenschwert', cost: 80, dmg: 6 },
+  { name: 'Kopis (Hiebschwert)', cost: 180, dmg: 12 }, { name: 'Xiphos des Champions', cost: 350, dmg: 20 },
+];
+const ARMORS = [
+  { name: 'Tunika', cost: 0, red: 0, hp: 0 }, { name: 'Leinenpanzer', cost: 70, red: 0.1, hp: 20, col: 0xe8e0cc },
+  { name: 'Schuppenpanzer', cost: 160, red: 0.2, hp: 40, col: 0x8a7a5a }, { name: 'Hoplitenrüstung', cost: 320, red: 0.3, hp: 70, col: 0xd8b050 },
+];
+const SHIPS = [
+  null, { name: 'Fischerboot', cost: 80, speed: [16, 22], scale: 0.6, sail: 0xd8d0b8 },
+  { name: 'Handelsschiff', cost: 200, speed: [22, 30], scale: 0.85, sail: 0xf2ead6 },
+  { name: 'Trireme', cost: 400, speed: [28, 40], scale: 1.0, sail: 0xb02020 },
+];
+const MERCS = {
+  speer: { name: 'Speerträger', cost: 40, hp: 80, dmg: 9, look: { tunic: 0x6a5a3a, pants: 0x3a3024, weapon: 'spear', shield: true, shieldCol: 0x8a6a3a, hair: 0x2a1a0e, beard: true } },
+  hoplit: { name: 'Hoplit', cost: 90, hp: 140, dmg: 13, look: { tunic: 0x1c3a7a, armor: 0xb98d3a, helmet: true, crest: 0x1c3a7a, shield: true, shieldEmblem: 0x1c3a7a, weapon: 'spear', greaves: true, pants: 0x2a2a2a } },
+  veteran: { name: 'Spartanischer Veteran', cost: 160, hp: 200, dmg: 19, look: { tunic: 0x8e1717, armor: 0xc99a42, helmet: true, crest: 0xa01818, shield: true, shieldEmblem: 0x8a1a1a, weapon: 'sword', cape: 0x8e1717, greaves: true, pants: 0x3a1414, beard: true } },
+  buerger: { name: 'Bürgersoldat', cost: 0, hp: 100, dmg: 11, look: { tunic: 0x5a7a4a, armor: 0x8a7a5a, helmet: true, crest: 0x5a7a4a, shield: true, weapon: 'spear', pants: 0x3a3024 } },
+};
+const MAX_ALLIES = 4;
+const allies = [];
+const playerDamage = () => (player.dmg + WEAPONS[player.wTier || 0].dmg) * (player.mounted && HORSES[player.horse || 'gaul'].chariot ? 1.3 : 1);
+
+function findSpotNear(L, rMin, rMax, rad) {
+  for (let i = 0; i < 400; i++) {
+    const a = rand() * 6.283, r = rr(rMin, rMax), x = L.x + Math.cos(a) * r, z = L.z + Math.sin(a) * r;
+    if (heightAt(x, z) > 1.2 && isFree(x, z, rad) && roadDist(x, z) > 5 && slopeAt(x, z) < 0.35) return [x, z];
+  }
+  return null;
+}
+const TAVERN_NAMES = ['Zum Goldenen Widder', 'Zum Durstigen Zyklopen', 'Die Lachende Amphore', 'Zum Einäugigen Polyphem', 'Zur Weinrebe des Dionysos', 'Zum Fliegenden Pegasus', 'Die Rostige Lanze', 'Zum Schlafenden Kentauren', 'Die Salzige Möwe', 'Zum Bronzenen Stier'];
+const KEEPERS = ['Wirt Lysandros', 'Wirtin Agathe', 'Wirt Dorkas', 'Wirtin Myrto', 'Wirt Bion', 'Wirtin Korinna', 'Wirt Phaidon', 'Wirtin Ismene', 'Wirt Kallias', 'Wirtin Nausikaa'];
+const RUMORS = [
+  'Man sagt, im Hain der Dryaden ganz im Norden liegt ein Schatz – aber die Baumgeister verteidigen ihn.',
+  'Im Wald von Nemea haust ein Löwe, dessen Fell kein Schwert durchdringt … fast keines.',
+  'Ein riesiger Eber verwüstet die Felder bei Kalydon im Westen.',
+  'Die Gelehrten im ganzen Land stellen Fragen. Wer klug antwortet, wird belohnt!',
+  'Wenn du zu viele Soldaten erschlägst, schicken die Städte Wachen hinter dir her.',
+  'Im Stall in Athen gibt es einen Streitwagen – schnell wie der Wind!',
+  'Der Schiffsbauer in Piräus baut die besten Triremen der Ägäis.',
+  'In deiner eigenen Stadt kannst du Bürger zu Soldaten ausbilden lassen.',
+];
+const TAVERNS = [];
+function buildServices() {
+  const tavernAt = ['athen', 'sparta', 'theben', 'piraeus', 'olympia', 'delphi', 'kreta', 'thera', 'ithaka', 'seriphos'];
+  tavernAt.forEach((k, i) => {
+    const L = LOCS[k]; const sp = findSpotNear(L, 12, L.r * 1.15, 6.5); if (!sp) return;
+    const rot = Math.atan2(L.x - sp[0], L.z - sp[1]);
+    const f = house(sp[0], sp[1], rot, 9, 7, 4.6, { wall: lam(0xd8c4a0), roof: M.roof2 });
+    if (!f) return;
+    f.box(M.wood, 1.8, 2.6, 3.6, 2.2, 0.9, 0.12); f.box(M.red, 1.8, 2.75, 3.68, 1.8, 0.55, 0.05);
+    for (const tx of [-3.2, 3.6]) { f.box(M.wood, tx, 0, 6, 1.4, 0.9, 1.0, true); f.put(G.sphere, M.terracotta, tx, 1.1, 6, 0, 0, 0, 0.3, 0.45, 0.3); }
+    const [nx, nz] = f.w(0, 5);
+    const tv = { name: 'Taverne „' + TAVERN_NAMES[i] + '“', keeper: KEEPERS[i], loc: k };
+    const n = addNPC(KEEPERS[i], nx, nz, { tunic: 0x8a5a2a, pants: 0x3a2a1a, beard: i % 2 === 0, veil: i % 2 ? 0xc8b090 : null, hair: 0x3a2a1a }, () => talkTavern(tv));
+    n.yaw = rot; tv.x = nx; tv.z = nz; TAVERNS.push(tv);
+  });
+  for (const k of ['athen', 'sparta', 'olympia', 'theben', 'delphi']) {
+    const L = LOCS[k]; const sp = findSpotNear(L, 15, L.r * 1.3, 9); if (!sp) continue;
+    reserve(sp[0], sp[1], 9);
+    const f = new Frame(sp[0], sp[1], Math.atan2(L.x - sp[0], L.z - sp[1]));
+    for (const [px, pz] of [[-4, -2.5], [4, -2.5], [-4, 2.5], [4, 2.5]]) f.box(M.wood, px, 0, pz, 0.3, 3.2, 0.3, true);
+    f.put(G.prism, M.roof2, 0, 3.2, 0, 0, 0, 0, 9, 1.4, 6);
+    for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; f.box(M.wood, Math.cos(a) * 7, 0.6, Math.sin(a) * 7 + 0.5, 3.4, 0.15, 0.12); }
+    ['rappe', 'schimmel', 'gaul'].forEach((h, i) => { const hm = makeHorse(HORSES[h].col); const [hx, hz] = f.w(-3 + i * 3, 0); hm.root.position.set(hx, heightAt(hx, hz), hz); hm.root.rotation.y = f.rot + Math.PI / 2; scene.add(hm.root); });
+    const [nx, nz] = f.w(0, 4.5);
+    addNPC('Stallmeister', nx, nz, { tunic: 0x6a4a2a, pants: 0x3a2a1a, beard: true, hair: 0x4a3a2a }, talkStable).yaw = f.rot;
+  }
+  for (const k of ['athen', 'sparta', 'theben', 'thera', 'olympia']) {
+    const L = LOCS[k]; const sp = findSpotNear(L, 12, L.r * 1.2, 6); if (!sp) continue;
+    reserve(sp[0], sp[1], 6);
+    const f = new Frame(sp[0], sp[1], Math.atan2(L.x - sp[0], L.z - sp[1]));
+    f.box(M.stone2, 0, 0, -1.5, 4, 2.4, 2.6, true); f.box(M.stone, 1.2, 2.4, -2.2, 0.9, 2.5, 0.9);
+    f.box(M.dark, 0, 0.9, -0.15, 1.6, 1.0, 0.1);
+    const fm = new THREE.Mesh(G.cone, M.fire); const [fx, fz] = f.w(0, -0.4); fm.position.set(fx, f.y + 1.2, fz); fm.scale.set(0.6, 0.7, 0.6); scene.add(fm); fires.push(fm);
+    f.box(M.black, 1.8, 0, 1.2, 0.6, 0.8, 0.4, true); f.box(M.black, 1.8, 0.8, 1.2, 1.0, 0.2, 0.4);
+    for (let i = 0; i < 4; i++) f.put(G.box, lam(0xc8c8c0), -2.4 + i * 0.35, 1.2, 1.2, 0, 0, 0.1, 0.06, 1.6, 0.04);
+    const [nx, nz] = f.w(0.2, 2.6);
+    addNPC('Schmied Hephaistion', nx, nz, { tunic: 0x4a3a2a, pants: 0x2a2018, beard: true, hair: 0x1a1008, armor: 0x5a4030 }, talkSmith).yaw = f.rot;
+  }
+  for (const k of ['piraeus', 'kreta', 'ithaka']) {
+    const d = DOCKS[k]; if (!d) continue;
+    const [dx, dz] = [Math.sin(d.rot), Math.cos(d.rot)];
+    const x = d.land[0] - dx * 6 - dz * 4, z = d.land[1] - dz * 6 + dx * 4;
+    addNPC('Schiffsbauer Argos', x, z, { tunic: 0x3a5a7a, pants: 0x2a3a4a, beard: true, hair: 0x6a5a4a }, talkShipwright);
+  }
+}
+function talkTavern(tv) {
+  const W = tv.keeper, opts = [
+    { label: 'Essen und ein Bett (10 Drachmen) – volle Heilung', fn: () => { if (spend(10)) { player.hp = player.maxHp; player.stamina = 100; for (const a of allies) a.hp = a.maxHp; toast('Gut gegessen und geschlafen – Leben voll!', 'gold'); sfx('drink'); } } },
+    { label: 'Söldner anheuern (' + allies.length + '/' + MAX_ALLIES + ')', fn: () => talkHire(tv) },
+    { label: 'Kopfgeldbrett ansehen', fn: () => talkBounties(tv) },
+  ];
+  if (player.wanted > 0) opts.push({ label: 'Das Kopfgeld auf dich bezahlen (' + wantedCost() + ' Drachmen)', fn: () => { if (spend(wantedCost())) { setWanted(0); toast('Die Wachen suchen dich nicht mehr.', 'gold'); } } });
+  opts.push({ label: 'Gerüchte hören', fn: () => talk([{ who: W, text: pick(RUMORS) }]) }, { label: 'Tschüss', fn: () => { } });
+  talk([{ who: W, text: 'Willkommen in der ' + tv.name + '! Ein Krug Wein, ein warmes Bett – oder suchst du Arbeit?', opts }]);
+}
+function talkHire(tv) {
+  const opts = Object.entries(MERCS).filter(([k]) => k !== 'buerger').map(([k, m]) => ({ label: m.name + ' anheuern (' + m.cost + ' Drachmen) – ' + m.hp + ' Leben, ' + m.dmg + ' Schaden', fn: () => {
+    if (allies.length >= MAX_ALLIES) { toast('Mehr als ' + MAX_ALLIES + ' Söldner kannst du nicht führen.'); return; }
+    if (spend(m.cost)) { spawnAlly(k); toast(m.name + ' folgt dir jetzt!', 'gold'); save(); }
+  } }));
+  if (allies.length) opts.push({ label: 'Alle Söldner entlassen', fn: () => { while (allies.length) removeAlly(allies[0]); toast('Deine Söldner ziehen weiter.'); save(); } });
+  opts.push({ label: 'Zurück', fn: () => talkTavern(tv) });
+  talk([{ who: tv.keeper, text: 'Ein paar Kämpfer sitzen hier herum und suchen Arbeit. Sie folgen dir und kämpfen an deiner Seite.', opts }]);
+}
+
+// ---------- Söldner / Gefolge ----------
+function spawnAlly(type, hp) {
+  const M2 = MERCS[type], h = makeHumanoid(M2.look);
+  const a = Math.random() * 6.28, x = player.pos.x + Math.cos(a) * 3, z = player.pos.z + Math.sin(a) * 3;
+  h.root.position.set(x, groundAt(x, z), z); scene.add(h.root);
+  const al = { type, def: M2, m: h, x, z, y: groundAt(x, z), yaw: 0, hp: hp || M2.hp, maxHp: M2.hp, cd: 0, atk: 0, speedNow: 0, lastHit: -99 };
+  allies.push(al); return al;
+}
+function removeAlly(a) { scene.remove(a.m.root); const i = allies.indexOf(a); if (i >= 0) allies.splice(i, 1); }
+function hurtAlly(a, dmg) {
+  a.hp -= dmg; a.lastHit = clock.elapsedTime;
+  floatText(a.x, a.y + 2.4, a.z, String(Math.round(dmg)), '#ff9a7a');
+  if (a.hp <= 0) { toast(a.def.name + ' ist gefallen.'); removeAlly(a); save(); }
+}
+function updateAllies(dt) {
+  const P = player.pos, t = clock.elapsedTime;
+  const hidden = player.sailing || player.flying || player.adminFly;
+  allies.forEach((a, i) => {
+    a.m.root.visible = !hidden;
+    if (hidden) return;
+    a.cd -= dt; a.atk = Math.max(0, a.atk - dt * 2.6);
+    if (t - a.lastHit > 6) a.hp = Math.min(a.maxHp, a.hp + dt * 3);
+    let tgt = null, best = 18;
+    for (const e of enemies) { if (e.dead || e.stoned > 0) continue; const d = Math.hypot(e.x - a.x, e.z - a.z); if (d < best && Math.hypot(e.x - P.x, e.z - P.z) < 30) { best = d; tgt = e; } }
+    let tx, tz, spd = 0;
+    if (tgt) {
+      tx = tgt.x; tz = tgt.z;
+      const reach = 2.2 + (tgt.def.hitR || 0.3);
+      if (best > reach) spd = 8;
+      else if (a.cd <= 0) { a.cd = 1.2; a.atk = 1; damageEnemy(tgt, a.def.dmg * rr(0.85, 1.15)); }
+    } else {
+      const ang = player.yaw + Math.PI + (i - (allies.length - 1) / 2) * 0.7;
+      tx = P.x + Math.sin(ang) * (3 + i * 0.6); tz = P.z + Math.cos(ang) * (3 + i * 0.6);
+      const d = Math.hypot(tx - a.x, tz - a.z);
+      if (d > 1.2) spd = Math.min(player.mounted ? 26 : 13, 4 + d * 1.5);
+    }
+    const dd = Math.hypot(tx - a.x, tz - a.z);
+    if (Math.hypot(P.x - a.x, P.z - a.z) > 60) { a.x = P.x - Math.sin(player.yaw) * 3 + (i - 1.5); a.z = P.z - Math.cos(player.yaw) * 3; }
+    else if (spd > 0 && dd > 0.01) {
+      const q = { x: a.x + (tx - a.x) / dd * spd * dt, z: a.z + (tz - a.z) / dd * spd * dt };
+      resolveCollisions(q, 0.45); a.speedNow = Math.hypot(q.x - a.x, q.z - a.z) / dt; a.x = q.x; a.z = q.z;
+    } else a.speedNow = 0;
+    a.yaw = angLerp(a.yaw, Math.atan2(tx - a.x, tz - a.z), Math.min(1, dt * 8));
+    const g = groundAt(a.x, a.z);
+    a.y = g < -1.4 ? -1.35 - 0.85 : g;
+    a.m.root.position.set(a.x, a.y, a.z); a.m.root.rotation.y = a.yaw;
+    animateHumanoid(a.m, a.speedNow, dt, { attack: a.atk });
+  });
+}
+
+// ---------- Fahndung ----------
+function wantedCost() { return player.wanted * 60; }
+function setWanted(n) {
+  const old = player.wanted || 0;
+  player.wanted = clamp(n, 0, 5); player.wantedT = 0;
+  if (player.wanted > old) { toast('Du wirst gesucht! ' + '★'.repeat(player.wanted), 'gold'); sfx('hurt'); }
+  if (player.wanted === 0) for (const e of enemies.filter(e => e.def.hunter)) removeEnemy(e);
+}
+function addCrime(n) { setWanted((player.wanted || 0) + n); player.lastCrime = clock.elapsedTime; }
+let hunterT = 20;
+function updateWanted(dt) {
+  if (!player.wanted || curD || player.dead) return;
+  player.wantedT = (player.wantedT || 0) + dt;
+  const hunters = enemies.filter(e => e.def.hunter && !e.dead);
+  const near = hunters.some(e => Math.hypot(e.x - player.pos.x, e.z - player.pos.z) < 60);
+  if (player.wantedT > 100 && !near) { player.wanted--; player.wantedT = 0; toast(player.wanted ? 'Die Fahndung lässt nach: ' + '★'.repeat(player.wanted) : 'Niemand sucht mehr nach dir.'); if (!player.wanted) setWanted(0); }
+  hunterT -= dt;
+  if (hunterT <= 0 && hunters.length < 8 && !player.sailing) {
+    hunterT = Math.max(25, 70 - player.wanted * 9);
+    const n = Math.min(1 + player.wanted, 8 - hunters.length);
+    for (let tries = 0; tries < 30; tries++) {
+      const a = player.yaw + Math.PI + rr(-1, 1), r = rr(55, 75), x = player.pos.x + Math.sin(a) * r, z = player.pos.z + Math.cos(a) * r;
+      if (heightAt(x, z) < 1) continue;
+      for (let k = 0; k < n; k++) { const e = spawnEnemy('jaeger', x + rr(-4, 4), z + rr(-4, 4), { name: player.wanted >= 3 ? 'Elite-Kopfgeldjäger' : 'Stadtwache', hp: 85 + player.wanted * 15 }); e.state = 'chase'; }
+      toast('Wachen sind hinter dir her!'); break;
+    }
+  }
+  for (const e of hunters) if (Math.hypot(e.x - player.pos.x, e.z - player.pos.z) > 260) removeEnemy(e);
+}
+
+// ---------- Kopfgelder ----------
+const BOUNTY_NAMES = ['Lykos der Schlächter', 'Drakon der Grausame', 'Kleitos Einauge', 'Phobos der Brandstifter', 'Nikandros der Verräter', 'Agrios der Wilde', 'Thrasos Blutbart', 'Melas der Schwarze', 'Kerkyon der Ringer', 'Skiron vom Felsen', 'Prokrustes der Strecker', 'Sinis der Fichtenbeuger'];
+function talkBounties(tv) {
+  if (S.bounty) { talk([{ who: tv.keeper, text: 'Du jagst schon ' + S.bounty.name + '. Bring das erst zu Ende! (Rotes Zeichen auf der Karte)', opts: [{ label: 'Auftrag aufgeben', fn: () => { cancelBounty(); toast('Kopfgeld aufgegeben.'); } }, { label: 'Zurück', fn: () => talkTavern(tv) }] }]); return; }
+  const offers = [];
+  for (let i = 0; i < 40 && offers.length < 3; i++) {
+    const a = Math.random() * 6.28, r = 120 + Math.random() * 320, x = tv.x + Math.cos(a) * r, z = tv.z + Math.sin(a) * r;
+    if (Math.abs(x) > 950 || Math.abs(z) > 950 || heightAt(x, z) < 2 || inCity(x, z, 1.3)) continue;
+    const name = BOUNTY_NAMES[Math.floor(Math.random() * BOUNTY_NAMES.length)];
+    if (offers.some(o => o.name === name)) continue;
+    offers.push({ name, x, z, reward: Math.round(60 + r * 0.45 + Math.random() * 40) });
+  }
+  talk([{ who: 'Kopfgeldbrett', text: 'Gesucht – tot oder lebendig! Wähle ein Ziel:', opts: offers.map(o => ({ label: o.name + ' – ' + o.reward + ' Drachmen (' + Math.round(Math.hypot(o.x - player.pos.x, o.z - player.pos.z)) + ' m)', fn: () => acceptBounty(o) })).concat([{ label: 'Zurück', fn: () => talkTavern(tv) }]) }]);
+}
+function acceptBounty(o) { S.bounty = o; spawnBounty(); toast('Kopfgeld angenommen: ' + o.name, 'gold'); sfx('quest'); updateQuestText(); save(); }
+function spawnBounty() {
+  const o = S.bounty; if (!o) return;
+  for (const e of enemies.filter(e => e.bountyOf)) removeEnemy(e);
+  const boss = spawnEnemy('kopfgeld', o.x, o.z, { name: o.name }); boss.bountyOf = o.name; boss.isBountyBoss = true;
+  for (let i = 0; i < 3; i++) { const e = spawnEnemy('bandit', o.x + rr(-6, 6), o.z + rr(-6, 6)); e.bountyOf = o.name; }
+}
+function cancelBounty() { S.bounty = null; for (const e of enemies.filter(e => e.bountyOf)) removeEnemy(e); updateQuestText(); save(); }
+
+// ---------- Stall, Schmied, Schiffsbauer ----------
+function talkStable() {
+  const opts = Object.entries(HORSES).map(([k, h]) => {
+    const own = player.horses.includes(k);
+    return { label: (own ? (player.horse === k ? '✔ ' : 'Reiten: ') : 'Kaufen: ') + h.name + ' – Tempo ' + h.speed[1] + (own ? '' : ' (' + h.cost + ' Drachmen)'), fn: () => {
+      if (!own) { if (!spend(h.cost)) return; player.horses.push(k); toast(h.name + ' gehört jetzt dir!', 'gold'); }
+      player.horse = k; setHorseModel(); save(); talkStable();
+    } };
+  });
+  opts.push({ label: 'Auf Wiedersehen', fn: () => { } });
+  talk([{ who: 'Stallmeister', text: 'Die besten Pferde von Hellas! Dein aktuelles Reittier: ' + HORSES[player.horse].name + '. (R zum Rufen)', opts }]);
+}
+function makeChariot() {
+  const g = new THREE.Group(), horsesM = [];
+  for (const s of [-0.5, 0.5]) { const h = makeHorse(0xece6dc, false); h.root.position.set(s, 0, 1.6); g.add(h.root); horsesM.push(h); }
+  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; g.add(m); return m; };
+  add(new THREE.BoxGeometry(1.6, 0.15, 1.3), M.wood, 0, 0.95, -1.3);
+  add(new THREE.BoxGeometry(1.6, 0.8, 0.12), M.gold, 0, 1.4, -0.7);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.1, 0.6, 1.3), M.gold, s * 0.8, 1.25, -1.3);
+  const wheels = [];
+  for (const s of [-1, 1]) wheels.push(add(new THREE.CylinderGeometry(0.65, 0.65, 0.12, 14), M.darkwood, s * 0.95, 0.65, -1.3, 0, 0, Math.PI / 2));
+  add(new THREE.BoxGeometry(0.1, 0.1, 2.6), M.wood, 0, 1.0, 0.4);
+  return { root: g, legs: horsesM[0].legs, horses: horsesM, wheels, tail: horsesM[0].tail, phase: 0, chariot: true };
+}
+function setHorseModel() {
+  const vis = horse ? horse.root.visible : false;
+  if (horse) scene.remove(horse.root);
+  const H = HORSES[player.horse || 'gaul'];
+  horse = H.chariot ? makeChariot() : makeHorse(H.col);
+  horse.root.visible = vis; scene.add(horse.root);
+}
+function talkSmith() {
+  const opts = [];
+  WEAPONS.forEach((w, i) => { if (i > (player.wTier || 0)) opts.push({ label: 'Waffe: ' + w.name + ' (+' + w.dmg + ' Schaden) – ' + w.cost + ' Drachmen', fn: () => { if (spend(w.cost)) { player.wTier = i; toast('Neue Waffe: ' + w.name, 'gold'); save(); } talkSmith(); } }); });
+  ARMORS.forEach((a, i) => { if (i > (player.aTier || 0)) opts.push({ label: 'Rüstung: ' + a.name + ' (−' + Math.round(a.red * 100) + ' % Schaden, +' + a.hp + ' Leben) – ' + a.cost + ' Drachmen', fn: () => { if (spend(a.cost)) { player.maxHp += a.hp - ARMORS[player.aTier || 0].hp; player.aTier = i; player.hp = player.maxHp; toast('Neue Rüstung: ' + a.name, 'gold'); refreshHeroLook(); save(); } talkSmith(); } }); });
+  opts.push({ label: 'Auf Wiedersehen', fn: () => { } });
+  talk([{ who: 'Schmied Hephaistion', text: 'Klirr, klirr! Deine Waffe: ' + WEAPONS[player.wTier || 0].name + ', deine Rüstung: ' + ARMORS[player.aTier || 0].name + '.' + (opts.length === 1 ? ' Du trägst schon das Beste, was ich schmieden kann!' : ' Was soll ich dir schmieden?'), opts }]);
+}
+function talkShipwright() {
+  const opts = [];
+  SHIPS.forEach((s, i) => { if (s && i !== player.shipTier) opts.push({ label: (i < player.shipTier ? 'Tauschen gegen: ' : 'Kaufen: ') + s.name + ' – Tempo ' + s.speed[1] + ' (' + s.cost + ' Drachmen)', fn: () => { if (spend(s.cost)) { player.shipTier = i; player.hasShip = true; setShipModel(); banner('Dein neues Schiff: ' + s.name, 'Drücke B am Ufer, um damit in See zu stechen.'); save(); } } }); });
+  opts.push({ label: 'Auf Wiedersehen', fn: () => { } });
+  talk([{ who: 'Schiffsbauer Argos', text: player.shipTier ? 'Dein Schiff: ' + SHIPS[player.shipTier].name + '. Willst du ein anderes?' : 'Ein eigenes Schiff gefällig? Damit segelst du, wohin du willst! (Taste B am Ufer)', opts }]);
+}
+function setShipModel() {
+  const vis = ship ? ship.root.visible : false;
+  if (ship) scene.remove(ship.root);
+  ship = makeShip(); const T = SHIPS[player.shipTier || 2];
+  ship.root.scale.setScalar(T.scale);
+  ship.root.traverse(o => { if (o.isMesh && o.material === M.sail) o.material = lam(T.sail); });
+  ship.root.visible = vis; scene.add(ship.root);
+}
+
+// ---------- Mythenwälder ----------
+const MYTH_FORESTS = [
+  { name: 'Hain der Dryaden', x: -220, z: -680, r: 85, guards: ['dryade', 'dryade', 'satyr', 'dryade'], roam: ['satyr', 'dryade', 'satyr', 'dryade'] },
+  { name: 'Wald von Nemea', x: -580, z: 420, r: 80, guards: ['loewe', 'satyr', 'satyr'], roam: ['satyr', 'eber', 'satyr'] },
+  { name: 'Kalydonischer Wald', x: -740, z: -140, r: 85, guards: ['eber_boss', 'eber', 'eber'], roam: ['eber', 'satyr', 'eber'] },
+];
+function buildMythForests() {
+  for (const F of MYTH_FORESTS) {
+    const f = new Frame(F.x, F.z, 0);
+    reserve(F.x, F.z, 9);
+    for (let i = 0; i < 10; i++) { const a = i / 10 * 6.28; f.put(G.rock, lam(0x8a8478), Math.cos(a) * 7, 0.8, Math.sin(a) * 7, rand(), rand(), 0, 0.9, 1.8, 0.9); }
+    f.put(G.cyl, lam(0x6a8a5a), 0, 0.2, 0, 0, 0, 0, 5, 0.4, 5);
+    const glow = new THREE.Mesh(G.sphere, lam(0x9aff9a, 0x40a040)); glow.position.set(F.x, f.y + 3.5, F.z); glow.scale.setScalar(0.8); scene.add(glow); fires.push(glow);
+    const ch = addChest(F.x, f.y + 0.4, F.z + 1.5, 0, 2, RUINS.length);
+    RUINS.push({ x: F.x, z: F.z, name: F.name, chest: ch, y: f.y, kind: 'forest', discR: F.r * 0.8, guards: F.guards.map((t, i) => { const a = i / F.guards.length * 6.28; return [F.x + Math.cos(a) * 5, F.z + Math.sin(a) * 5]; }), guardTypes: F.guards });
+  }
+}
+function makeBoar(col, big) {
+  const w = makeWolf(col);
+  for (const s of [-1, 1]) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 5), lam(0xf0ead8)); t.position.set(s * 0.12, -0.08, 0.45); t.rotation.x = -0.9; w.head.add(t); }
+  const mane = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.25, 1.1), lam(0x2a1a10)); mane.position.set(0, 1.1, 0); w.root.add(mane);
+  w.root.scale.setScalar(big ? 2.6 : 1.25);
+  return w;
+}
+function makeLion() {
+  const w = makeWolf(0xc9a050);
+  const mane = new THREE.Mesh(new THREE.SphereGeometry(0.38, 10, 8), lam(0x7a4a1a)); mane.position.set(0, 0, -0.05); mane.scale.set(1.2, 1.2, 0.8); w.head.add(mane);
+  w.root.scale.setScalar(2.2);
+  return w;
+}
+
+// ---------- Quiz-Nebenmissionen ----------
+const QUIZ = [
+  ['Wie heißt die Hauptstadt von Griechenland?', 'Athen', 'Sparta', 'Rom'],
+  ['Wer ist der Göttervater?', 'Zeus', 'Hermes', 'Ares'],
+  ['Wie heißt der höchste Berg Griechenlands?', 'Olymp', 'Vesuv', 'Matterhorn'],
+  ['Wo fanden die ersten Olympischen Spiele statt?', 'In Olympia', 'In Paris', 'In Troja'],
+  ['Welches Meer liegt östlich von Griechenland?', 'Die Ägäis', 'Die Nordsee', 'Die Ostsee'],
+  ['Wer ist die Göttin der Weisheit?', 'Athene', 'Aphrodite', 'Hera'],
+  ['Wer ist der Gott des Meeres?', 'Poseidon', 'Hades', 'Apollon'],
+  ['Welcher berühmte Tempel steht auf der Akropolis?', 'Der Parthenon', 'Das Kolosseum', 'Die Pyramide'],
+  ['Auf welcher Insel war das Labyrinth des Minotauros?', 'Kreta', 'Sizilien', 'Island'],
+  ['Welcher Held irrte zehn Jahre lang heim nach Ithaka?', 'Odysseus', 'Herakles', 'Perseus'],
+  ['Was ist eine Amphore?', 'Ein Krug', 'Ein Schild', 'Ein Helm'],
+  ['Welche Stadt war berühmt für ihre harten Krieger?', 'Sparta', 'Delphi', 'Olympia'],
+  ['Was ist Pegasus?', 'Ein geflügeltes Pferd', 'Eine Schlange', 'Ein Löwe'],
+  ['Wie viele Köpfe hat Kerberos?', 'Drei', 'Zwei', 'Sieben'],
+  ['Welche Frucht wächst in Griechenland besonders viel?', 'Oliven', 'Bananen', 'Ananas'],
+  ['Welche Sprache sprachen die alten Griechen?', 'Griechisch', 'Latein', 'Englisch'],
+  ['Wo saß das berühmte Orakel?', 'In Delphi', 'In Sparta', 'In Rom'],
+  ['Wer ist der Gott der Unterwelt?', 'Hades', 'Zeus', 'Dionysos'],
+  ['Wer ist die Göttin der Liebe?', 'Aphrodite', 'Artemis', 'Athene'],
+  ['Wer verwandelte Menschen mit ihrem Blick zu Stein?', 'Medusa', 'Eine Sirene', 'Ein Zyklop'],
+  ['Wie viele Augen hat ein Zyklop?', 'Eins', 'Zwei', 'Drei'],
+  ['Was ist ein Hoplit?', 'Ein Soldat', 'Ein Tempel', 'Ein Fisch'],
+  ['Wie gelangten die Griechen heimlich in die Stadt Troja?', 'Mit einem hölzernen Pferd', 'Mit einem Tunnel', 'Mit einem Ballon'],
+  ['Wer war ein berühmter Philosoph aus Athen?', 'Sokrates', 'Caesar', 'Napoleon'],
+  ['Wie hieß das Geld im alten Griechenland?', 'Drachme', 'Euro', 'Dollar'],
+  ['Was ist eine Polis?', 'Ein Stadtstaat', 'Ein Schiff', 'Ein Tier'],
+  ['Welcher Gott schleudert Blitze?', 'Zeus', 'Poseidon', 'Hermes'],
+  ['Wie heißt der erste Buchstabe des griechischen Alphabets?', 'Alpha', 'Omega', 'Zeta'],
+  ['Welche Farbe haben die Häuser auf griechischen Inseln oft?', 'Weiß', 'Schwarz', 'Lila'],
+  ['Wo wohnen die griechischen Götter?', 'Auf dem Olymp', 'Auf dem Mond', 'Im Wald'],
+  ['Wer ist der Götterbote mit Flügelschuhen?', 'Hermes', 'Ares', 'Hades'],
+  ['Wer ist der Gott des Krieges?', 'Ares', 'Apollon', 'Hermes'],
+  ['Wer ist der Gott des Weines?', 'Dionysos', 'Poseidon', 'Zeus'],
+  ['Wer ist die Göttin der Jagd?', 'Artemis', 'Hera', 'Demeter'],
+  ['Wer ist die Frau von Zeus?', 'Hera', 'Athene', 'Medusa'],
+  ['Welcher Held war unglaublich stark und vollbrachte zwölf Taten?', 'Herakles', 'Odysseus', 'Ikarus'],
+  ['Wer flog mit Flügeln aus Wachs zu nah an die Sonne?', 'Ikarus', 'Achilles', 'Perseus'],
+  ['Welche Körperstelle war bei Achilles verwundbar?', 'Die Ferse', 'Die Nase', 'Das Ohr'],
+  ['Wer besiegte Medusa?', 'Perseus', 'Theseus', 'Jason'],
+  ['Wer besiegte den Minotauros?', 'Theseus', 'Herakles', 'Odysseus'],
+  ['Wie hieß der berühmte Dichter der Ilias?', 'Homer', 'Goethe', 'Shakespeare'],
+  ['Welcher Gott ist der Schmied der Götter?', 'Hephaistos', 'Hermes', 'Apollon'],
+  ['Was trugen Sieger in Olympia auf dem Kopf?', 'Einen Olivenkranz', 'Eine Krone aus Gold', 'Einen Helm'],
+  ['Wofür war ein griechisches Theater da?', 'Für Schauspiele', 'Ein Hafen', 'Ein Gefängnis'],
+  ['Welches Tier ist ein Symbol der Göttin Athene?', 'Die Eule', 'Der Hai', 'Das Krokodil'],
+  ['Auf welchem Kontinent liegt Griechenland?', 'Europa', 'Asien', 'Afrika'],
+  ['Welches Getränk mischten die Griechen gern mit Wasser?', 'Wein', 'Kaffee', 'Cola'],
+  ['Woraus bestanden viele griechische Tempel?', 'Aus Marmor', 'Aus Plastik', 'Aus Glas'],
+  ['Wer sang so schön, dass Seeleute ins Verderben fuhren?', 'Die Sirenen', 'Die Zyklopen', 'Die Kentauren'],
+  ['Was ist ein Kentaur?', 'Halb Mensch, halb Pferd', 'Halb Fisch, halb Vogel', 'Ein Drache'],
+  ['Wie hieß der Gott der Sonne und Musik?', 'Apollon', 'Hades', 'Ares'],
+  ['Wer brachte den Menschen das Feuer?', 'Prometheus', 'Zeus', 'Hermes'],
+  ['Wie viele Götter wohnten auf dem Olymp?', 'Zwölf', 'Zwei', 'Hundert'],
+  ['Wer war der Lehrer von Alexander dem Großen?', 'Aristoteles', 'Odysseus', 'Herakles'],
+  ['Welches Schiff hatte die Argonauten an Bord?', 'Die Argo', 'Die Titanic', 'Die Arche'],
+  ['Was suchten Jason und die Argonauten?', 'Das Goldene Vlies', 'Einen Schatz aus Silber', 'Ein Einhorn'],
+  ['Wie heißt ein Ruderkriegsschiff der Griechen?', 'Trireme', 'U-Boot', 'Floß'],
+  ['Wie heißt der Marktplatz einer griechischen Stadt?', 'Agora', 'Arena', 'Basar'],
+  ['Wer ist die Göttin der Ernte und des Getreides?', 'Demeter', 'Aphrodite', 'Athene'],
+  ['Wie hieß der dreiköpfige Hund der Unterwelt?', 'Kerberos', 'Bello', 'Pegasus'],
+];
+const QUIZ_NAMES = ['Sokrates', 'Platon', 'Aristoteles', 'Thales', 'Pythagoras', 'Heraklit', 'Demokrit', 'Hypatia', 'Sappho', 'Herodot', 'Thukydides', 'Euklid', 'Archimedes', 'Hippokrates', 'Diogenes', 'Anaxagoras', 'Zenon', 'Epikur', 'Empedokles', 'Parmenides', 'Aspasia', 'Theano', 'Äsop', 'Homer', 'Hesiod', 'Pindar', 'Solon', 'Kleisthenes', 'Xenophon', 'Protagoras'];
+const QUIZZERS = [];
+function buildQuizNPCs() {
+  let tries = 0;
+  while (QUIZZERS.length < 30 && tries < 20000) {
+    tries++;
+    const x = rr(-920, 720), z = rr(-920, 920), h = heightAt(x, z);
+    if (h < 2 || h > 90 || slopeAt(x, z) > 0.45 || !isFree(x, z, 3) || inCity(x, z, 0.9)) continue;
+    if (QUIZZERS.some(q => Math.hypot(q.x - x, q.z - z) < (tries < 12000 ? 110 : 70))) continue;
+    const id = QUIZZERS.length, qr = mulberry32(5000 + id * 97), qs = [];
+    while (qs.length < 5) { const k = Math.floor(qr() * QUIZ.length); if (!qs.includes(k)) qs.push(k); }
+    const q = { id, x, z, name: QUIZ_NAMES[id], qs };
+    reserve(x, z, 2);
+    const f = new Frame(x, z, rand() * 6.28); f.box(M.marble2, 0, -0.3, -1.2, 1.4, 0.8, 0.5, true);
+    q.npc = addNPC(q.name + ', der Gelehrte', x, z, { tunic: 0xf2ecdc, pants: 0xd8d0c0, beard: id % 3 !== 1, hair: pick([0xb8b0a0, 0x6a5a4a, 0x2a1a0e]), cape: 0x3a5a8a, weapon: 'staff', wreath: id % 2 === 0 }, () => talkQuiz(q));
+    QUIZZERS.push(q);
+  }
+}
+function talkQuiz(q) {
+  const W = q.name;
+  if (S.quiz.includes(q.id)) { talk([{ who: W, text: 'Du hast meine Fragen schon gelöst. Es gibt noch ' + (30 - S.quiz.length) + ' andere Gelehrte in Hellas!' }]); return; }
+  talk([{ who: W, text: 'Chaire! Ich bin ' + W + '. Beantworte mir 5 Fragen über Griechenland – für jede richtige Antwort gibt es Drachmen!', opts: [
+    { label: 'Ich bin bereit!', fn: () => askQuiz(q, 0, 0) }, { label: 'Später', fn: () => { } }] }]);
+}
+function askQuiz(q, i, correct) {
+  const W = q.name;
+  if (i >= 5) {
+    const reward = correct * 12 + (correct === 5 ? 40 : 0);
+    const pages = [{ who: W, text: correct + ' von 5 richtig! ' + (correct === 5 ? 'Perfekt – du bist ein wahrer Weiser!' : correct >= 3 ? 'Gut gemacht!' : 'Komm wieder, wenn du mehr weißt.'), fn: () => {
+      if (reward) addMoney(reward);
+      if (correct === 5) { player.potions++; toast('+1 Ambrosia', 'gold'); }
+      if (correct >= 3) { S.quiz.push(q.id); toast('Rätsel gelöst: ' + S.quiz.length + '/30 Gelehrte', 'gold'); if (S.quiz.length === 30) banner('MEISTER DES WISSENS', 'Du hast alle 30 Gelehrten überzeugt!'); }
+      save();
+    } }];
+    talk(pages); return;
+  }
+  const [question, right, w1, w2] = QUIZ[q.qs[i]];
+  const opts = [right, w1, w2].map(v => ({ v, r: Math.random() })).sort((a, b) => a.r - b.r).map(o => o.v);
+  talk([{ who: W + ' – Frage ' + (i + 1) + '/5', text: question, opts: opts.map(o => ({ label: o, fn: () => {
+    const ok = o === right; sfx(ok ? 'coin' : 'block');
+    talk([{ who: W, text: ok ? 'Richtig! ✔' : 'Leider falsch. Richtig ist: ' + right + '.', fn: () => askQuiz(q, i + 1, correct + (ok ? 1 : 0)) }]);
+  } })) }]);
 }
 
 function spawnMythCreatures() {
@@ -2443,6 +2976,7 @@ function spawnMythCreatures() {
   for (let i = 0; i < 4; i++) put('harpyie', Si.x + rr(-35, 35), Si.z + rr(-35, 35));
   for (let i = 0; i < 3; i++) put('harpyie', -470 + rr(-30, 30), -410 + rr(-30, 30));
   for (let i = 0; i < 3; i++) put('skelett', LOCS.seriphos.x + rr(20, 60), LOCS.seriphos.z + rr(-60, -20));
+  for (const F of MYTH_FORESTS) for (const t of F.roam) put(t, F.x + rr(-F.r * 0.7, F.r * 0.7), F.z + rr(-F.r * 0.7, F.r * 0.7));
 }
 
 // ============================================================
@@ -2455,11 +2989,14 @@ addEventListener('keydown', (e) => {
   if (k === 'Enter' && !dialog) { e.preventDefault(); openChat(); return; }
   keys[k] = true;
   if (k === 'KeyE') { if (dialog) advanceDialog(); else interact(); }
+  if (dialog && k === 'Escape') { dialog = null; renderDialog(); return; }
   if (dialog && /^Digit[1-9]$/.test(k)) chooseOpt(+k.slice(5) - 1);
   if (dialog) return;
   if (k === 'KeyR' && !player.flying && !player.sailing) { player.mounted ? dismount() : mount(); }
   if (k === 'KeyF') { if (player.potions > 0 && player.hp < player.maxHp) { player.potions--; player.hp = Math.min(player.maxHp, player.hp + 60); sfx('drink'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, '+60', '#7aff8a'); } else if (player.potions <= 0) toast('Keine Ambrosia mehr. Kleon in Athen verkauft welche.'); }
   if (k === 'KeyQ') zeusBolt();
+  if (k === 'KeyP') toggleAdmin();
+  if (adminOpen) return;
   if (k === 'KeyT') toggleFly();
   if (k === 'KeyB') toggleShip();
   if (k === 'KeyG') medusaHead();
@@ -2481,7 +3018,7 @@ addEventListener('mousemove', (e) => {
   if (locked || mouse.left) { const mx = e.movementX || 0, my = e.movementY || 0; if (Math.abs(mx) > 300 || Math.abs(my) > 300) return; camYaw -= mx * 0.0026; camPitch = clamp(camPitch + my * 0.0022, -0.35, 1.25); }
 });
 addEventListener('wheel', (e) => { camZoom = clamp(camZoom * (e.deltaY > 0 ? 1.1 : 0.9), 0.45, 2.2); }, { passive: true });
-document.addEventListener('pointerlockchange', () => { paused = started && document.pointerLockElement !== canvas && !dialog && !mapOpen; $('pause').classList.toggle('hidden', !paused); });
+document.addEventListener('pointerlockchange', () => { paused = started && document.pointerLockElement !== canvas && !dialog && !mapOpen && !adminOpen && !NET.chatOpen; $('pause').classList.toggle('hidden', !paused); });
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeOverlay(); });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.left = mouse.right = false; });
 
@@ -2509,7 +3046,7 @@ function updatePlayer(dt) {
   const flt = player.stoned > 0 ? 'grayscale(1) brightness(0.8)' : ''; if (canvas.style.filter !== flt) canvas.style.filter = flt;
   _fwd.set(-Math.sin(camYaw), 0, -Math.cos(camYaw)); _right.set(Math.cos(camYaw), 0, -Math.sin(camYaw));
   _mv.set(0, 0, 0);
-  const canMove = !dialog && !player.dead && !mapOpen && !(player.stoned > 0);
+  const canMove = !dialog && !player.dead && !mapOpen && !adminOpen && !NET.chatOpen && !(player.stoned > 0);
   if (canMove) {
     if (keys.KeyW || keys.ArrowUp) _mv.add(_fwd);
     if (keys.KeyS || keys.ArrowDown) _mv.sub(_fwd);
@@ -2520,10 +3057,12 @@ function updatePlayer(dt) {
   const moving = _mv.lengthSq() > 0;
   if (moving) _mv.normalize();
   const sprint = (keys.ShiftLeft || keys.ShiftRight) && moving && player.stamina > 1 && !player.blocking;
+  if (player.adminFly) { updateAdminFly(dt, moving, sprint, canMove); return; }
   if (player.sailing) { updateSailing(dt, moving, sprint); return; }
   if (player.flying) { updateFlying(dt, moving, sprint, canMove); return; }
   const hasHippo = player.gear.includes('poseidon');
-  let speed = player.mounted ? (sprint ? 30 : 19) : (sprint ? 12.5 : 7);
+  const HS = HORSES[player.horse || 'gaul'].speed;
+  let speed = player.mounted ? (sprint ? HS[1] : HS[0]) : (sprint ? 12.5 : 7);
   if (player.swimming) speed = hasHippo ? (sprint ? 36 : 26) : (sprint ? 6 : 4);
   if (player.blocking) speed = 3.2;
   if (player.relics.includes('hermes')) speed *= 1.2;
@@ -2570,7 +3109,11 @@ function updatePlayer(dt) {
   hippo.root.visible = riding; if (riding) { hippo.root.position.set(P.x, P.y - 0.4, P.z); hippo.root.rotation.y = player.yaw; animateQuad(hippo, player.speedNow * 0.4, dt); }
   pegasus.root.visible = false; ship.root.visible = false;
   if (player.swimming && !riding) { hero.armL.rotation.x = -2.6 + Math.sin(clock.elapsedTime * 4) * 0.6; hero.armR.rotation.x = -2.6 - Math.sin(clock.elapsedTime * 4) * 0.6; }
-  if (player.mounted) { horse.root.position.set(P.x, P.y, P.z); horse.root.rotation.y = player.yaw; animateQuad(horse, player.speedNow * 0.6, dt); }
+  if (player.mounted) {
+    horse.root.position.set(P.x, P.y, P.z); horse.root.rotation.y = player.yaw;
+    if (horse.horses) { for (const hh of horse.horses) animateQuad(hh, player.speedNow * 0.6, dt); for (const w of horse.wheels) w.rotation.x += player.speedNow * dt / 0.65; hero.root.position.set(P.x - Math.sin(player.yaw) * 1.3, P.y + 1.0, P.z - Math.cos(player.yaw) * 1.3); animateHumanoid(hero, 0, dt, { attack: player.atkAnim }); }
+    else animateQuad(horse, player.speedNow * 0.6, dt);
+  }
   // Rennen
   if (race) {
     race.t += dt;
@@ -2588,7 +3131,8 @@ function updatePlayer(dt) {
 }
 function updateSailing(dt, moving, sprint) {
   const P = player.pos, t = clock.elapsedTime;
-  player.shipSpeed = lerp(player.shipSpeed || 0, moving ? (sprint ? 32 : 22) : 0, Math.min(1, dt * 1.2));
+  const SS = SHIPS[player.shipTier || 2].speed;
+  player.shipSpeed = lerp(player.shipSpeed || 0, moving ? (sprint ? SS[1] : SS[0]) : 0, Math.min(1, dt * 1.2));
   if (moving) player.yaw = angLerp(player.yaw, Math.atan2(_mv.x, _mv.z), Math.min(1, dt * 1.8));
   const nx = P.x + Math.sin(player.yaw) * player.shipSpeed * dt, nz = P.z + Math.cos(player.yaw) * player.shipSpeed * dt;
   const fx = nx + Math.sin(player.yaw) * 7, fz = nz + Math.cos(player.yaw) * 7;
@@ -2713,20 +3257,24 @@ function updateHUD() {
   $('stFill').style.width = player.stamina + '%';
   $('money').textContent = player.money; $('potions').textContent = player.potions;
   const ab = [];
-  ab.push(player.mounted ? '[R] Absteigen' : '[R] Pferd');
+  ab.push(player.mounted ? '[R] Absteigen' : '[R] ' + HORSES[player.horse || 'gaul'].name);
+  if (NET.account && NET.account.admin) ab.push('[P] Admin');
   if (player.hasShip) ab.push(player.sailing ? '[B] Anlegen' : '[B] Schiff');
   if (player.gear.includes('pegasus')) { ab.push(player.flying ? '[T] Landen' : '[T] Pegasus'); ab.push(player.medCd > 0 ? 'Medusa: ' + Math.ceil(player.medCd) + ' s' : '[G] Medusenhaupt'); }
   if (player.relics.length) ab.push('Relikte ' + player.relics.length + '/6');
   if (player.blessed) ab.push(player.zapCd > 0 ? 'Blitz: ' + Math.ceil(player.zapCd) + ' s' : '[Q] Blitz des Zeus bereit');
   $('abilities').textContent = ab.join('  ·  ');
+  $('wanted').textContent = player.wanted ? 'GESUCHT  ' + '★'.repeat(player.wanted) + '☆'.repeat(5 - player.wanted) : '';
+  $('bountyText').textContent = S.bounty ? '☠ Kopfgeld: ' + S.bounty.name + ' – ' + S.bounty.reward + ' Drachmen' : '';
+  $('allyText').textContent = allies.length ? '⚔ Gefolge: ' + allies.map(a => a.def.name.split(' ').pop() + ' ' + Math.ceil(a.hp)).join(', ') : '';
   nearInter = dialog ? null : findInteractable();
   $('prompt').innerHTML = nearInter ? '<b>E</b>' + (typeof nearInter.label === 'function' ? nearInter.label() : nearInter.label) : '';
   // Ortsnamen
   let cur = null;
   for (const L of LOC_LIST) if (!L.hidden && Math.hypot(player.pos.x - L.x, player.pos.z - L.z) < L.r + 10) cur = L;
-  RUINS.forEach((r, i) => { if (Math.hypot(player.pos.x - r.x, player.pos.z - r.z) < 26) { cur = r; if (!S.found.includes(i)) { S.found.push(i); toast('Entdeckt: ' + r.name, 'gold'); } } });
+  RUINS.forEach((r, i) => { if (Math.hypot(player.pos.x - r.x, player.pos.z - r.z) < (r.discR || 26)) { cur = r; if (!S.found.includes(i)) { S.found.push(i); toast('Entdeckt: ' + r.name, 'gold'); } } });
   if (!curD) for (const d of DUNGEONS) if (Math.hypot(player.pos.x - d.at[0], player.pos.z - d.at[1]) < 22) { cur = d; if (!S.foundD.includes(d.idx)) { S.foundD.push(d.idx); toast('Entdeckt: ' + d.name, 'gold'); } }
-  if (cur && cur !== lastLoc) showLoc(cur.sub ? cur : { name: cur.name, sub: cur.chest && cur.chest.opened ? 'Geplündert' : cur.kind === 'old' ? 'Alte Ruinen – von Skeletten bewacht' : 'Vergessener Tempel – bewacht' });
+  if (cur && cur !== lastLoc) showLoc(cur.sub ? cur : { name: cur.name, sub: cur.chest && cur.chest.opened ? 'Geplündert' : cur.kind === 'forest' ? 'Mythenwald – Fabelwesen hüten einen Schatz' : cur.kind === 'old' ? 'Alte Ruinen – von Skeletten bewacht' : 'Vergessener Tempel – bewacht' });
   lastLoc = cur;
 }
 
@@ -2745,7 +3293,7 @@ function loop() {
     updatePlayer(dt);
     for (const e of enemies) updateEnemy(e, dt);
     updateNPCs(dt);
-    updateRemotes(dt); netSend(dt);
+    updateRemotes(dt); netSend(dt); updateAllies(dt); updateWanted(dt);
     updatePickups(dt, t);
     updateSky(dt);
     animateWorld(dt, t);
@@ -2787,13 +3335,20 @@ function startGame(fromSave) {
     for (const ch of CHESTS) if (S.chests.includes(ch.id)) markChestOpened(ch);
     for (const e of enemies) if ((e.ruin !== undefined && RUINS[e.ruin].chest.opened) || (e.key && (S.bossDead || []).includes(e.key))) { e.dead = true; e.respawn = 1e9; e.deadT = 99; e.m.root.visible = false; }
     S.bossDead = S.bossDead || []; S.foundD = S.foundD || []; player.gear = player.gear || [];
+    S.quiz = S.quiz || [];
+    player.horses = player.horses || ['gaul']; player.horse = player.horse || 'gaul';
+    if (player.hasShip && !player.shipTier) player.shipTier = 2;
+    for (const a of (sv.p.allies || [])) if (MERCS[a.type]) spawnAlly(a.type, a.hp);
+    delete player.allies;
+    if (S.bounty) spawnBounty();
     refreshHeroLook();
   } else {
-    try { localStorage.removeItem('hellas-save'); } catch (e) { }
+    try { localStorage.removeItem(saveKey()); } catch (e) { }
     player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]), SPOTS.respawn[1]);
   }
   if (!sv) S.towns = defaultTowns();
   if (mpEnabled()) setTimeout(() => { if (!NET.towns) syncTowns(); }, 6000); else syncTowns();
+  setHorseModel(); setShipModel();
   started = true;
   $('menu').classList.add('hidden'); $('hud').classList.remove('hidden');
   updateQuestText();
@@ -2813,7 +3368,7 @@ function init() {
   buildTerrain();
   buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
   buildIslands();
-  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons();
+  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildServices(); buildQuizNPCs();
   buildVegetation();
   finalizeStatic();
   buildClouds();
@@ -2834,7 +3389,7 @@ function init() {
   setupMenuNet();
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);

@@ -17,3 +17,8 @@ class_name = "Store"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["World", "Directory", "Store"]
+
+[vars]
+ADMIN_NAME = "Crim"
+# ADMIN_PW_HASH (SHA-256 des Admin-Passworts) wird als Secret gesetzt:
+#   npx wrangler secret put ADMIN_PW_HASH
