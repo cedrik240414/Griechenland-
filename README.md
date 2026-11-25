@@ -16,12 +16,17 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
 - **Kreta** – das Labyrinth des Minotauros
 - **8 vergessene Tempel** in der Wildnis, bewacht von Tempelwächtern – darin liegen Relikte der Helden
 - **Deine eigene Stadt** am Siedlungsplatz südwestlich von Athen
+- **Inseln der Ägäis**: Thera (Vulkaninsel), Seriphos (Insel der Medusa), die Sireneninsel und Ithaka – erreichbar per Fähre ab Piräus oder mit deinem **eigenen Schiff**
+- **Götter-Dungeons** mit Bossen: Unterwelt des Hades (Kerberos), Schmiede des Hephaistos (Talos), Grotte des Poseidon (Skylla), Hort der Medusa (Medusa) und die Höhle des Polyphem
+- **7 Höhlen** und **9 alte Ruinen** voller Beute, bewacht von Wölfen, Skeletten und Schatten
+- **Mythische Kreaturen**: Zentauren, Zyklopen, Harpyien, Tritonen, Schlangenkrieger, Feuergeister – und Chiron, der weise Kentaur
 
 ## Features
 
 - Hauptquest in 12 Etappen, Kampf mit Schild-Block, Pferd, Schwimmen, Tag-/Nachtzyklus
 - **Schatztruhen** in allen Tempeln: Drachmen, Ambrosia und 6 einzigartige Relikte
   (Schwert des Perseus, Helm des Achilles, Sandalen des Hermes, Amulett des Apollon, Schild der Athene, Gürtel des Herakles)
+- **Göttliche Belohnungen**: Klinge des Hephaistos, Helm des Hades, Dreizack des Poseidon + Hippokamp (Seepferd zum Reiten übers Meer), Pegasus (fliegen!) + Haupt der Medusa (Feinde versteinern)
 - **Tempelwachen** vor den Stadttempeln, feindliche **Tempelwächter** in den Ruinen
 - **Stadt gründen und ausbauen**: Siedlung → Dorf → Kleinstadt → Polis. Jede Stufe baut neue Gebäude,
   bringt neue Bewohner und mehr Steuereinnahmen, die du am Grenzstein einsammelst
@@ -41,5 +46,8 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
 | R | Pferd rufen / absteigen |
 | F | Ambrosia trinken |
 | Q | Blitz des Zeus (nach dem Segen) |
+| B | Eigenes Schiff rufen / anlegen |
+| T | Pegasus (Leertaste: steigen, C: sinken) |
+| G | Haupt der Medusa |
 | M | Weltkarte |
-| 1–4 | Antwort wählen |
+| 1–9 | Antwort wählen |

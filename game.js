@@ -38,12 +38,19 @@ const BLOBS = [
   { x: -350, z: 360, r: 330 },   // Peloponnes
   { x: -650, z: -300, r: 250 },  // Westen
   { x: 480, z: 660, r: 170 },    // Kreta
+  { x: 650, z: 255, r: 110 },    // Thera
+  { x: 620, z: -365, r: 115 },   // Seriphos
+  { x: 375, z: -222, r: 66 },    // Sireneninsel
+  { x: -875, z: 330, r: 95 },    // Ithaka
 ];
 const PEAKS = [
   { x: 100, z: -680, h: 175, s: 80 },  // Olymp
   { x: -480, z: -430, h: 80, s: 70 },  // Parnass
   { x: -400, z: 560, h: 60, s: 55 },   // Taygetos
   { x: 540, z: 620, h: 30, s: 45 },    // Ida (Kreta)
+  { x: 665, z: 235, h: 85, s: 30 },    // Vulkan von Thera
+  { x: 660, z: -400, h: 30, s: 40 },   // Seriphos
+  { x: -905, z: 300, h: 38, s: 35 },   // Ithaka
 ];
 const LOCS = {
   athen:     { name: 'Athen', sub: 'Stadt der Athene', x: 0, z: 0, r: 78, h: 6, city: true },
@@ -56,6 +63,15 @@ const LOCS = {
   banditen:  { name: 'Banditenlager', sub: 'Vorsicht, Wanderer', x: -120, z: 430, r: 26, h: null },
   olymp:     { name: 'Gipfel des Olymp', sub: 'Thron der Götter', x: 100, z: -680, r: 14, h: null },
   kreta:     { name: 'Knossos', sub: 'Insel Kreta', x: 460, z: 690, r: 62, h: 6, city: true },
+  thera:     { name: 'Thera', sub: 'Die Vulkaninsel', x: 590, z: 300, r: 26, h: null, city: true },
+  seriphos:  { name: 'Seriphos', sub: 'Insel der Medusa', x: 595, z: -330, r: 26, h: null, city: true },
+  sirenen:   { name: 'Sireneninsel', sub: 'Hüte dich vor ihrem Gesang', x: 372, z: -218, r: 16, h: null },
+  ithaka:    { name: 'Ithaka', sub: 'Heimat des Odysseus', x: -860, z: 340, r: 30, h: null, city: true },
+  hadesTor:  { name: 'Tor zur Unterwelt', sub: 'Reich des Hades', x: -330, z: 615, r: 9, h: null, hidden: true },
+  hephTor:   { name: 'Schmiede des Hephaistos', x: 640, z: 262, r: 8, h: null, hidden: true },
+  poseidonTor: { name: 'Grotte des Poseidon', x: 392, z: -238, r: 7, h: null, hidden: true },
+  medusaTor: { name: 'Hort der Medusa', x: 650, z: -395, r: 8, h: null, hidden: true },
+  polyphemTor: { name: 'Höhle des Polyphem', x: -905, z: 310, r: 8, h: null, hidden: true },
   heimat:    { name: 'Siedlungsplatz', sub: 'Gründe hier deine eigene Stadt', x: -120, z: 120, r: 45, h: null },
 };
 const LOC_LIST = Object.values(LOCS);
@@ -91,7 +107,7 @@ function rawHeight(x, z) {
   for (const p of PEAKS) { const d2 = (x - p.x) ** 2 + (z - p.z) ** 2; h += p.h * Math.exp(-d2 / (2 * p.s * p.s)); }
   return h;
 }
-for (const L of LOC_LIST) if (L.h === null) L.h = rawHeight(L.x, L.z);
+for (const L of LOC_LIST) if (L.h === null) L.h = Math.max(3, rawHeight(L.x, L.z));
 function shapedHeight(x, z) {
   let h = rawHeight(x, z);
   for (const L of LOC_LIST) {
@@ -302,8 +318,8 @@ class Frame {
     boxCol(Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[1])), top);
   }
   platform(lx, lz, w, d, top) {
-    const pts = [this.w(lx - w / 2, lz - d / 2), this.w(lx + w / 2, lz + d / 2)];
-    addPlatform(Math.min(pts[0][0], pts[1][0]), Math.max(pts[0][0], pts[1][0]), Math.min(pts[0][1], pts[1][1]), Math.max(pts[0][1], pts[1][1]), this.y + top);
+    const pts = [this.w(lx - w / 2, lz - d / 2), this.w(lx + w / 2, lz + d / 2), this.w(lx - w / 2, lz + d / 2), this.w(lx + w / 2, lz - d / 2)];
+    addPlatform(Math.min(...pts.map(q => q[0])), Math.max(...pts.map(q => q[0])), Math.min(...pts.map(q => q[1])), Math.max(...pts.map(q => q[1])), this.y + top);
   }
 }
 
@@ -451,7 +467,7 @@ const RELICS = {
 };
 function makeChestMesh(tier) {
   const g = new THREE.Group();
-  const wood = lam(tier === 2 ? 0x5a2e1a : 0x7a5230), trim = tier === 2 ? M.gold : M.bronze;
+  const wood = lam(tier === 3 ? 0xe8c46a : tier === 2 ? 0x5a2e1a : 0x7a5230, tier === 3 ? 0x4a3000 : 0), trim = tier >= 2 ? M.gold : M.bronze;
   const add = (geo, mat, x, y, z, p = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; p.add(m); return m; };
   add(new THREE.BoxGeometry(1.1, 0.6, 0.7), wood, 0, 0.3, 0);
   for (const x of [-0.42, 0.42]) add(new THREE.BoxGeometry(0.1, 0.62, 0.72), trim, x, 0.3, 0);
@@ -459,7 +475,7 @@ function makeChestMesh(tier) {
   add(new THREE.BoxGeometry(1.12, 0.24, 0.72), wood, 0, 0.12, 0.36, lid);
   for (const x of [-0.42, 0.42]) add(new THREE.BoxGeometry(0.1, 0.26, 0.74), trim, x, 0.12, 0.36, lid);
   add(new THREE.BoxGeometry(0.18, 0.2, 0.06), trim, 0, -0.05, 0.73, lid);
-  const glow = add(new THREE.TorusGeometry(0.95, 0.04, 6, 28), new THREE.MeshBasicMaterial({ color: tier === 2 ? 0xffd24a : 0xe8c46a, transparent: true, opacity: 0.8 }), 0, 0.05, 0);
+  const glow = add(new THREE.TorusGeometry(0.95, 0.04, 6, 28), new THREE.MeshBasicMaterial({ color: tier === 3 ? 0xffffff : tier === 2 ? 0xffd24a : 0xe8c46a, transparent: true, opacity: 0.8 }), 0, 0.05, 0);
   glow.rotation.x = Math.PI / 2; glow.castShadow = false;
   return { root: g, lid, glow };
 }
@@ -468,19 +484,24 @@ function addChest(x, y, z, rot, tier = 1, ruin) {
   m.root.position.set(x, y, z); m.root.rotation.y = rot; scene.add(m.root);
   const ch = { id: CHESTS.length, x, y, z, tier, m, opened: false, ruin };
   CHESTS.push(ch);
-  interactables.push({ pos: () => new V3(ch.x, ch.y, ch.z), label: tier === 2 ? 'Tempelschatz öffnen' : 'Opfertruhe öffnen', r: 2.6, active: () => !ch.opened, fn: () => tryOpenChest(ch) });
+  interactables.push({ pos: () => new V3(ch.x, ch.y, ch.z), label: tier === 3 ? 'Göttlichen Schatz öffnen' : tier === 2 ? 'Schatz öffnen' : 'Truhe öffnen', r: 2.6, active: () => !ch.opened, fn: () => tryOpenChest(ch) });
   return ch;
 }
 function markChestOpened(ch) { ch.opened = true; ch.m.lid.rotation.x = -1.9; ch.m.glow.visible = false; }
 function tryOpenChest(ch) {
   if (ch.opened) return;
+  if (ch.dungeon !== undefined) {
+    const boss = enemies.find(e => e.dungeon === ch.dungeon && e.def.boss && !e.dead);
+    if (boss) { toast('Besiege zuerst ' + boss.def.name + '!'); sfx('block'); return; }
+  }
   if (ch.ruin !== undefined) {
     const alive = enemies.filter(e => e.ruin === ch.ruin && !e.dead).length;
     if (alive) { toast('Die Tempelwächter bewachen den Schatz! (' + alive + ' übrig)'); sfx('block'); return; }
   }
   markChestOpened(ch); if (!S.chests.includes(ch.id)) S.chests.push(ch.id);
-  addMoney(Math.round(ch.tier === 2 ? rr(45, 95) : rr(12, 35)));
-  if (rand() < (ch.tier === 2 ? 0.75 : 0.35)) { const n = ch.tier === 2 ? 2 : 1; player.potions += n; toast('+' + n + ' Ambrosia', 'gold'); }
+  if (ch.tier === 3) { addMoney(Math.round(rr(150, 250))); const dd = DUNGEONS[ch.dungeon]; if (dd && dd.reward) gainGear(dd.reward); player.potions += 3; sfx('quest'); save(); return; }
+  addMoney(Math.round(ch.tier === 2 ? rr(45, 95) : ch.bonus ? rr(25, 60) : rr(12, 35)));
+  if (rand() < (ch.tier === 2 ? 0.75 : ch.bonus ? 0.6 : 0.35)) { const n = ch.tier === 2 ? 2 : 1; player.potions += n; toast('+' + n + ' Ambrosia', 'gold'); }
   if (ch.tier === 2) {
     const left = Object.keys(RELICS).filter(k => !player.relics.includes(k));
     if (left.length) gainRelic(pick(left)); else { addMoney(60); }
@@ -965,7 +986,7 @@ function buildClouds() {
 // ============================================================
 function makeHumanoid(o = {}) {
   const g = new THREE.Group();
-  const skin = lam(o.skin ?? 0xc98f5e), tunic = lam(o.tunic ?? 0xe8e0cc), belt = lam(o.belt ?? 0x5a3a1a);
+  const skin = lam(o.skin ?? 0xc98f5e, o.glow), tunic = lam(o.tunic ?? 0xe8e0cc), belt = lam(o.belt ?? 0x5a3a1a);
   const mesh = (geo, mat, x, y, z, parent = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
   const limb = (w, h, d, mat, x, y) => { const p = new THREE.Group(); p.position.set(x, y, 0); g.add(p); const m = mesh(new THREE.BoxGeometry(w, h, d), mat, 0, -h / 2, 0, p); return p; };
   const pants = lam(o.pants ?? 0x4a3a2a);
@@ -981,8 +1002,11 @@ function makeHumanoid(o = {}) {
   mesh(new THREE.SphereGeometry(0.19, 12, 10), skin, 0, 0, 0, head);
   mesh(new THREE.SphereGeometry(0.2, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), lam(o.hair ?? 0x2a1a0e), 0, 0.02, -0.02, head);
   if (o.beard) mesh(new THREE.BoxGeometry(0.26, 0.18, 0.12), lam(o.beardCol ?? o.hair ?? 0x2a1a0e), 0, -0.13, 0.12, head);
+  if (o.eyes) for (const sx of [-1, 1]) mesh(new THREE.BoxGeometry(0.06, 0.05, 0.03), lam(o.eyes, o.eyes), sx * 0.07, 0.03, 0.18, head);
+  if (o.cyclops) { mesh(new THREE.SphereGeometry(0.08, 10, 8), lam(0xffffff), 0, 0.04, 0.16, head); mesh(new THREE.SphereGeometry(0.04, 8, 6), lam(0x101010), 0, 0.04, 0.23, head); }
+  if (o.snakes) for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; const sn = mesh(new THREE.ConeGeometry(0.035, 0.3, 5), lam(0x3a7a2a), Math.cos(a) * 0.17, 0.12, Math.sin(a) * 0.17 - 0.02, head); sn.rotation.z = -Math.cos(a) * 1.0; sn.rotation.x = Math.sin(a) * 1.0; }
   if (o.helmet) {
-    mesh(new THREE.SphereGeometry(0.23, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), M.bronze, 0, 0.0, 0, head);
+    mesh(new THREE.SphereGeometry(0.23, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), o.helmetCol ? lam(o.helmetCol) : M.bronze, 0, 0.0, 0, head);
     mesh(new THREE.BoxGeometry(0.06, 0.24, 0.52), lam(o.crest ?? 0xa01818), 0, 0.27, -0.02, head);
     for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.05, 0.2, 0.16), M.bronze, s * 0.18, -0.1, 0.08, head);
   }
@@ -1001,6 +1025,9 @@ function makeHumanoid(o = {}) {
   if (o.weapon === 'sword') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); mesh(new THREE.BoxGeometry(0.07, 0.04, 0.85), lam(0xd8d8d0), 0, 0, 0.5, weapon); mesh(new THREE.BoxGeometry(0.28, 0.05, 0.06), M.bronze, 0, 0, 0.08, weapon); }
   if (o.weapon === 'spear') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.6, 6), M.wood, 0, 0, 0.6, weapon).rotation.x = Math.PI / 2; mesh(new THREE.ConeGeometry(0.07, 0.3, 6), lam(0xd8d8d0), 0, 0, 2.0, weapon).rotation.x = Math.PI / 2; }
   if (o.weapon === 'axe') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), M.wood, 0, 0, 0.5, weapon).rotation.x = Math.PI / 2; for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.04, 0.42, 0.3), lam(0x9a9a9a), 0, s * 0.2, 1.05, weapon); }
+  if (o.weapon === 'fireSword') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); mesh(new THREE.BoxGeometry(0.1, 0.05, 1.15), lam(0xff8a30, 0xff4a00), 0, 0, 0.65, weapon); mesh(new THREE.BoxGeometry(0.34, 0.06, 0.08), M.gold, 0, 0, 0.08, weapon); }
+  if (o.weapon === 'trident') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6), lam(0x2a8a8a), 0, 0, 0.6, weapon).rotation.x = Math.PI / 2; for (const sx of [-0.12, 0, 0.12]) mesh(new THREE.ConeGeometry(0.04, 0.4, 5), M.gold, sx, 0, 2.05, weapon).rotation.x = Math.PI / 2; mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05), M.gold, 0, 0, 1.85, weapon); }
+  if (o.weapon === 'club') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.16, 0.06, 1.3, 7), M.darkwood, 0, 0, 0.55, weapon).rotation.x = Math.PI / 2; }
   if (o.weapon === 'staff') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.9, 6), M.darkwood, 0, 0.3, 0.05, weapon); }
   if (o.scale) g.scale.setScalar(o.scale);
   return { root: g, legL, legR, armL, armR, head, weapon, shield, phase: rand() * 6 };
@@ -1017,29 +1044,35 @@ function animateHumanoid(h, speed, dt, opt = {}) {
   else h.armR.rotation.x = opt.sitting ? -0.6 : s * 0.8 - (h.weapon ? 0.25 : 0);
   if (opt.idleTalk) h.armR.rotation.x = -0.6 + Math.sin(performance.now() / 300) * 0.25;
 }
-function makeWolf(col = 0x6e6a64) {
+function makeWolf(col = 0x6e6a64, heads = 1) {
   const g = new THREE.Group(), m = lam(col), d = lam(0x3c3a36);
   const add = (geo, mat, x, y, z, p = g) => { const mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); mm.castShadow = true; p.add(mm); return mm; };
   add(new THREE.BoxGeometry(0.5, 0.5, 1.25), m, 0, 0.8, 0);
   add(new THREE.BoxGeometry(0.55, 0.58, 0.5), m, 0, 0.88, 0.42);
-  const head = new THREE.Group(); head.position.set(0, 1.0, 0.78); g.add(head);
-  add(new THREE.BoxGeometry(0.36, 0.34, 0.38), m, 0, 0, 0, head);
-  add(new THREE.BoxGeometry(0.2, 0.17, 0.32), d, 0, -0.07, 0.32, head);
-  for (const s of [-1, 1]) add(new THREE.ConeGeometry(0.07, 0.18, 4), d, s * 0.12, 0.24, -0.05, head);
-  for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.035, 6, 4), lam(0xffd040, 0x806000), s * 0.1, 0.05, 0.19, head);
+  const headsArr = [];
+  for (let hi = 0; hi < heads; hi++) {
+    const off = heads === 1 ? 0 : (hi - 1) * 0.34;
+    const head = new THREE.Group(); head.position.set(off, 1.0, 0.78 - Math.abs(off) * 0.3); head.rotation.y = -off * 0.8; g.add(head);
+    add(new THREE.BoxGeometry(0.36, 0.34, 0.38), m, 0, 0, 0, head);
+    add(new THREE.BoxGeometry(0.2, 0.17, 0.32), d, 0, -0.07, 0.32, head);
+    for (const s of [-1, 1]) add(new THREE.ConeGeometry(0.07, 0.18, 4), d, s * 0.12, 0.24, -0.05, head);
+    for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.035, 6, 4), heads > 1 ? lam(0xff3010, 0xff2000) : lam(0xffd040, 0x806000), s * 0.1, 0.05, 0.19, head);
+    headsArr.push(head);
+  }
+  const head = headsArr[heads === 1 ? 0 : 1];
   const tail = add(new THREE.BoxGeometry(0.12, 0.12, 0.6), m, 0, 0.9, -0.85); tail.rotation.x = 0.6;
   const legs = [];
   for (const [x, z] of [[-0.17, 0.45], [0.17, 0.45], [-0.17, -0.45], [0.17, -0.45]]) { const p = new THREE.Group(); p.position.set(x, 0.6, z); g.add(p); add(new THREE.BoxGeometry(0.13, 0.6, 0.13), m, 0, -0.3, 0, p); legs.push(p); }
-  return { root: g, legs, head, tail, phase: 0 };
+  return { root: g, legs, head, heads: headsArr, tail, phase: 0 };
 }
-function makeHorse() {
-  const g = new THREE.Group(), m = lam(0x6b4325), d = lam(0x2a1a10);
+function makeHorse(col = 0x6b4325, saddle = true) {
+  const g = new THREE.Group(), m = lam(col), d = lam(col === 0x6b4325 ? 0x2a1a10 : 0xd8d0c0);
   const add = (geo, mat, x, y, z, p = g) => { const mm = new THREE.Mesh(geo, mat); mm.position.set(x, y, z); mm.castShadow = true; p.add(mm); return mm; };
   add(new THREE.BoxGeometry(0.75, 0.75, 1.9), m, 0, 1.4, 0);
   const neck = add(new THREE.BoxGeometry(0.38, 0.95, 0.45), m, 0, 2.0, 0.9); neck.rotation.x = 0.55;
   add(new THREE.BoxGeometry(0.34, 0.36, 0.72), m, 0, 2.38, 1.38);
   add(new THREE.BoxGeometry(0.1, 0.7, 0.5), d, 0, 2.2, 0.9).rotation.x = 0.55;
-  add(new THREE.BoxGeometry(0.8, 0.12, 0.8), M.red, 0, 1.82, -0.05);
+  if (saddle) add(new THREE.BoxGeometry(0.8, 0.12, 0.8), M.red, 0, 1.82, -0.05);
   const tail = add(new THREE.BoxGeometry(0.15, 0.8, 0.15), d, 0, 1.3, -1.05); tail.rotation.x = 0.35;
   const legs = [];
   for (const [x, z] of [[-0.25, 0.75], [0.25, 0.75], [-0.25, -0.75], [0.25, -0.75]]) { const p = new THREE.Group(); p.position.set(x, 1.1, z); g.add(p); add(new THREE.BoxGeometry(0.16, 1.1, 0.16), m, 0, -0.55, 0, p); add(new THREE.BoxGeometry(0.18, 0.12, 0.2), d, 0, -1.06, 0.01, p); legs.push(p); }
@@ -1058,9 +1091,9 @@ function animateQuad(q, speed, dt, k = 2.2) {
 const player = {
   pos: new V3(0, 10, 26), vy: 0, yaw: Math.PI, onGround: false, hp: 100, maxHp: 100, stamina: 100,
   money: 20, potions: 1, dmg: 14, blessed: false, mounted: false, blocking: false, atkCd: 0, atkAnim: 0,
-  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [],
+  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [], gear: [], hasShip: false, chiron: false, flying: false, sailing: false, stoned: 0, medCd: 0,
 };
-const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], town: { lvl: 0, name: '', treasury: 0 } };
+const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], town: { lvl: 0, name: '', treasury: 0 }, bossDead: [], foundD: [] };
 let hero, horse;
 const npcs = [], enemies = [], pickups = [], floaters = [], bolts = [];
 let race = null, dialog = null, started = false, paused = false, mapOpen = false;
@@ -1145,6 +1178,7 @@ const STAGES = [
 function setStage(s) { S.stage = s; $('questText').textContent = STAGES[s](); sfx('quest'); if (s === 1) spawnOlives(); save(); }
 function updateQuestText() { $('questText').textContent = STAGES[S.stage](); }
 function questTarget() {
+  if (curD) return null;
   const nearestOf = (arr) => { let b = null, bd = 1e9; for (const a of arr) { const d = Math.hypot(a.x - player.pos.x, a.z - player.pos.z); if (d < bd) { bd = d; b = a; } } return b; };
   switch (S.stage) {
     case 0: case 2: case 11: return { x: SPOTS.agora[0], z: SPOTS.agora[1] };
@@ -1167,7 +1201,8 @@ function questTarget() {
 // ---------- Speichern ----------
 function save() {
   try {
-    localStorage.setItem('hellas-save', JSON.stringify({ S, p: { x: player.pos.x, z: player.pos.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics } }));
+    const sp = curD ? { x: curD.out[0], z: curD.out[1] } : player.pos;
+    localStorage.setItem('hellas-save', JSON.stringify({ S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron } }));
   } catch (e) { /* ignorieren */ }
 }
 function loadSave() { try { const s = localStorage.getItem('hellas-save'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
@@ -1185,7 +1220,7 @@ const VILLAGER_LINES = [
   'Ich hätte gern ein Pferd wie deins. Pfeif einfach, und es kommt.',
 ];
 function addNPC(name, x, z, look, talkFn, wander = 0) {
-  const h = makeHumanoid(look);
+  const h = look.model || makeHumanoid(look);
   h.root.position.set(x, groundAt(x, z), z);
   scene.add(h.root);
   const n = { name, h, x, z, home: [x, z], wander, tx: x, tz: z, wt: rr(1, 5), talkFn, yaw: rand() * 6.28, talking: 0 };
@@ -1202,8 +1237,8 @@ function buildNPCs() {
   addNPC('Pythia, das Orakel', SPOTS.pythia[0], SPOTS.pythia[1], { tunic: 0xf4f0e6, veil: 0xf4f0e6, skin: 0xe0b08a, wreath: true }, talkPythia);
   addNPC('Leonidas', SPOTS.leonidas[0], SPOTS.leonidas[1], { tunic: 0x8e1717, armor: 0xb98d3a, helmet: true, crest: 0xa01818, beard: true, shield: true, shieldEmblem: 0x8a1a1a, weapon: 'spear', cape: 0x8e1717, greaves: true, pants: 0x4a1414, scale: 1.08 }, talkLeonidas);
   addNPC('Kampfrichter', SPOTS.judge[0], SPOTS.judge[1], { tunic: 0x3a5a9a, beard: true, hair: 0x6a5a4a, wreath: true, weapon: 'staff' }, talkJudge);
-  if (piraeusDock) addNPC('Fährmann Nikias', piraeusDock.boatman[0], piraeusDock.boatman[1], { tunic: 0x6a5a3a, beard: true, hair: 0x3a2a1a }, () => talkFerry(true));
-  if (kretaDock) addNPC('Fährmann Minos', kretaDock.boatman[0], kretaDock.boatman[1], { tunic: 0xa8302a, beard: true }, () => talkFerry(false));
+  if (piraeusDock) addNPC('Fährmann Nikias', piraeusDock.boatman[0], piraeusDock.boatman[1], { tunic: 0x6a5a3a, beard: true, hair: 0x3a2a1a }, () => talkFerry('piraeus'));
+  if (kretaDock) addNPC('Fährmann Minos', kretaDock.boatman[0], kretaDock.boatman[1], { tunic: 0xa8302a, beard: true }, () => talkFerry('kreta'));
   const tunics = [0xe8e0cc, 0x9b3b2b, 0x3a5a8a, 0x7a6a3a, 0xcfc4a8, 0x5a7a4a, 0xb08a5a];
   for (const [key, n] of [['athen', 9], ['sparta', 4], ['delphi', 3], ['piraeus', 4], ['olympia', 4], ['theben', 4], ['kreta', 3]]) {
     const L = LOCS[key];
@@ -1291,13 +1326,6 @@ function startRace() {
   player.stamina = 100;
   toast('Los! Lauf zum Ziel am Ostende!', 'gold'); sfx('quest');
 }
-function talkFerry(fromPiraeus) {
-  const W = fromPiraeus ? 'Fährmann Nikias' : 'Fährmann Minos';
-  talk([{ who: W, text: fromPiraeus ? 'Mein Schiff fährt nach Kreta, zur Insel des Königs Minos. Die Überfahrt kostet 10 Drachmen.' : 'Zurück zum Festland, nach Piräus? 10 Drachmen.', opts: [
-    { label: 'Segeln (10 Drachmen)', fn: () => { if (spend(10)) fadeTo(() => { const d = fromPiraeus ? kretaDock : piraeusDock; if (player.mounted) dismount(); player.pos.set(d.land[0], groundAt(d.land[0], d.land[1]) + 0.5, d.land[1]); player.vy = 0; camYaw = d.rot + Math.PI; toast(fromPiraeus ? 'Du erreichst Kreta.' : 'Du erreichst Piräus.'); }); } },
-    { label: 'Nein danke.', fn: () => { } },
-  ] }]);
-}
 function prayShrine() {
   if (S.stage === 9) talk([
     { who: 'Stimme des Zeus', text: 'STERBLICHER. Du hast den Gipfel erklommen, den nur Götter betreten.' },
@@ -1323,16 +1351,41 @@ const EDEF = {
   wolf: { hp: 38, dmg: 7, speed: 9.5, range: 1.9, aggro: 26, cd: 1.2, name: 'Wolf', money: [0, 3], r: 0.6 },
   bandit: { hp: 65, dmg: 11, speed: 6.5, range: 2.1, aggro: 24, cd: 1.4, name: 'Bandit', money: [6, 16], r: 0.5 },
   guard: { hp: 110, dmg: 14, speed: 6.2, range: 2.6, aggro: 22, cd: 1.5, name: 'Tempelwächter', money: [12, 25], r: 0.5 },
-  minotaur: { hp: 650, dmg: 26, speed: 6.5, range: 3.6, aggro: 21, cd: 1.8, name: 'Minotauros', money: [150, 150], r: 1.0 },
+  minotaur: { hp: 650, dmg: 26, speed: 6.5, range: 3.6, aggro: 21, cd: 1.8, name: 'Minotauros', money: [150, 150], r: 1.0, hitR: 1.4, top: 4.4, charge: true, bossLike: true },
+  skelett: { hp: 55, dmg: 10, speed: 6.5, range: 2.1, aggro: 22, cd: 1.3, name: 'Skelettkrieger', money: [3, 10], r: 0.45 },
+  schatten: { hp: 50, dmg: 13, speed: 8.5, range: 2.0, aggro: 24, cd: 1.1, name: 'Schatten', money: [4, 12], r: 0.45 },
+  feuergeist: { hp: 70, dmg: 14, speed: 7, range: 2.1, aggro: 24, cd: 1.3, name: 'Feuergeist', money: [5, 14], r: 0.45 },
+  triton: { hp: 80, dmg: 13, speed: 6.5, range: 2.7, aggro: 24, cd: 1.4, name: 'Triton', money: [6, 14], r: 0.5 },
+  schlangenkrieger: { hp: 75, dmg: 13, speed: 7, range: 2.2, aggro: 24, cd: 1.3, name: 'Schlangenkrieger', money: [6, 14], r: 0.5 },
+  zentaur: { hp: 110, dmg: 15, speed: 11, range: 2.7, aggro: 28, cd: 1.4, name: 'Wilder Zentaur', money: [10, 25], r: 0.9, hitR: 0.8, top: 3.1 },
+  harpyie: { hp: 45, dmg: 9, speed: 10, range: 2.4, aggro: 26, cd: 1.3, name: 'Harpyie', money: [3, 9], r: 0.5, fly: true, top: 4.2 },
+  zyklop: { hp: 420, dmg: 26, speed: 5.5, range: 3.8, aggro: 24, cd: 2.0, name: 'Zyklop', money: [60, 90], r: 1.1, hitR: 1.6, top: 5.4, charge: true },
+  kerberos: { hp: 1100, dmg: 30, speed: 8, range: 3.9, aggro: 30, cd: 1.6, name: 'Kerberos', money: [250, 250], r: 1.6, hitR: 2.2, top: 4.6, charge: true, boss: true },
+  talos: { hp: 1400, dmg: 36, speed: 5.5, range: 4.3, aggro: 30, cd: 2.0, name: 'Talos, der Bronzeriese', money: [300, 300], r: 1.4, hitR: 2.0, top: 6.6, charge: true, boss: true },
+  skylla: { hp: 1200, dmg: 28, speed: 2.5, range: 6.5, aggro: 32, cd: 1.3, name: 'Skylla', money: [280, 280], r: 2.4, hitR: 2.8, top: 6.6, boss: true },
+  medusa: { hp: 950, dmg: 24, speed: 6, range: 2.6, aggro: 30, cd: 1.4, name: 'Medusa', money: [260, 260], r: 0.6, hitR: 0.6, top: 2.8, boss: true, gaze: true },
 };
-function spawnEnemy(type, x, z) {
+function spawnEnemy(type, x, z, over) {
   let model;
   if (type === 'wolf') model = makeWolf(pick([0x6e6a64, 0x5a5550, 0x7d7468]));
   else if (type === 'bandit') model = makeHumanoid({ tunic: pick([0x3a2a1a, 0x4a3a2a, 0x2a2a2a]), hair: 0x1a1008, beard: true, weapon: 'sword', armor: 0x5a4a3a, veil: 0x3a2a1a });
   else if (type === 'guard') model = makeHumanoid({ tunic: 0x2a2a3a, armor: 0x8a7a5a, helmet: true, crest: 0x2a2a2a, shield: true, shieldCol: 0x6a5a3a, shieldEmblem: 0x2a2a2a, weapon: 'spear', greaves: true, pants: 0x1e1e26, scale: 1.12 });
+  else if (type === 'skelett') model = makeHumanoid({ skin: 0xe6dfc8, tunic: 0xd8d0b8, pants: 0xcfc6ac, hair: 0xe6dfc8, belt: 0x6a5a4a, weapon: 'sword', eyes: 0x101010, shield: rand() < 0.5, shieldCol: 0x6a5a4a });
+  else if (type === 'schatten') model = makeHumanoid({ skin: 0x1a1a26, tunic: 0x14141c, pants: 0x101018, hair: 0x0a0a10, veil: 0x14141c, weapon: 'sword', eyes: 0x60ffd0 });
+  else if (type === 'feuergeist') model = makeHumanoid({ skin: 0xff6a20, glow: 0xb02a00, tunic: 0x3a1a10, pants: 0x2a1008, hair: 0xffb040, weapon: 'fireSword', eyes: 0xffff80 });
+  else if (type === 'triton') model = makeHumanoid({ skin: 0x4a8a8a, tunic: 0x2a5a6a, pants: 0x1a4a5a, hair: 0x1a3a3a, beard: true, weapon: 'trident' });
+  else if (type === 'schlangenkrieger') model = makeHumanoid({ skin: 0x6a8a4a, armor: 0x4a5a3a, tunic: 0x3a4a2a, pants: 0x2a3a1a, helmet: true, crest: 0x2a4a1a, weapon: 'sword', shield: true, shieldCol: 0x4a5a3a, eyes: 0xffd000 });
+  else if (type === 'zentaur') model = makeCentaur({ tunic: 0x5a3a2a, hair: 0x2a1a0e, beard: true, weapon: 'spear', body: pick([0x5a3a22, 0x7a5230, 0x3a2a1a]) });
+  else if (type === 'harpyie') model = makeHarpy();
+  else if (type === 'zyklop') model = makeHumanoid({ skin: 0x9a8a6a, tunic: 0x5a4a3a, pants: 0x4a3a2a, hair: 0x3a2a1a, cyclops: true, beard: true, weapon: 'club', scale: 2.4 });
+  else if (type === 'kerberos') { model = makeWolf(0x1e1818, 3); model.root.scale.setScalar(3.2); }
+  else if (type === 'talos') model = makeHumanoid({ skin: 0xb98d3a, tunic: 0xa07a30, pants: 0x8a6a2a, armor: 0xc99a42, hair: 0xb98d3a, helmet: true, crest: 0xb98d3a, weapon: 'sword', eyes: 0xff6a20, scale: 2.8 });
+  else if (type === 'skylla') model = makeSkylla();
+  else if (type === 'medusa') model = makeHumanoid({ skin: 0x7aa06a, tunic: 0x4a2a5a, pants: 0x3a2a4a, hair: 0x2a5a1a, snakes: true, eyes: 0xffee40, weapon: 'sword', scale: 1.1 });
   else model = makeHumanoid({ skin: 0x5a3b25, tunic: 0x2a1a10, belt: 0xb98d3a, weapon: 'axe', bull: true, scale: 1.75, hair: 0x2a1a10 });
   scene.add(model.root);
-  const e = { type, def: EDEF[type], m: model, x, z, home: [x, z], hp: EDEF[type].hp, maxHp: EDEF[type].hp, state: 'idle', cd: 0, wind: 0, wt: rr(0, 4), tx: x, tz: z, yaw: rand() * 6.28, dead: false, respawn: 0, flashT: 0, atkAnim: 0, chargeT: 0, chargeCd: 4, speedNow: 0, y: groundAt(x, z), deadT: 0 };
+  const def = over ? Object.assign({}, EDEF[type], over) : EDEF[type];
+  const e = { type, def, m: model, baseScale: model.root.scale.x, x, z, home: [x, z], hp: def.hp, maxHp: def.hp, state: 'idle', cd: 0, wind: 0, wt: rr(0, 4), tx: x, tz: z, yaw: rand() * 6.28, dead: false, respawn: 0, flashT: 0, atkAnim: 0, chargeT: 0, chargeCd: 4, speedNow: 0, y: groundAt(x, z), deadT: 0 };
   model.root.position.set(x, e.y, z);
   enemies.push(e);
   return e;
@@ -1346,7 +1399,7 @@ function buildEnemies() {
   for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; spawnEnemy('bandit', B.x + Math.cos(a) * 6, B.z + Math.sin(a) * 6); }
   for (const [x, z] of [[-320, 75], [-300, 90], [-100, 255], [-85, 262], [-480, 270]]) spawnEnemy('bandit', x, z);
   spawnEnemy('minotaur', SPOTS.mazeCenter[0], SPOTS.mazeCenter[1]);
-  RUINS.forEach((r, i) => { for (const [gx, gz] of r.guards) { const e = spawnEnemy('guard', gx, gz); e.ruin = i; } });
+  RUINS.forEach((r, i) => { for (const [gx, gz] of r.guards) { const e = spawnEnemy(r.kind === 'old' ? 'skelett' : 'guard', gx, gz); e.ruin = i; } });
 }
 function hurtPlayer(dmg, from) {
   if (player.dead) return;
@@ -1357,6 +1410,7 @@ function hurtPlayer(dmg, from) {
   }
   if (player.hasArmor) dmg *= 0.85;
   if (player.relics.includes('achilles')) dmg *= 0.8;
+  if (player.gear.includes('hadeshelm')) dmg *= 0.7;
   dmg = Math.round(dmg);
   player.hp -= dmg; player.lastHurt = clock.elapsedTime;
   $('damageFlash').style.opacity = 1; setTimeout(() => $('damageFlash').style.opacity = 0, 120);
@@ -1369,6 +1423,7 @@ function die() {
   banner('Du bist gefallen', 'Hermes geleitet dich zurück nach Athen …');
   setTimeout(() => fadeTo(() => {
     const lost = Math.floor(player.money * 0.2); player.money -= lost;
+    curD = null; player.flying = false; player.sailing = false; player.stoned = 0;
     player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]) + 0.5, SPOTS.respawn[1]);
     player.hp = player.maxHp; player.dead = false; player.vy = 0;
     for (const e of enemies) if (!e.dead) { e.state = 'idle'; e.hp = e.maxHp; }
@@ -1377,7 +1432,7 @@ function die() {
 }
 function damageEnemy(e, dmg, crit = false) {
   e.hp -= dmg; e.flashT = 0.15; e.state = 'chase';
-  floatText(e.x, e.y + (e.type === 'minotaur' ? 4.2 : e.type === 'wolf' ? 1.7 : 2.4), e.z, String(Math.round(dmg)) + (crit ? '!' : ''), crit ? '#ffd24a' : '#ffffff', crit);
+  floatText(e.x, e.y + (e.def.top || (e.type === 'wolf' ? 1.7 : 2.4)), e.z, String(Math.round(dmg)) + (crit ? '!' : ''), crit ? '#ffd24a' : '#ffffff', crit);
   sfx('hit');
   if (e.hp <= 0) killEnemy(e);
 }
@@ -1388,6 +1443,7 @@ function killEnemy(e) {
   if (e.type === 'wolf' && S.stage === 4) { S.wolves++; updateQuestText(); if (S.wolves >= 5) { toast('Genug Wölfe besiegt! Zurück zur Pythia.', 'gold'); setStage(5); } }
   if (e.type === 'bandit' && S.stage === 7 && Math.hypot(e.home[0] - LOCS.banditen.x, e.home[1] - LOCS.banditen.z) < 40) { S.bandits++; updateQuestText(); if (S.bandits >= 4) { toast('Das Lager ist befreit! Zurück zu Leonidas.', 'gold'); setStage(8); } }
   if (e.type === 'minotaur') { banner('DER MINOTAUROS IST BESIEGT', 'Kehre nach Athen zurück, Held!'); if (S.stage === 10) setStage(11); S.minoDead = true; save(); }
+  if (e.def.boss && e.key) { banner(e.def.name + ' ist besiegt!', 'Öffne den Schatz am Ende der Halle.'); if (!S.bossDead.includes(e.key)) S.bossDead.push(e.key); sfx('quest'); save(); }
 }
 function updateEnemy(e, dt) {
   const P = player.pos;
@@ -1406,23 +1462,36 @@ function updateEnemy(e, dt) {
   const D = e.def;
   let mvx = 0, mvz = 0, spd = 0;
   e.cd -= dt; e.atkAnim = Math.max(0, e.atkAnim - dt * 2.5);
+  if (e.stoned > 0) { e.stoned -= dt; e.state = 'chase'; e.m.root.position.set(e.x, e.y, e.z); return; }
   if (e.state === 'idle') {
     e.wt -= dt;
-    if (e.wt <= 0) { e.wt = rr(3, 8); const a = rand() * 6.28, r = rand() * (e.type === 'minotaur' ? 5 : 14); e.tx = e.home[0] + Math.cos(a) * r; e.tz = e.home[1] + Math.sin(a) * r; }
+    if (e.wt <= 0) { e.wt = rr(3, 8); const a = rand() * 6.28, r = rand() * (D.charge || D.boss ? 5 : 14); e.tx = e.home[0] + Math.cos(a) * r; e.tz = e.home[1] + Math.sin(a) * r; }
     const tx = e.tx - e.x, tz = e.tz - e.z, td = Math.hypot(tx, tz);
     if (td > 0.8) { mvx = tx / td; mvz = tz / td; spd = D.speed * 0.3; }
     const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
-    if (d < D.aggro && !player.dead && !(player.swimming && e.type !== 'minotaur') && homeD < 90) e.state = 'chase';
+    if (d < D.aggro && !player.dead && !player.flying && !player.sailing && !(player.swimming && !D.fly) && homeD < 90 && Math.abs(P.y - e.y) < 12) e.state = 'chase';
   } else if (e.state === 'chase') {
     const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
-    if (player.dead || d > D.aggro * 2.5 || homeD > (e.type === 'minotaur' ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
+    if (player.dead || player.flying || player.sailing || d > D.aggro * 2.5 || homeD > (D.boss ? 40 : D.charge ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
     else {
-      if (e.type === 'minotaur') {
+      if (D.charge) {
         e.chargeCd -= dt;
         if (e.chargeT > 0) { e.chargeT -= dt; mvx = Math.sin(e.yaw); mvz = Math.cos(e.yaw); spd = 17; if (d < 2.6 && !e.chargeHit) { e.chargeHit = true; hurtPlayer(D.dmg * 1.2, e); player.knock = { x: mvx * 18, z: mvz * 18, t: 0.25 }; } }
-        else if (e.chargeCd <= 0 && d > 7 && d < 20) { e.chargeT = 1.0; e.chargeCd = 6; e.chargeHit = false; e.yaw = Math.atan2(dx, dz); floatText(e.x, e.y + 4.5, e.z, 'BRÜLL!', '#ff7050', true); }
+        else if (e.chargeCd <= 0 && d > 7 && d < 20) { e.chargeT = 1.0; e.chargeCd = 6; e.chargeHit = false; e.yaw = Math.atan2(dx, dz); floatText(e.x, e.y + (D.top || 4) + 0.3, e.z, 'BRÜLL!', '#ff7050', true); }
       }
-      if (e.chargeT <= 0) {
+      if (D.gaze) {
+        e.gazeCd = (e.gazeCd ?? 5) - dt;
+        if (e.gazeT > 0) {
+          e.gazeT -= dt;
+          if (e.gazeT <= 0) {
+            const cf = new V3(); camera.getWorldDirection(cf);
+            const tv = new V3(e.x - camera.position.x, e.y + 2 - camera.position.y, e.z - camera.position.z).normalize();
+            if (cf.dot(tv) > 0.5) { player.stoned = 2.5; hurtPlayer(14, e); floatText(P.x, P.y + 2.6, P.z, 'Versteinert!', '#c8c8c0', true); }
+            else floatText(P.x, P.y + 2.6, P.z, 'Ausgewichen!', '#b0ff60');
+          }
+        } else if (e.gazeCd <= 0 && d < 28) { e.gazeCd = 7; e.gazeT = 1.4; floatText(e.x, e.y + 3.4, e.z, 'SCHAU WEG!', '#b0ff60', true); }
+      }
+      if (e.chargeT <= 0 && !(e.gazeT > 0)) {
         e.yaw = angLerp(e.yaw, Math.atan2(dx, dz), Math.min(1, dt * 8));
         if (d > D.range * 0.85) { mvx = dx / d; mvz = dz / d; spd = D.speed; }
         else if (e.cd <= 0 && e.wind <= 0) { e.wind = 0.42; e.atkAnim = 1; }
@@ -1433,35 +1502,38 @@ function updateEnemy(e, dt) {
   if (spd > 0) {
     const ox = e.x, oz = e.z;
     const nx = e.x + mvx * spd * dt, nz = e.z + mvz * spd * dt;
-    if (heightAt(nx, nz) > -0.6) {
+    if (D.fly || groundAt(nx, nz) > -0.6) {
       const p = { x: nx, z: nz }; resolveCollisions(p, D.r); e.x = p.x; e.z = p.z;
-      // Feind nicht in andere Feinde schieben
     }
     if (e.state === 'idle') e.yaw = angLerp(e.yaw, Math.atan2(mvx, mvz), Math.min(1, dt * 5));
     e.speedNow = Math.hypot(e.x - ox, e.z - oz) / dt;
   } else e.speedNow = 0;
-  e.y = groundAt(e.x, e.z);
+  e.y = Math.max(groundAt(e.x, e.z), D.fly ? 0 : -99) + (D.fly ? 2.2 + Math.sin(clock.elapsedTime * 2 + e.x) * 0.4 - (e.wind > 0 ? 1.2 : 0) : 0);
   const r = e.m.root; r.position.set(e.x, e.y, e.z); r.rotation.y = e.yaw;
   const fs = e.flashT > 0 ? 1.12 : 1; e.flashT -= dt;
-  const base = e.type === 'minotaur' ? 1.75 : e.type === 'guard' ? 1.12 : 1; r.scale.setScalar(base * fs);
-  if (e.type === 'wolf') { animateQuad(e.m, e.speedNow, dt); e.m.head.rotation.x = e.atkAnim > 0 ? -Math.sin(e.atkAnim * Math.PI) * 0.6 : 0; }
-  else animateHumanoid(e.m, e.speedNow, dt, { attack: e.atkAnim });
+  r.scale.setScalar(e.baseScale * fs);
+  const m = e.m, t = clock.elapsedTime;
+  if (m.centaur) { animateQuad(m, e.speedNow, dt); if (e.atkAnim > 0) { const k = 1 - e.atkAnim; m.armR.rotation.x = k < 0.35 ? lerp(-0.3, -2.7, k / 0.35) : lerp(-2.7, -0.4, (k - 0.35) / 0.65); } else m.armR.rotation.x = -0.5; }
+  else if (m.wings) { const f = Math.sin(t * 12 + e.x) * 0.7; m.wings[0].rotation.z = f; m.wings[1].rotation.z = -f; }
+  else if (m.necks) m.necks.forEach((n, i) => { n.rotation.x = Math.sin(t * 1.5 + i) * 0.25 + (e.atkAnim > 0 ? Math.sin(e.atkAnim * Math.PI) * 0.9 : 0); n.rotation.z = Math.cos(t * 1.2 + i * 2) * 0.2; });
+  else if (m.legs) { animateQuad(m, e.speedNow, dt); for (const h of (m.heads || [m.head])) h.rotation.x = e.atkAnim > 0 ? -Math.sin(e.atkAnim * Math.PI) * 0.6 : 0; }
+  else animateHumanoid(m, e.speedNow, dt, { attack: e.atkAnim });
 }
-function canRevive(e) { return e.type !== 'minotaur' && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
+function canRevive(e) { return e.type !== 'minotaur' && !e.def.boss && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
 function revive(e) { e.dead = false; e.hp = e.maxHp; e.x = e.home[0]; e.z = e.home[1]; e.state = 'idle'; e.m.root.rotation.z = 0; e.m.root.visible = true; }
 
 // ---------- Spieler-Angriffe ----------
 function playerAttack() {
-  if (player.atkCd > 0 || dialog || player.dead || player.swimming || player.blocking) return;
+  if (player.atkCd > 0 || dialog || player.dead || (player.swimming && !player.gear.includes('poseidon')) || player.blocking || player.stoned > 0 || player.sailing) return;
   player.atkCd = 0.55; player.atkAnim = 1;
   let fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
-  const reach = player.mounted ? 3.8 : 3.0;
+  const reach = (player.mounted ? 3.8 : 3.0) + (player.gear.includes('poseidon') ? 1.2 : 0);
   // Sanftes Auto-Zielen: nächsten Gegner im weiten Kegel vor der Kamera anvisieren
   let tgt = null, best = 1e9;
   for (const e of enemies) {
     if (e.dead) continue;
     const dx = e.x - player.pos.x, dz = e.z - player.pos.z, d = Math.hypot(dx, dz);
-    const er = e.type === 'minotaur' ? 1.4 : 0.3;
+    const er = e.def.hitR || 0.3;
     if (d < reach + er + 1.2 && (d < 1 || (dx * fx + dz * fz) / d > -0.15) && d < best) { best = d; tgt = e; }
   }
   if (tgt) { const d = Math.hypot(tgt.x - player.pos.x, tgt.z - player.pos.z) || 1; fx = (tgt.x - player.pos.x) / d; fz = (tgt.z - player.pos.z) / d; }
@@ -1470,11 +1542,11 @@ function playerAttack() {
   for (const e of enemies) {
     if (e.dead) continue;
     const dx = e.x - player.pos.x, dz = e.z - player.pos.z, d = Math.hypot(dx, dz);
-    const er = e.type === 'minotaur' ? 1.4 : 0.3;
-    if (d < reach + er && Math.abs(e.y - player.pos.y) < 3 && (d < 1 || (dx * fx + dz * fz) / d > 0.4)) {
+    const er = e.def.hitR || 0.3;
+    if (d < reach + er && Math.abs(e.y - player.pos.y) < (player.flying ? 6 : 3.5) && (d < 1 || (dx * fx + dz * fz) / d > 0.4)) {
       const crit = rand() < 0.15;
       damageEnemy(e, player.dmg * rr(0.85, 1.15) * (crit ? 2 : 1), crit);
-      if (!e.dead && e.type !== 'minotaur') { const k = 1.2 / (d || 1); const p = { x: e.x + dx * k, z: e.z + dz * k }; if (heightAt(p.x, p.z) > -0.5) { resolveCollisions(p, e.def.r); e.x = p.x; e.z = p.z; } }
+      if (!e.dead && !e.def.charge && !e.def.boss) { const k = 1.2 / (d || 1); const p = { x: e.x + dx * k, z: e.z + dz * k }; if (e.def.fly || groundAt(p.x, p.z) > -0.5) { resolveCollisions(p, e.def.r); e.x = p.x; e.z = p.z; } }
     }
   }
 }
@@ -1499,6 +1571,8 @@ function makeBolt(x, z) {
 
 // ---------- Pferd ----------
 function mount() {
+  if (curD) { toast('Hier unten kann dein Pferd nicht hin.'); return; }
+  if (player.flying || player.sailing) return;
   if (player.swimming || race) { toast(race ? 'Beim Wettlauf kein Pferd!' : 'Im Wasser kann dein Pferd nicht kommen.'); return; }
   player.mounted = true; horse.root.visible = true; toast('Dein Pferd ist da. (R zum Absteigen)'); sfx('coin');
 }
@@ -1509,7 +1583,7 @@ function refreshHeroLook() {
   hero = makeHumanoid(heroLook());
   hero.root.position.copy(p); hero.root.rotation.y = r; scene.add(hero.root);
 }
-function heroLook() { return { tunic: 0x9b1c1c, armor: player.hasArmor ? 0xb98d3a : 0x7a5a3a, helmet: true, crest: 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: 'sword', cape: 0x1c3a7a, pants: 0x3a2a1e, greaves: player.hasArmor, hair: 0x2a1a0e }; }
+function heroLook() { const gr = player.gear || []; return { tunic: 0x9b1c1c, armor: player.hasArmor ? 0xb98d3a : 0x7a5a3a, helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : 'sword', cape: 0x1c3a7a, pants: 0x3a2a1e, greaves: player.hasArmor, hair: 0x2a1a0e }; }
 
 // ---------- Sammelobjekte ----------
 const ampGeo = (() => { const pts = []; const prof = [[0, 0], [0.18, 0.02], [0.3, 0.25], [0.36, 0.55], [0.3, 0.85], [0.14, 1.0], [0.1, 1.15], [0.16, 1.22], [0.0, 1.22]]; for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y)); return new THREE.LatheGeometry(pts, 12); })();
@@ -1573,6 +1647,18 @@ function buildMapCanvas() {
 const w2m = (x) => (x + HALF) / CELL; // Welt -> Kartenpixel
 function drawMinimap() {
   const c = $('minimap'), ctx = c.getContext('2d'), S2 = c.width;
+  if (curD) {
+    const P = player.pos, sc = 2.4, rel = (x, z) => [S2 / 2 + (x - P.x) * sc, S2 / 2 + (z - P.z) * sc];
+    ctx.fillStyle = '#0e0b08'; ctx.fillRect(0, 0, S2, S2);
+    ctx.fillStyle = '#3e342a';
+    for (const r of curD.R) { const [x, y] = rel(r.x - r.W / 2, r.z - r.L / 2); ctx.fillRect(x, y, r.W * sc, r.L * sc); }
+    for (let i = 0; i < curD.R.length - 1; i++) { const a = curD.R[i], b = curD.R[i + 1], g = (a.x + b.x) / 2; const [x, y] = rel(g - 3, a.z + a.L / 2); ctx.fillRect(x, y, 6 * sc, (b.z - b.L / 2 - a.z - a.L / 2) * sc); }
+    if (curD.chest && !curD.chest.opened) { const [x, y] = rel(curD.chest.x, curD.chest.z); ctx.fillStyle = '#ffd24a'; ctx.fillRect(x - 3, y - 3, 6, 6); }
+    for (const e of enemies) { if (e.dead || e.dungeon !== curD.idx) continue; const [x, y] = rel(e.x, e.z); ctx.fillStyle = e.def.boss ? '#ff3a1a' : '#c0392b'; ctx.beginPath(); ctx.arc(x, y, e.def.boss ? 5 : 2.5, 0, 7); ctx.fill(); }
+    ctx.save(); ctx.translate(S2 / 2, S2 / 2); ctx.rotate(-player.yaw + Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(5.5, 6); ctx.lineTo(0, 3); ctx.lineTo(-5.5, 6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+    return;
+  }
   const range = 320, scale = S2 / (range / CELL);
   const px = w2m(player.pos.x), pz = w2m(player.pos.z);
   ctx.fillStyle = '#16465e'; ctx.fillRect(0, 0, S2, S2);
@@ -1616,6 +1702,7 @@ function drawBigMap() {
   ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('HELLAS', 20, 36);
   ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen', 20, 58);
   ctx.textAlign = 'center';
+  DUNGEONS.forEach(d => { if (!d.reward && !S.foundD.includes(d.idx)) return; const x = w2m(d.at[0]) * k, y = w2m(d.at[1]) * k; ctx.fillStyle = S.bossDead.includes(d.key) || (d.chest && d.chest.opened) ? '#6a5a70' : '#b05aff'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(d.name, x, y - 10); ctx.fillStyle = '#e8d0ff'; ctx.fillText(d.name, x, y - 10); });
   S.found.forEach(i => { const r = RUINS[i]; if (!r) return; const x = w2m(r.x) * k, y = w2m(r.z) * k; ctx.fillStyle = r.chest.opened ? '#8a8070' : '#ffd24a'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(r.name, x, y + 20); ctx.fillStyle = '#fff3d0'; ctx.fillText(r.name, x, y + 20); });
   ctx.textAlign = 'center'; ctx.font = '700 18px Cinzel, serif'; ctx.fillText('N', W / 2, 24);
 }
@@ -1635,12 +1722,12 @@ function drawOverlay(dt) {
     if (e.dead || !e.m.root.visible) continue;
     const d = Math.hypot(e.x - player.pos.x, e.z - player.pos.z);
     if (d > 38 || (e.state !== 'chase' && e.hp >= e.maxHp && d > 14)) continue;
-    const top = e.type === 'minotaur' ? 4.4 : e.type === 'wolf' ? 1.6 : 2.4;
+    const top = e.def.top || (e.type === 'wolf' ? 1.6 : 2.4);
     const s = project(e.x, e.y + top, e.z); if (s.behind) continue;
-    const w = e.type === 'minotaur' ? 90 : 46;
+    const big = e.def.boss || e.def.bossLike; const w = big ? 110 : 46;
     octx.fillStyle = 'rgba(0,0,0,.6)'; octx.fillRect(s.x - w / 2 - 1, s.y - 1, w + 2, 7);
     octx.fillStyle = '#c0392b'; octx.fillRect(s.x - w / 2, s.y, w * Math.max(0, e.hp / e.maxHp), 5);
-    if (e.type === 'minotaur' || d < 14) { octx.font = '600 12px Alegreya Sans, sans-serif'; octx.fillStyle = '#ffdcd0'; octx.fillText(e.def.name, s.x, s.y - 4); }
+    if (big || d < 14) { octx.font = '600 12px Alegreya Sans, sans-serif'; octx.fillStyle = '#ffdcd0'; octx.fillText(e.def.name, s.x, s.y - 4); }
   }
   for (const n of npcs) {
     const p = n.h.root.position, d = Math.hypot(p.x - player.pos.x, p.z - player.pos.z);
@@ -1685,6 +1772,400 @@ function drawOverlay(dt) {
 }
 
 // ============================================================
+// Inseln, Schiffe, Dungeons, Höhlen, alte Ruinen, Mythen
+// ============================================================
+const DOCKS = {};
+const DOCK_TITLES = { piraeus: 'Piräus', kreta: 'Kreta', thera: 'Thera', seriphos: 'Seriphos', sirenen: 'die Sireneninsel', ithaka: 'Ithaka' };
+const DOCK_PRICE = { piraeus: 10, kreta: 10, thera: 15, seriphos: 15, sirenen: 12, ithaka: 20 };
+const GEAR = {
+  hephklinge: { name: 'Klinge des Hephaistos', desc: 'Eine glühende Götterklinge: +25 Schaden' },
+  hadeshelm: { name: 'Helm des Hades', desc: 'Du erleidest 30 % weniger Schaden' },
+  poseidon: { name: 'Dreizack des Poseidon & Hippokamp', desc: '+15 Schaden, mehr Reichweite – und im Wasser reitest du ein Seepferd!' },
+  pegasus: { name: 'Pegasus & Haupt der Medusa', desc: 'T: Auf Pegasus fliegen  ·  G: Feinde versteinern' },
+};
+const THEMES = {
+  hades: { wall: 0x37323f, floor: 0x26222c, col: 0x4a4452, fire: 0x40ff90, light: 0x70ffb8, H: 9, pool: 0x1a3a7a },
+  fire: { wall: 0x4a2a22, floor: 0x33241e, col: 0x5a3a2a, fire: 0xff7a20, light: 0xffa050, H: 9, pool: 0xff5a10 },
+  sea: { wall: 0x2f5a5e, floor: 0x3a6a6a, col: 0x5a8a8a, fire: 0x60d0ff, light: 0x90d8ff, H: 9, pool: 0x2080b0 },
+  stone: { wall: 0x8a8478, floor: 0x6a665c, col: 0xa8a294, fire: 0xb0ff60, light: 0xd8ffb0, H: 9, pool: 0x3a5a2a },
+  cave: { wall: 0x5a4a3a, floor: 0x4a3e30, col: 0x6a5a48, fire: 0xffa040, light: 0xffc070, H: 6.5, pool: 0x2a4a6a },
+};
+const DUNGEONS = [];
+let curD = null;
+G.rock = new THREE.DodecahedronGeometry(1, 0);
+
+function downhillRot(x, z) { const e = 3; const gx = heightAt(x + e, z) - heightAt(x - e, z), gz = heightAt(x, z + e) - heightAt(x, z - e); return Math.atan2(-gx, -gz); }
+function buildEntrance(def) {
+  const [x, z] = def.at;
+  const rot = downhillRot(x, z);
+  const f = new Frame(x, z, rot);
+  f.y = Math.min(heightAt(...f.w(-3, 0)), heightAt(...f.w(3, 0)), f.y);
+  const cave = def.theme === 'cave';
+  const rockM = lam(cave ? 0x6a5a48 : 0x4e4a50);
+  for (const s of [-1, 1]) { f.put(G.rock, rockM, s * 3, 1.6, 0, rand(), rand(), 0, 2.2, 3.6, 2.2); const [wx, wz] = f.w(s * 3, 0); circleCol(wx, wz, 2); }
+  f.put(G.rock, rockM, 0, 5.0, 0, 0.3, 0.5, 0, 4.6, 1.9, 2.6);
+  f.put(G.rock, rockM, 0, 2.5, -2.2, 0, 0, 0, 4, 4, 2.5);
+  f.box(lam(0x030303), 0, -0.2, -0.9, 3.6, 4.6, 0.6);
+  const fireM = lam(THEMES[def.theme].fire, THEMES[def.theme].fire);
+  if (!cave || def.boss) for (const s of [-1, 1]) {
+    const [bx, bz] = f.w(s * 5, 2);
+    const bf = new Frame(bx, bz, 0); bf.put(G.cyl8, M.bronze, 0, 0.6, 0, 0, 0, 0, 0.25, 1.2, 0.25); bf.put(G.cyl, M.bronze, 0, 1.3, 0, 0, 0, 0, 1.0, 0.3, 1.0);
+    const fm = new THREE.Mesh(G.cone, fireM); fm.position.set(bx, bf.y + 1.85, bz); fm.scale.set(0.7, 1.0, 0.7); scene.add(fm); fires.push(fm); circleCol(bx, bz, 0.5);
+  }
+  def.out = f.w(0, 5);
+  reserve(x, z, 9);
+  const [ix, iz] = f.w(0, 1.5);
+  interactables.push({ pos: () => new V3(ix, heightAt(ix, iz), iz), label: (cave ? 'Höhle betreten: ' : 'Betreten: ') + def.name, r: 4, fn: () => enterDungeon(def) });
+}
+function buildDungeonInterior(def) {
+  const idx = DUNGEONS.length; def.idx = idx; DUNGEONS.push(def);
+  const O = { x: 6500 + (idx % 4) * 450, y: 240, z: -6000 + Math.floor(idx / 4) * 450 };
+  const T = THEMES[def.theme], H = T.H;
+  const wm = lam(T.wall), fm = lam(T.floor), cm = lam(T.col), fireM = lam(T.fire, T.fire), poolM = lam(T.pool, (T.pool >> 1) & 0x7f7f7f);
+  const rooms = []; let cz = 0, cx = 0;
+  for (let i = 0; i < def.rooms; i++) {
+    const boss = !!def.boss && i === def.rooms - 1;
+    const W = boss ? 34 : Math.round(rr(16, 22)), L = boss ? 32 : Math.round(rr(16, 22));
+    if (i > 0) cx += rr(-5, 5);
+    rooms.push({ x: O.x + cx, z: O.z + cz + L / 2, W, L, boss, H: boss ? H + 3 : H });
+    cz += L + 10;
+  }
+  def.O = O; def.R = rooms; def.H = H;
+  const links = []; for (let i = 0; i < rooms.length - 1; i++) links.push((rooms[i].x + rooms[i + 1].x) / 2);
+  const F = new Frame(0, 0, 0, O.y);
+  const wallX = (xa, xb, z, h) => { if (xb - xa > 0.2) F.box(wm, (xa + xb) / 2, -0.5, z, xb - xa, h + 0.5, 1.2, true); };
+  const wallZ = (x, za, zb, h) => { if (zb - za > 0.2) F.box(wm, x, -0.5, (za + zb) / 2, 1.2, h + 0.5, zb - za, true); };
+  const dfire = (x, z) => {
+    F.put(G.cyl8, cm, x, 0.7, z, 0, 0, 0, 0.3, 1.4, 0.3); F.put(G.cyl, cm, x, 1.5, z, 0, 0, 0, 1.0, 0.3, 1.0); circleCol(x, z, 0.5);
+    const m = new THREE.Mesh(G.cone, fireM); m.position.set(x, O.y + 2.05, z); m.scale.set(0.7, 1.0, 0.7); scene.add(m); fires.push(m);
+  };
+  rooms.forEach((r, i) => {
+    const x0 = r.x - r.W / 2, x1 = r.x + r.W / 2, z0 = r.z - r.L / 2, z1 = r.z + r.L / 2;
+    F.box(fm, r.x, -1, r.z, r.W + 2.4, 1, r.L + 2.4); F.platform(r.x, r.z, r.W + 2.4, r.L + 2.4, 0);
+    F.box(wm, r.x, r.H, r.z, r.W + 2.4, 1, r.L + 2.4);
+    wallZ(x0 - 0.6, z0 - 1.2, z1 + 1.2, r.H); wallZ(x1 + 0.6, z0 - 1.2, z1 + 1.2, r.H);
+    if (i > 0) { const g = links[i - 1]; wallX(x0 - 1.2, g - 3, z0 - 0.6, r.H); wallX(g + 3, x1 + 1.2, z0 - 0.6, r.H); F.box(wm, g, H, z0 - 0.6, 6, r.H - H + 0.01, 1.2); }
+    else wallX(x0 - 1.2, x1 + 1.2, z0 - 0.6, r.H);
+    if (i < rooms.length - 1) { const g = links[i]; wallX(x0 - 1.2, g - 3, z1 + 0.6, r.H); wallX(g + 3, x1 + 1.2, z1 + 0.6, r.H); F.box(wm, g, H, z1 + 0.6, 6, r.H - H + 0.01, 1.2); }
+    else wallX(x0 - 1.2, x1 + 1.2, z1 + 0.6, r.H);
+    // Säulen & Feuer
+    const px = r.W / 3.3, pz = r.L / 3.3;
+    if (def.theme === 'cave') {
+      for (let k = 0; k < 9; k++) { const sx = rr(x0 + 1.5, x1 - 1.5), sz = rr(z0 + 1.5, z1 - 1.5); if (i === 0 && Math.abs(sx - r.x) < 3) continue; const h = rr(1, 3.2); F.put(G.cone, cm, sx, h / 2, sz, 0, 0, 0, rr(0.6, 1.2), h, rr(0.6, 1.2)); circleCol(sx, sz, 0.5); F.put(G.cone, cm, sx + rr(-1, 1), r.H - 0.8, sz + rr(-1, 1), Math.PI, 0, 0, 0.7, rr(1, 2), 0.7); }
+      for (let k = 0; k < 14; k++) { const side = k % 4, t = rand(); const sx = side < 2 ? (side ? x0 : x1) : lerp(x0, x1, t), sz = side < 2 ? lerp(z0, z1, t) : (side === 2 ? z0 : z1); F.put(G.rock, wm, sx, rr(0.5, r.H - 1), sz, rand(), rand(), 0, rr(1.4, 2.6), rr(1.4, 2.6), rr(1.4, 2.6)); }
+    } else {
+      for (const [sx, sz] of [[-px, -pz], [px, -pz], [-px, pz], [px, pz]]) { F.put(G.col, cm, r.x + sx, r.H / 2, r.z + sz, 0, 0, 0, 1.5, r.H, 1.5); circleCol(r.x + sx, r.z + sz, 0.9); }
+    }
+    for (const [fx, fz] of [[x0 + 1.6, z0 + 1.6], [x1 - 1.6, z0 + 1.6], [x0 + 1.6, z1 - 1.6], [x1 - 1.6, z1 - 1.6]]) dfire(fx, fz);
+    // Thema
+    if (def.theme === 'fire') for (const s of [-1, 1]) F.box(poolM, r.x + s * (r.W / 2 - 0.9), 0.01, r.z, 1.2, 0.05, r.L - 4);
+    if (def.theme === 'hades') { F.box(poolM, r.x, 0.01, r.z, r.W * 0.25, 0.04, r.L - 6); for (let k = 0; k < 8; k++) F.put(G.sphere, lam(0xe6dfc8), rr(x0 + 1, x1 - 1), 0.15, rr(z0 + 1, z1 - 1), 0, 0, 0, 0.35, 0.3, 0.4); }
+    if (def.theme === 'sea') { for (const [sx, sz] of [[-px, 0], [px, 0]]) F.put(G.cyl, poolM, r.x + sx, 0.02, r.z + sz, 0, 0, 0, 5, 0.05, 5); for (let k = 0; k < 6; k++) F.put(G.cone, lam(0xd06a6a), rr(x0 + 1, x1 - 1), 0.6, rand() < 0.5 ? z0 + 1 : z1 - 1, 0, 0, 0, 0.5, 1.2, 0.5); }
+    if (def.theme === 'stone' && !r.boss) for (let k = 0; k < 3; k++) statue(rr(x0 + 3, x1 - 3), rr(z0 + 3, z1 - 3), rand() * 6.28, 1, lam(0x8e8a80), O.y);
+    if (def.theme === 'stone' && r.boss) for (let k = 0; k < 6; k++) { const a = k / 6 * 6.28; statue(r.x + Math.cos(a) * 11, r.z + Math.sin(a) * 10, a + Math.PI, 1, lam(0x8e8a80), O.y); }
+  });
+  links.forEach((g, i) => {
+    const za = rooms[i].z + rooms[i].L / 2 + 1.2, zb = rooms[i + 1].z - rooms[i + 1].L / 2 - 1.2;
+    F.box(fm, g, -1, (za + zb) / 2, 6.4, 1, zb - za + 0.2); F.platform(g, (za + zb) / 2, 6.4, zb - za + 0.4, 0);
+    F.box(wm, g, H, (za + zb) / 2, 8.6, 1, zb - za);
+    wallZ(g - 3.6, za, zb, H); wallZ(g + 3.6, za, zb, H);
+  });
+  const r0 = rooms[0];
+  def.start = [r0.x, r0.z - r0.L / 2 + 5];
+  // Portal nach draußen
+  const pm = new THREE.Mesh(new THREE.TorusGeometry(1.8, 0.22, 8, 30), new THREE.MeshBasicMaterial({ color: T.light }));
+  pm.position.set(r0.x, O.y + 2.2, r0.z - r0.L / 2 + 0.9); scene.add(pm); fires.push(pm);
+  interactables.push({ pos: () => new V3(r0.x, O.y, r0.z - r0.L / 2 + 1.8), label: 'Zurück an die Oberfläche', r: 3.2, fn: exitDungeon });
+  // Schatz
+  const rl = rooms[rooms.length - 1];
+  const ch = addChest(rl.x, O.y, rl.z + rl.L / 2 - 4, Math.PI, def.reward ? 3 : 2);
+  ch.dungeon = idx; def.chest = ch;
+}
+function spawnDungeonEnemies() {
+  for (const def of DUNGEONS) {
+    def.R.forEach((r, i) => {
+      if (i === 0) return;
+      if (r.boss) { const e = spawnEnemy(def.boss, r.x, r.z, def.bossOver); e.dungeon = def.idx; e.key = def.key; return; }
+      const n = 2 + Math.floor(rand() * 2) + (i === def.R.length - 1 ? 1 : 0);
+      for (let k = 0; k < n; k++) { const e = spawnEnemy(pick(def.enemies), r.x + rr(-r.W / 3, r.W / 3), r.z + rr(-r.L / 3, r.L / 3)); e.dungeon = def.idx; }
+    });
+  }
+}
+function enterDungeon(def) {
+  if (player.mounted) dismount();
+  fadeTo(() => {
+    curD = def;
+    player.pos.set(def.start[0], def.O.y + 0.2, def.start[1]); player.vy = 0;
+    camYaw = Math.PI; camPitch = 0.25;
+    showLoc({ name: def.name, sub: def.sub });
+    if (!S.foundD.includes(def.idx)) S.foundD.push(def.idx);
+  });
+}
+function exitDungeon() {
+  const def = curD; if (!def) return;
+  fadeTo(() => {
+    curD = null;
+    player.pos.set(def.out[0], groundAt(def.out[0], def.out[1]) + 0.3, def.out[1]); player.vy = 0;
+    camYaw = downhillRot(def.at[0], def.at[1]) + Math.PI;
+    for (const e of enemies) if (e.dungeon === def.idx && !e.dead) { e.state = 'idle'; e.x = e.home[0]; e.z = e.home[1]; }
+    save();
+  });
+}
+function buildDungeons() {
+  const L = LOCS;
+  const defs = [
+    { key: 'hades', name: 'Unterwelt des Hades', sub: 'Reich der Toten – bewacht von Kerberos', at: [L.hadesTor.x, L.hadesTor.z], theme: 'hades', rooms: 4, enemies: ['skelett', 'schatten'], boss: 'kerberos', reward: 'hadeshelm' },
+    { key: 'hephaistos', name: 'Schmiede des Hephaistos', sub: 'Im glühenden Herzen des Vulkans', at: [L.hephTor.x, L.hephTor.z], theme: 'fire', rooms: 4, enemies: ['feuergeist', 'skelett'], boss: 'talos', reward: 'hephklinge' },
+    { key: 'poseidon', name: 'Grotte des Poseidon', sub: 'Wo die Skylla lauert', at: [L.poseidonTor.x, L.poseidonTor.z], theme: 'sea', rooms: 4, enemies: ['triton'], boss: 'skylla', reward: 'poseidon' },
+    { key: 'medusa', name: 'Hort der Medusa', sub: 'Schau ihr niemals in die Augen', at: [L.medusaTor.x, L.medusaTor.z], theme: 'stone', rooms: 4, enemies: ['schlangenkrieger', 'skelett'], boss: 'medusa', reward: 'pegasus' },
+    { key: 'polyphem', name: 'Höhle des Polyphem', sub: 'Hier haust der Zyklop', at: [L.polyphemTor.x, L.polyphemTor.z], theme: 'cave', rooms: 3, enemies: ['wolf'], boss: 'zyklop', bossOver: { name: 'Polyphem', hp: 900, boss: true, money: [150, 150] } },
+  ];
+  for (const d of defs) { buildDungeonInterior(d); buildEntrance(d); }
+  const names = ['Höhle der Nymphen', 'Bärenhöhle', 'Grotte des Pan', 'Höhle der Schatten', 'Kristallhöhle', 'Fledermaushöhle', 'Höhle des Echos'];
+  let tries = 0, n = 0;
+  const placed = [];
+  while (n < names.length && tries < 6000) {
+    tries++;
+    const x = rr(-900, 700), z = rr(-900, 900), h = heightAt(x, z), sl = slopeAt(x, z);
+    if (h < 8 || h > 95 || sl < 0.28 || sl > 1.2 || inCity(x, z, 1.6) || roadDist(x, z) < 14 || !isFree(x, z, 20)) continue;
+    if (placed.some(p => Math.hypot(p[0] - x, p[1] - z) < 160) || RUINS.some(r => Math.hypot(r.x - x, r.z - z) < 60)) continue;
+    const r = downhillRot(x, z), ox = x + Math.sin(r) * 6, oz = z + Math.cos(r) * 6;
+    if (heightAt(ox, oz) < 1.5) continue;
+    placed.push([x, z]);
+    const d = { key: 'cave' + n, name: names[n], sub: 'Eine dunkle Höhle', at: [x, z], theme: 'cave', rooms: 2 + (rand() < 0.5 ? 1 : 0), enemies: ['wolf', 'skelett', 'schatten'] };
+    buildDungeonInterior(d); buildEntrance(d); n++;
+  }
+}
+
+// ---------- Alte Ruinen ----------
+const OLD_RUIN_NAMES = ['Ruinen von Mykene', 'Alte Festung', 'Verlassenes Dorf', 'Ruinen von Tiryns', 'Turm der Wächter', 'Grab des Agamemnon', 'Altes Heroon', 'Ruinen von Argos', 'Verfallene Wachstation'];
+function buildOldRuins() {
+  let tries = 0, n = 0;
+  while (n < OLD_RUIN_NAMES.length && tries < 5000) {
+    tries++;
+    const x = rr(-900, 700), z = rr(-900, 900), h = heightAt(x, z);
+    if (h < 3 || h > 85 || slopeAt(x, z) > 0.35 || inCity(x, z, 1.7) || roadDist(x, z) < 18 || !isFree(x, z, 18)) continue;
+    if (RUINS.some(r => Math.hypot(r.x - x, r.z - z) < 140)) continue;
+    buildOldRuin(x, z, OLD_RUIN_NAMES[n]); n++;
+  }
+}
+function buildOldRuin(x, z, name) {
+  const rot = rand() * 6.28, f = new Frame(x, z, rot);
+  reserve(x, z, 14);
+  const sm = lam(0xb8ab92), moss = lam(0x8f9870);
+  for (const [wx, wz, len, alongX] of [[-7, 0, 10, false], [7, 0, 10, false], [0, -5, 14, true], [0, 5, 14, true]]) {
+    for (let k = 0; k < 3; k++) {
+      if (rand() < 0.28) continue;
+      const seg = len / 3, off = -len / 2 + seg * (k + 0.5), h = rr(0.8, 3.8);
+      const px = alongX ? wx + off : wx, pz = alongX ? wz : wz + off;
+      f.box(rand() < 0.4 ? moss : sm, px, -0.8, pz, alongX ? seg : 0.9, h + 0.8, alongX ? 0.9 : seg, true);
+    }
+  }
+  for (const s of [-1, 1]) f.box(sm, s * 2, -0.5, 8, 0.9, 4.5, 0.9, true);
+  f.box(sm, 0, 4, 8, 5, 0.8, 1);
+  for (let k = 0; k < 9; k++) f.put(G.rock, rand() < 0.5 ? moss : sm, rr(-10, 10), 0.2, rr(-8, 10), rand(), rand(), 0, rr(0.5, 1.1), rr(0.4, 0.8), rr(0.5, 1.1));
+  for (let k = 0; k < 3; k++) { const [cx, cz] = [rr(-5, 5), rr(-3, 3)]; const h = rr(0.6, 2); f.put(G.col, sm, cx, h / 2, cz, 0, 0, 0, 1, h, 1); const [wx, wz] = f.w(cx, cz); circleCol(wx, wz, 0.6); }
+  const [cx, cz] = f.w(rr(-2, 2), rr(-1.5, 1.5));
+  const ch = addChest(cx, heightAt(cx, cz), cz, rot, 1, RUINS.length); ch.bonus = true;
+  RUINS.push({ x, z, name, chest: ch, y: f.y, kind: 'old', guards: [f.w(-3, 2), f.w(3, -2)] });
+}
+
+// ---------- Inseln ----------
+function buildIslands() {
+  const toP = (L) => [LOCS.piraeus.x - L.x, LOCS.piraeus.z - L.z];
+  const T = LOCS.thera, Se = LOCS.seriphos, Si = LOCS.sirenen, I = LOCS.ithaka;
+  DOCKS.piraeus = piraeusDock; DOCKS.kreta = kretaDock;
+  DOCKS.thera = dock(T, ...toP(T)); DOCKS.seriphos = dock(Se, ...toP(Se)); DOCKS.sirenen = dock(Si, ...toP(Si)); DOCKS.ithaka = dock(I, 1, 0.2);
+  // Thera: weiße Häuser mit blauen Dächern, kleiner Tempel des Hephaistos, Vulkan
+  for (let i = 0; i < 9; i++) house(T.x + rr(-24, 24), T.z + rr(-24, 24), Math.floor(rand() * 4) * Math.PI / 2, rr(4.5, 6), rr(4.5, 6), rr(3, 4), { wall: lam(0xf6f2ea), roof: M.blue });
+  temple(new Frame(T.x - 4, T.z + 26, Math.PI), 7, 11, 4, 5, 4.5, { tier: 1 });
+  { const px = 665, pz = 235, py = heightAt(px, pz); const lava = new THREE.Mesh(G.cyl, lam(0xff5a10, 0xff3a00)); lava.position.set(px, py - 1.2, pz); lava.scale.set(14, 1, 14); scene.add(lava); const lava2 = new THREE.Mesh(G.cone, lam(0xff8a20, 0xff5000)); lava2.position.set(px, py + 1, pz); lava2.scale.set(5, 3, 5); scene.add(lava2); fires.push(lava2); }
+  // Seriphos: versteinerte Helden
+  for (let i = 0; i < 6; i++) house(Se.x + rr(-22, 22), Se.z + rr(-22, 22), Math.floor(rand() * 4) * Math.PI / 2, rr(5, 6.5), rr(5, 6.5), 3.6);
+  let st = 0;
+  for (let i = 0; i < 200 && st < 12; i++) { const a = rand() * 6.28, d = rr(35, 95); const x = 620 + Math.cos(a) * d, z = -370 + Math.sin(a) * d; if (heightAt(x, z) < 2 || !isFree(x, z, 3)) continue; statue(x, z, rand() * 6.28, rr(0.9, 1.15), lam(0x8e8a80)); st++; }
+  // Sireneninsel: Felsen
+  for (let i = 0; i < 16; i++) { const x = Si.x + rr(-50, 50), z = Si.z + rr(-50, 50); if (heightAt(x, z) < 0.5) continue; addStatic(G.rock, lam(0x7a746a), x, heightAt(x, z) + 0.5, z, rand(), rand(), 0, rr(1.5, 4), rr(1.5, 5), rr(1.5, 4)); circleCol(x, z, 2); }
+  // Ithaka: Palast des Odysseus
+  stoa(new Frame(I.x + 4, I.z - 18, 0), 22, 7, 8, 4.5);
+  for (let i = 0; i < 7; i++) house(I.x + rr(-28, 28), I.z + rr(-5, 28), Math.floor(rand() * 4) * Math.PI / 2, rr(5, 6.5), rr(5, 6.5), 3.8);
+  fountain(I.x - 8, I.z + 2);
+}
+function buildIslandNPCs() {
+  const names = { thera: 'Fährmann Iason', seriphos: 'Fährmann Glaukos', sirenen: 'Fährmann Nereus', ithaka: 'Fährmann Eumaios' };
+  for (const [k, nm] of Object.entries(names)) { const d = DOCKS[k]; if (d) addNPC(nm, d.boatman[0], d.boatman[1], { tunic: 0x6a5a3a, beard: true, pants: 0x3a3024 }, () => talkFerry(k)); }
+  const vl = (L, n) => { for (let i = 0; i < n; i++) { let x, z, t = 0; do { x = L.x + rr(-L.r, L.r); z = L.z + rr(-L.r, L.r); t++; } while (t < 20 && heightAt(x, z) < 1); const line = pick(ISLAND_LINES[L === LOCS.thera ? 'thera' : L === LOCS.seriphos ? 'seriphos' : 'ithaka']); addNPC(pick(['Ariadne', 'Phoibe', 'Demetrios', 'Nikolaos', 'Kostas', 'Eirene']), x, z, { tunic: pick([0xe8e0cc, 0x3a5a8a, 0x9b3b2b]), pants: 0x3a3024, beard: rand() < 0.5 }, function () { talk([{ who: this.name, text: line }]); }, 10); } };
+  vl(LOCS.thera, 3); vl(LOCS.seriphos, 3); vl(LOCS.ithaka, 3);
+  const Si = LOCS.sirenen;
+  for (let i = 0; i < 2; i++) { let x, z, t = 0; do { x = Si.x + rr(-12, 12); z = Si.z + rr(-12, 12); t++; } while (t < 20 && heightAt(x, z) < 1); addNPC('Sirene', x, z, { tunic: 0xbfe6f0, pants: 0x8fbcc8, veil: 0xe0f4ff, skin: 0xe8c8b0, wreath: true }, function () { talk([{ who: 'Sirene', text: pick(['♪ Komm näher, Held … bleib bei uns für immer … ♪', '♪ Wir kennen alle Geheimnisse des Meeres … in der Grotte des Poseidon wartet die Skylla … ♪', '♪ Odysseus band sich an den Mast, um uns zu hören. Und du? ♪']) }]); }, 4); }
+  const I = LOCS.ithaka;
+  addNPC('Penelope', I.x + 4, I.z - 10, { tunic: 0xe8dcc0, pants: 0xc8bca0, veil: 0x6b2f7a, skin: 0xd9a577 }, function () { talk([{ who: 'Penelope', text: 'Seit zwanzig Jahren webe ich und warte auf Odysseus. Er hat den Zyklopen Polyphem geblendet – nun haust das Ungeheuer in einer Höhle im Westen der Insel. Nimm dich in Acht!' }]); });
+  addNPC('Chiron, der Kentaur', 60, -540, { model: makeCentaur({ tunic: 0xe8e0cc, beard: true, hair: 0xb8b0a0, body: 0x8a6a4a, weapon: 'staff' }) }, talkChiron);
+}
+const ISLAND_LINES = {
+  thera: ['Der Vulkan grollt jede Nacht. Man sagt, Hephaistos schmiedet darin.', 'Am Hang des Vulkans gibt es einen Eingang – aber nur Narren gehen hinein.', 'Ein bronzener Riese bewacht die Schmiede. Talos heißt er.'],
+  seriphos: ['Siehst du die Statuen? Das waren einmal Helden … Medusa hat sie versteinert.', 'Perseus? Ach, der ist lange fort. Und Medusa lebt wieder im Hort im Osten.', 'Wer Medusa besiegt, dem schenken die Götter Pegasus, sagt man.'],
+  ithaka: ['Willkommen auf Ithaka! Unser König Odysseus irrt noch immer übers Meer.', 'Hör nicht auf die Sirenen, wenn du nach Osten segelst!', 'In der Höhle im Westen brüllt Polyphem. Ein Riese mit nur einem Auge.'],
+};
+function talkChiron() {
+  const W = 'Chiron';
+  const opts = [
+    { label: 'Erzähl mir von den Göttern und ihren Schätzen.', fn: () => talk([
+      { who: W, text: 'Vier Götter haben ihre Schätze tief unter der Erde verborgen.' },
+      { who: W, text: 'Hades: Das Tor zur Unterwelt liegt im Gebirge südlich von Sparta. Kerberos bewacht dort den Helm des Hades.' },
+      { who: W, text: 'Hephaistos: Seine Schmiede liegt im Vulkan von Thera. Der Bronzeriese Talos hütet die Flammenklinge.' },
+      { who: W, text: 'Poseidon: Auf der Sireneninsel führt eine Grotte hinab zur Skylla. Wer sie besiegt, erhält den Dreizack – und ein Seepferd.' },
+      { who: W, text: 'Und auf Seriphos haust Medusa. Aus ihrem Blut wird Pegasus geboren, das geflügelte Pferd. Doch schau ihr nie in die Augen!' },
+      { who: W, text: 'Die Fährleute in Piräus bringen dich zu allen Inseln. Oder kauf dir ein eigenes Schiff.' } ]) },
+    { label: player.chiron ? 'Training (bereits abgeschlossen)' : 'Trainiere mich (80 Drachmen): +5 Schaden', fn: () => { if (!player.chiron && spend(80)) { player.chiron = true; player.dmg += 5; toast('Chirons Training: Schaden +5', 'gold'); } } },
+    { label: 'Leb wohl.', fn: () => { } },
+  ];
+  talk([{ who: W, text: 'Sei gegrüßt, junger Held. Ich bin Chiron, Lehrer des Achilles und des Herakles. Meine wilden Brüder im Wald östlich von hier sind weniger freundlich …', opts }]);
+}
+
+// ---------- Reittiere & Schiff ----------
+function makePegasus() {
+  const p = makeHorse(0xf4f0ea, false);
+  p.wings = [];
+  for (const s of [-1, 1]) {
+    const w = new THREE.Group(); w.position.set(s * 0.4, 1.75, 0.2); p.root.add(w);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 1.0), lam(0xffffff)); m.position.set(s * 1.2, 0, 0); m.castShadow = true; w.add(m);
+    const m2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 0.7), lam(0xe8eef8)); m2.position.set(s * 2.6, 0, -0.1); w.add(m2);
+    p.wings.push(w);
+  }
+  return p;
+}
+function makeHippo() {
+  const p = makeHorse(0x3a9a9a, false);
+  p.legs[2].visible = false; p.legs[3].visible = false; p.tail.visible = false;
+  const fin = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.8, 6), lam(0x2a7a8a)); fin.position.set(0, 1.2, -1.6); fin.rotation.x = -Math.PI / 2; p.root.add(fin);
+  const fin2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.6), lam(0x5ac0c0)); fin2.position.set(0, 1.25, -2.5); p.root.add(fin2);
+  return p;
+}
+function makeShip() {
+  const g = new THREE.Group();
+  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; g.add(m); return m; };
+  add(new THREE.BoxGeometry(3.6, 1.6, 15), M.darkwood, 0, 0.2, 0);
+  add(new THREE.BoxGeometry(3.7, 0.25, 15.2), M.red, 0, 1.0, 0);
+  add(new THREE.ConeGeometry(0.5, 2.4, 4), M.bronze, 0, 0.0, 8.4, Math.PI / 2);
+  add(new THREE.BoxGeometry(1.2, 2.2, 1.2), M.darkwood, 0, 1.6, -7.2, 0.4);
+  add(new THREE.CylinderGeometry(0.15, 0.15, 8, 6), M.wood, 0, 4.8, 0.5);
+  add(new THREE.BoxGeometry(6, 4.2, 0.08), M.sail, 0, 5.0, 0.7);
+  add(new THREE.BoxGeometry(6.05, 0.6, 0.1), M.red, 0, 6.6, 0.72);
+  add(new THREE.BoxGeometry(7, 0.2, 0.2), M.wood, 0, 7.2, 0.6);
+  for (let i = 0; i < 6; i++) for (const s of [-1, 1]) add(new THREE.CylinderGeometry(0.08, 0.08, 3, 5), M.wood, s * 2.5, 0.3, -5 + i * 2, 0, 0, s * 1.2);
+  return { root: g };
+}
+let pegasus, hippo, ship, torch;
+function toggleShip() {
+  if (curD) return;
+  if (player.sailing) {
+    const P = player.pos;
+    for (let r = 4; r <= 18; r += 2) for (let a = 0; a < 6.28; a += 0.4) { const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (heightAt(x, z) > 0.4) { player.sailing = false; ship.root.visible = false; player.pos.set(x, groundAt(x, z) + 0.3, z); player.vy = 0; toast('Du gehst an Land.'); return; } }
+    toast('Kein Land in der Nähe zum Anlegen.'); return;
+  }
+  if (!player.hasShip) { toast('Du hast noch kein Schiff. Kauf eines beim Fährmann in Piräus.'); return; }
+  const P = player.pos;
+  for (let r = 0; r <= 14; r += 2) for (let a = 0; a < 6.28; a += 0.4) { const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (heightAt(x, z) < -2.2) {
+    if (player.mounted) dismount(); if (player.flying) stopFlying(true);
+    player.sailing = true; player.shipSpeed = 0; player.pos.set(x, 0.9, z); ship.root.visible = true; toast('An Bord! WASD steuern, B zum Anlegen.'); sfx('quest'); return; } }
+  toast('Stell dich ans Ufer, um dein Schiff zu rufen.');
+}
+function buyShip() { if (player.hasShip) return; if (spend(120)) { player.hasShip = true; banner('Dein eigenes Schiff!', 'Drücke B am Ufer, um damit über die Ägäis zu segeln.'); save(); } }
+function sailTo(k, price) {
+  if (!spend(price)) return;
+  fadeTo(() => { const d = DOCKS[k]; if (player.mounted) dismount(); player.sailing = false; ship.root.visible = false; player.pos.set(d.land[0], groundAt(d.land[0], d.land[1]) + 0.5, d.land[1]); player.vy = 0; camYaw = d.rot + Math.PI; toast('Du erreichst ' + DOCK_TITLES[k] + '.'); });
+}
+function talkFerry(from) {
+  const D = DOCKS[from]; if (!D) return;
+  const opts = [];
+  for (const k of Object.keys(DOCK_TITLES)) { if (k === from || !DOCKS[k]) continue; opts.push({ label: 'Nach ' + DOCK_TITLES[k] + ' segeln (' + DOCK_PRICE[k] + ' Drachmen)', fn: () => sailTo(k, DOCK_PRICE[k]) }); }
+  if (!player.hasShip) opts.push({ label: 'Eigenes Schiff kaufen (120 Drachmen)', fn: buyShip });
+  opts.push({ label: 'Nein danke.', fn: () => { } });
+  talk([{ who: 'Fährmann', text: from === 'piraeus' ? 'Meine Schiffe fahren zu allen Inseln der Ägäis: Kreta, Thera, Seriphos, die Sireneninsel und Ithaka. Wohin soll es gehen?' : 'Wohin soll ich dich bringen, Wanderer?', opts }]);
+}
+function toggleFly() {
+  if (!player.gear.includes('pegasus')) { toast('Besiege Medusa auf Seriphos, um Pegasus zu erhalten.'); return; }
+  if (curD) { toast('Unter der Erde kann Pegasus nicht fliegen.'); return; }
+  if (player.flying) { stopFlying(false); return; }
+  if (player.mounted) dismount(); if (player.sailing) return;
+  player.flying = true; pegasus.root.visible = true; player.vy = 0; player.pos.y += 1;
+  toast('Pegasus! Leertaste: steigen · C: sinken · T: landen'); sfx('quest');
+}
+function stopFlying(force) {
+  const g = Math.max(groundAt(player.pos.x, player.pos.z), -0.5);
+  if (!force && player.pos.y - g > 4) { toast('Lande zuerst (C gedrückt halten).'); return; }
+  player.flying = false; pegasus.root.visible = false; player.vy = 0;
+}
+function medusaHead() {
+  if (!player.gear.includes('pegasus')) return;
+  if (player.medCd > 0) { toast('Das Haupt der Medusa ruht noch … (' + Math.ceil(player.medCd) + ' s)'); return; }
+  player.medCd = 20; flash = 0.6; sfx('zap');
+  let n = 0;
+  for (const e of enemies) if (!e.dead && Math.hypot(e.x - player.pos.x, e.z - player.pos.z) < 22) { e.stoned = e.def.boss ? 2.5 : 7; n++; floatText(e.x, e.y + 2.6, e.z, 'Versteinert', '#c8c8c0'); }
+  toast(n ? n + ' Feinde versteinert!' : 'Kein Feind in der Nähe.');
+}
+function gainGear(k) {
+  if (player.gear.includes(k)) return;
+  player.gear.push(k);
+  if (k === 'hephklinge') player.dmg += 25;
+  if (k === 'poseidon') player.dmg += 15;
+  banner(GEAR[k].name, GEAR[k].desc);
+  toast('Göttlicher Schatz: ' + GEAR[k].name, 'gold');
+  refreshHeroLook(); save();
+}
+
+// ---------- Mythische Kreaturen (Modelle) ----------
+function makeCentaur(o) {
+  const hz = makeHorse(o.body ?? 0x7a5230, false);
+  const hu = makeHumanoid(Object.assign({}, o, { scale: undefined }));
+  hu.legL.visible = false; hu.legR.visible = false;
+  hu.root.position.set(0, 0.85, 0.75); hz.root.add(hu.root);
+  return { root: hz.root, legs: hz.legs, tail: hz.tail, phase: 0, legL: hu.legL, legR: hu.legR, armL: hu.armL, armR: hu.armR, head: hu.head, weapon: hu.weapon, centaur: true };
+}
+function makeHarpy() {
+  const g = new THREE.Group();
+  const add = (geo, mat, x, y, z, p = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; p.add(m); return m; };
+  const fe = lam(0x6a4a3a);
+  add(new THREE.BoxGeometry(0.5, 0.8, 0.4), fe, 0, 1.2, 0);
+  add(new THREE.SphereGeometry(0.2, 10, 8), lam(0xc9a080), 0, 1.8, 0.05);
+  add(new THREE.SphereGeometry(0.22, 10, 8, 0, 6.3, 0, 1.8), lam(0x1a1008), 0, 1.84, -0.02);
+  for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.03, 6, 4), lam(0xff3020, 0xff2000), s * 0.07, 1.83, 0.2);
+  for (const s of [-1, 1]) add(new THREE.ConeGeometry(0.06, 0.4, 4), lam(0xd0c080), s * 0.12, 0.65, 0.05).rotation.x = Math.PI;
+  const wings = [];
+  for (const s of [-1, 1]) { const w = new THREE.Group(); w.position.set(s * 0.25, 1.5, -0.05); g.add(w); add(new THREE.BoxGeometry(1.6, 0.06, 0.7), fe, s * 0.8, 0, 0, w); wings.push(w); }
+  return { root: g, wings, phase: 0 };
+}
+function makeSkylla() {
+  const g = new THREE.Group();
+  const add = (geo, mat, x, y, z, p = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; p.add(m); return m; };
+  const sk = lam(0x2f6a6a), dk = lam(0x1a3a3a);
+  add(new THREE.SphereGeometry(1, 16, 12), sk, 0, 1.4, 0).scale.set(2.2, 1.5, 2.2);
+  const necks = [];
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    const n = new THREE.Group(); n.position.set(Math.cos(a) * 1.2, 2.4, Math.sin(a) * 1.2 + 0.6); n.rotation.y = a; g.add(n);
+    const neck = add(new THREE.CylinderGeometry(0.22, 0.32, 3, 8), sk, 0, 1.5, 0, n);
+    const head = add(new THREE.BoxGeometry(0.5, 0.45, 0.8), dk, 0, 3.1, 0.25, n);
+    add(new THREE.BoxGeometry(0.42, 0.08, 0.5), lam(0xf0f0e0), 0, -0.2, 0.25, head);
+    for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.06, 6, 4), lam(0xffee40, 0xffcc00), s * 0.16, 0.12, 0.3, head);
+    necks.push(n);
+  }
+  for (let i = 0; i < 8; i++) { const a = i / 8 * 6.28; const t = add(new THREE.ConeGeometry(0.3, 2.6, 6), dk, Math.cos(a) * 2.2, 0.3, Math.sin(a) * 2.2); t.rotation.z = Math.cos(a) * 1.3; t.rotation.x = -Math.sin(a) * 1.3; }
+  return { root: g, necks, phase: 0 };
+}
+
+function spawnMythCreatures() {
+  const put = (type, x, z) => { if (heightAt(x, z) > 1.2) spawnEnemy(type, x, z); };
+  for (const [x, z] of [[150, -460], [175, -480], [140, -490], [-520, -160], [-555, -185], [-430, 330]]) put('zentaur', x, z);
+  for (const [x, z] of [[-850, 365], [210, -575], [-660, -420]]) put('zyklop', x, z);
+  const Si = LOCS.sirenen;
+  for (let i = 0; i < 4; i++) put('harpyie', Si.x + rr(-35, 35), Si.z + rr(-35, 35));
+  for (let i = 0; i < 3; i++) put('harpyie', -470 + rr(-30, 30), -410 + rr(-30, 30));
+  for (let i = 0; i < 3; i++) put('skelett', LOCS.seriphos.x + rr(20, 60), LOCS.seriphos.z + rr(-60, -20));
+}
+
+// ============================================================
 // Eingabe
 // ============================================================
 addEventListener('keydown', (e) => {
@@ -1694,9 +2175,12 @@ addEventListener('keydown', (e) => {
   if (k === 'KeyE') { if (dialog) advanceDialog(); else interact(); }
   if (dialog && /^Digit[1-9]$/.test(k)) chooseOpt(+k.slice(5) - 1);
   if (dialog) return;
-  if (k === 'KeyR') { player.mounted ? dismount() : mount(); }
+  if (k === 'KeyR' && !player.flying && !player.sailing) { player.mounted ? dismount() : mount(); }
   if (k === 'KeyF') { if (player.potions > 0 && player.hp < player.maxHp) { player.potions--; player.hp = Math.min(player.maxHp, player.hp + 60); sfx('drink'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, '+60', '#7aff8a'); } else if (player.potions <= 0) toast('Keine Ambrosia mehr. Kleon in Athen verkauft welche.'); }
   if (k === 'KeyQ') zeusBolt();
+  if (k === 'KeyT') toggleFly();
+  if (k === 'KeyB') toggleShip();
+  if (k === 'KeyG') medusaHead();
   if (k === 'KeyM') { mapOpen = !mapOpen; $('bigmap').classList.toggle('hidden', !mapOpen); }
   if (k === 'Space') e.preventDefault();
 });
@@ -1738,10 +2222,12 @@ const clock = new THREE.Clock();
 const _fwd = new V3(), _right = new V3(), _mv = new V3();
 function updatePlayer(dt) {
   const P = player.pos;
-  player.atkCd -= dt; player.atkAnim = Math.max(0, player.atkAnim - dt * 2.6); player.zapCd = Math.max(0, player.zapCd - dt);
+  player.atkCd -= dt; player.atkAnim = Math.max(0, player.atkAnim - dt * 2.6); player.zapCd = Math.max(0, player.zapCd - dt); player.medCd = Math.max(0, player.medCd - dt);
+  if (player.stoned > 0) player.stoned -= dt;
+  const flt = player.stoned > 0 ? 'grayscale(1) brightness(0.8)' : ''; if (canvas.style.filter !== flt) canvas.style.filter = flt;
   _fwd.set(-Math.sin(camYaw), 0, -Math.cos(camYaw)); _right.set(Math.cos(camYaw), 0, -Math.sin(camYaw));
   _mv.set(0, 0, 0);
-  const canMove = !dialog && !player.dead && !mapOpen;
+  const canMove = !dialog && !player.dead && !mapOpen && !(player.stoned > 0);
   if (canMove) {
     if (keys.KeyW || keys.ArrowUp) _mv.add(_fwd);
     if (keys.KeyS || keys.ArrowDown) _mv.sub(_fwd);
@@ -1752,8 +2238,11 @@ function updatePlayer(dt) {
   const moving = _mv.lengthSq() > 0;
   if (moving) _mv.normalize();
   const sprint = (keys.ShiftLeft || keys.ShiftRight) && moving && player.stamina > 1 && !player.blocking;
+  if (player.sailing) { updateSailing(dt, moving, sprint); return; }
+  if (player.flying) { updateFlying(dt, moving, sprint, canMove); return; }
+  const hasHippo = player.gear.includes('poseidon');
   let speed = player.mounted ? (sprint ? 30 : 19) : (sprint ? 12.5 : 7);
-  if (player.swimming) speed = sprint ? 6 : 4;
+  if (player.swimming) speed = hasHippo ? (sprint ? 36 : 26) : (sprint ? 6 : 4);
   if (player.blocking) speed = 3.2;
   if (player.relics.includes('hermes')) speed *= 1.2;
   const stMul = player.relics.includes('herakles') ? 0.5 : 1;
@@ -1767,7 +2256,7 @@ function updatePlayer(dt) {
   }
   if (player.blocking) player.yaw = angLerp(player.yaw, Math.atan2(_fwd.x, _fwd.z), Math.min(1, dt * 12));
   if (player.knock && player.knock.t > 0) { P.x += player.knock.x * dt; P.z += player.knock.z * dt; player.knock.t -= dt; }
-  P.x = clamp(P.x, -HALF + 10, HALF - 10); P.z = clamp(P.z, -HALF + 10, HALF - 10);
+  if (!curD) { P.x = clamp(P.x, -HALF + 10, HALF - 10); P.z = clamp(P.z, -HALF + 10, HALF - 10); }
   resolveCollisions(P, player.mounted ? 0.9 : 0.45);
   player.speedNow = Math.hypot(P.x - ox, P.z - oz) / Math.max(dt, 1e-4);
   // Vertikal
@@ -1792,10 +2281,13 @@ function updatePlayer(dt) {
   if (!player.dead && clock.elapsedTime - player.lastHurt > 6 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * 4);
   // Modell
   const hy = player.mounted ? 1.3 : 0;
-  hero.root.position.set(P.x, P.y + hy + (player.swimming ? -0.85 : 0), P.z);
+  const riding = player.swimming && hasHippo;
+  hero.root.position.set(P.x, P.y + hy + (riding ? 1.0 : player.swimming ? -0.85 : 0), P.z);
   hero.root.rotation.y = player.yaw;
-  animateHumanoid(hero, player.mounted ? 0 : player.speedNow, dt, { attack: player.atkAnim, block: player.blocking, sitting: player.mounted });
-  if (player.swimming) { hero.armL.rotation.x = -2.6 + Math.sin(clock.elapsedTime * 4) * 0.6; hero.armR.rotation.x = -2.6 - Math.sin(clock.elapsedTime * 4) * 0.6; }
+  animateHumanoid(hero, player.mounted || riding ? 0 : player.speedNow, dt, { attack: player.atkAnim, block: player.blocking, sitting: player.mounted || riding });
+  hippo.root.visible = riding; if (riding) { hippo.root.position.set(P.x, P.y - 0.4, P.z); hippo.root.rotation.y = player.yaw; animateQuad(hippo, player.speedNow * 0.4, dt); }
+  pegasus.root.visible = false; ship.root.visible = false;
+  if (player.swimming && !riding) { hero.armL.rotation.x = -2.6 + Math.sin(clock.elapsedTime * 4) * 0.6; hero.armR.rotation.x = -2.6 - Math.sin(clock.elapsedTime * 4) * 0.6; }
   if (player.mounted) { horse.root.position.set(P.x, P.y, P.z); horse.root.rotation.y = player.yaw; animateQuad(horse, player.speedNow * 0.6, dt); }
   // Rennen
   if (race) {
@@ -1811,6 +2303,40 @@ function updatePlayer(dt) {
     } else if (race && race.t > race.limit) { race = null; toast('Zu langsam! Sprich erneut mit dem Kampfrichter.'); }
     if (race && player.mounted) { race = null; toast('Disqualifiziert – kein Pferd im Stadion!'); }
   }
+}
+function updateSailing(dt, moving, sprint) {
+  const P = player.pos, t = clock.elapsedTime;
+  player.shipSpeed = lerp(player.shipSpeed || 0, moving ? (sprint ? 32 : 22) : 0, Math.min(1, dt * 1.2));
+  if (moving) player.yaw = angLerp(player.yaw, Math.atan2(_mv.x, _mv.z), Math.min(1, dt * 1.8));
+  const nx = P.x + Math.sin(player.yaw) * player.shipSpeed * dt, nz = P.z + Math.cos(player.yaw) * player.shipSpeed * dt;
+  const fx = nx + Math.sin(player.yaw) * 7, fz = nz + Math.cos(player.yaw) * 7;
+  if (heightAt(fx, fz) < -1.8 && heightAt(nx, nz) < -1.8 && Math.abs(fx) < HALF - 15 && Math.abs(fz) < HALF - 15) { P.x = nx; P.z = nz; }
+  else { player.shipSpeed *= 0.2; if (!player._shoreT || t - player._shoreT > 4) { player._shoreT = t; toast('Land in Sicht – drücke B zum Anlegen.'); } }
+  P.y = 0.9 + Math.sin(t * 1.3) * 0.15; player.vy = 0; player.swimming = false;
+  player.speedNow = player.shipSpeed;
+  ship.root.visible = true; ship.root.position.set(P.x, Math.sin(t * 1.3) * 0.15 - 0.2, P.z); ship.root.rotation.set(0, player.yaw, Math.sin(t * 0.9) * 0.04);
+  hero.root.position.set(P.x - Math.sin(player.yaw) * 5.5, P.y + 0.3, P.z - Math.cos(player.yaw) * 5.5); hero.root.rotation.y = player.yaw;
+  animateHumanoid(hero, 0, dt, {});
+  pegasus.root.visible = false; hippo.root.visible = false;
+}
+function updateFlying(dt, moving, sprint, canMove) {
+  const P = player.pos, t = clock.elapsedTime, sp = sprint ? 50 : 32;
+  if (moving) { P.x += _mv.x * sp * dt; P.z += _mv.z * sp * dt; player.yaw = angLerp(player.yaw, Math.atan2(_mv.x, _mv.z), Math.min(1, dt * 6)); }
+  let vy = 0; if (canMove && keys.Space) vy = 15; if (canMove && (keys.KeyC || keys.ControlLeft)) vy = -18;
+  P.y += vy * dt;
+  P.x = clamp(P.x, -HALF + 10, HALF - 10); P.z = clamp(P.z, -HALF + 10, HALF - 10);
+  const floor = Math.max(groundAt(P.x, P.z), -0.5);
+  if (P.y < floor) P.y = floor;
+  if (P.y > 340) P.y = 340;
+  if (P.y - floor < 3) resolveCollisions(P, 0.9);
+  player.speedNow = moving ? sp : 0; player.swimming = false; player.vy = 0;
+  pegasus.root.visible = true; pegasus.root.position.set(P.x, P.y, P.z); pegasus.root.rotation.set(moving ? 0.1 : 0, player.yaw, 0);
+  const fl = Math.sin(t * (moving ? 9 : 4)) * 0.7; pegasus.wings[0].rotation.z = 0.3 + fl; pegasus.wings[1].rotation.z = -0.3 - fl;
+  animateQuad(pegasus, P.y - floor < 0.3 ? player.speedNow * 0.4 : 0, dt);
+  hero.root.position.set(P.x, P.y + 1.3, P.z); hero.root.rotation.y = player.yaw;
+  animateHumanoid(hero, 0, dt, { attack: player.atkAnim, sitting: true });
+  hippo.root.visible = false; ship.root.visible = false;
+  if (!player.dead && clock.elapsedTime - player.lastHurt > 6 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * 4);
 }
 function updateNPCs(dt) {
   for (const n of npcs) {
@@ -1844,6 +2370,18 @@ const SKY = {
 const _c1 = new THREE.Color(), _c2 = new THREE.Color(), _sunDir = new V3();
 function updateSky(dt) {
   S.time = (S.time + dt / 480) % 1; // 8 Minuten pro Tag
+  if (curD) {
+    const T = THEMES[curD.theme], P = player.pos;
+    sky.visible = false; stars.visible = false; water.visible = false; for (const c of clouds) c.visible = false;
+    scene.fog.color.setHex(0x0a0806); scene.fog.near = 14; scene.fog.far = 95;
+    sun.intensity = 0; hemi.intensity = 0.55 + flash * 3; hemi.color.setHex(T.light); hemi.groundColor.setHex(0x30241a);
+    torch.intensity = 45; torch.color.setHex(T.light); torch.position.set(P.x, P.y + 3.2, P.z);
+    flash = Math.max(0, flash - dt * 3);
+    $('clock').textContent = '⛰ Unter der Erde';
+    return;
+  }
+  sky.visible = true; stars.visible = true; water.visible = true; for (const c of clouds) c.visible = true;
+  scene.fog.near = 220; scene.fog.far = 1300; if (torch) torch.intensity = 0;
   const a = (S.time - 0.25) * Math.PI * 2;
   const elev = Math.sin(a);
   _sunDir.set(Math.cos(a) * 0.8, elev, 0.35).normalize();
@@ -1867,13 +2405,22 @@ function updateSky(dt) {
   const hrs = (S.time * 24 + 0) % 24;
   $('clock').textContent = (elev > 0 ? '☀ ' : '☾ ') + String(Math.floor(hrs)).padStart(2, '0') + ':' + String(Math.floor((hrs % 1) * 60)).padStart(2, '0');
 }
+function camBlocked(x, y, z) {
+  const list = cgrid.get(ckey(Math.floor(x / CGRID), Math.floor(z / CGRID)));
+  if (!list) return false;
+  for (const c of list) if (c.t === 'b' && c.top > 1e8 && x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return true;
+  return false;
+}
 function updateCamera(dt) {
   const P = player.pos;
-  const tgt = new V3(P.x, P.y + (player.mounted ? 3.0 : 1.75) + (player.swimming ? -0.6 : 0), P.z);
-  const dist = (player.mounted ? 9 : 6.5) * camZoom;
-  const cx = tgt.x + Math.sin(camYaw) * Math.cos(camPitch) * dist, cz = tgt.z + Math.cos(camYaw) * Math.cos(camPitch) * dist;
-  let cy = tgt.y + Math.sin(camPitch) * dist;
-  cy = Math.max(cy, heightAt(cx, cz) + 0.6, 0.4);
+  const tgt = new V3(P.x, P.y + (player.sailing ? 3.5 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
+  let dist = (player.sailing ? 17 : player.flying ? 11 : player.mounted ? 9 : 6.5) * camZoom;
+  const dx = Math.sin(camYaw) * Math.cos(camPitch), dy = Math.sin(camPitch), dz = Math.cos(camYaw) * Math.cos(camPitch);
+  for (let k = 0.12; k <= 1.0001; k += 0.08) { if (camBlocked(tgt.x + dx * dist * k, tgt.y + dy * dist * k, tgt.z + dz * dist * k)) { dist *= Math.max(0.12, k - 0.1); break; } }
+  const cx = tgt.x + dx * dist, cz = tgt.z + dz * dist;
+  let cy = tgt.y + dy * dist;
+  if (curD) cy = Math.min(cy, curD.O.y + curD.H - 0.8);
+  else cy = Math.max(cy, heightAt(cx, cz) + 0.6, 0.4);
   camera.position.set(cx, cy, cz);
   camera.lookAt(tgt);
 }
@@ -1885,6 +2432,8 @@ function updateHUD() {
   $('money').textContent = player.money; $('potions').textContent = player.potions;
   const ab = [];
   ab.push(player.mounted ? '[R] Absteigen' : '[R] Pferd');
+  if (player.hasShip) ab.push(player.sailing ? '[B] Anlegen' : '[B] Schiff');
+  if (player.gear.includes('pegasus')) { ab.push(player.flying ? '[T] Landen' : '[T] Pegasus'); ab.push(player.medCd > 0 ? 'Medusa: ' + Math.ceil(player.medCd) + ' s' : '[G] Medusenhaupt'); }
   if (player.relics.length) ab.push('Relikte ' + player.relics.length + '/6');
   if (player.blessed) ab.push(player.zapCd > 0 ? 'Blitz: ' + Math.ceil(player.zapCd) + ' s' : '[Q] Blitz des Zeus bereit');
   $('abilities').textContent = ab.join('  ·  ');
@@ -1894,7 +2443,8 @@ function updateHUD() {
   let cur = null;
   for (const L of LOC_LIST) if (!L.hidden && Math.hypot(player.pos.x - L.x, player.pos.z - L.z) < L.r + 10) cur = L;
   RUINS.forEach((r, i) => { if (Math.hypot(player.pos.x - r.x, player.pos.z - r.z) < 26) { cur = r; if (!S.found.includes(i)) { S.found.push(i); toast('Entdeckt: ' + r.name, 'gold'); } } });
-  if (cur && cur !== lastLoc) showLoc(cur.sub ? cur : { name: cur.name, sub: cur.chest && cur.chest.opened ? 'Geplündert' : 'Vergessener Tempel – bewacht' });
+  if (!curD) for (const d of DUNGEONS) if (Math.hypot(player.pos.x - d.at[0], player.pos.z - d.at[1]) < 22) { cur = d; if (!S.foundD.includes(d.idx)) { S.foundD.push(d.idx); toast('Entdeckt: ' + d.name, 'gold'); } }
+  if (cur && cur !== lastLoc) showLoc(cur.sub ? cur : { name: cur.name, sub: cur.chest && cur.chest.opened ? 'Geplündert' : cur.kind === 'old' ? 'Alte Ruinen – von Skeletten bewacht' : 'Vergessener Tempel – bewacht' });
   lastLoc = cur;
 }
 
@@ -1952,7 +2502,9 @@ function startGame(fromSave) {
     applyTownName();
     for (let l = 1; l <= S.town.lvl; l++) buildTownLevel(l);
     for (const ch of CHESTS) if (S.chests.includes(ch.id)) markChestOpened(ch);
-    for (const e of enemies) if (e.ruin !== undefined && RUINS[e.ruin].chest.opened) { e.dead = true; e.respawn = 1e9; e.deadT = 99; e.m.root.visible = false; }
+    for (const e of enemies) if ((e.ruin !== undefined && RUINS[e.ruin].chest.opened) || (e.key && (S.bossDead || []).includes(e.key))) { e.dead = true; e.respawn = 1e9; e.deadT = 99; e.m.root.visible = false; }
+    S.bossDead = S.bossDead || []; S.foundD = S.foundD || []; player.gear = player.gear || [];
+    refreshHeroLook();
   } else {
     try { localStorage.removeItem('hellas-save'); } catch (e) { }
     player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]), SPOTS.respawn[1]);
@@ -1961,6 +2513,7 @@ function startGame(fromSave) {
   $('menu').classList.add('hidden'); $('hud').classList.remove('hidden');
   updateQuestText();
   camYaw = 0; camPitch = 0.3; if (!sv) player.yaw = Math.PI;
+  if (sv) for (const d of DUNGEONS) if (Math.hypot(player.pos.x - d.at[0], player.pos.z - d.at[1]) < 12) { const r = downhillRot(d.at[0], d.at[1]); camYaw = r + Math.PI; player.yaw = r; }
   canvas.requestPointerLock && canvas.requestPointerLock();
   showLoc(LOCS.athen);
   if (!sv) setTimeout(() => toast('Folge dem goldenen Zeichen zu deiner ersten Aufgabe.'), 1500);
@@ -1971,13 +2524,18 @@ function init() {
   const t0 = performance.now();
   buildTerrain();
   buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
-  buildTownBase(); buildRuins();
+  buildIslands();
+  buildTownBase(); buildRuins(); buildOldRuins(); buildDungeons();
   buildVegetation();
   finalizeStatic();
   buildClouds();
   hero = makeHumanoid(heroLook()); scene.add(hero.root);
   horse = makeHorse(); horse.root.visible = false; scene.add(horse.root);
-  buildNPCs(); buildInteractables(); buildEnemies();
+  pegasus = makePegasus(); pegasus.root.visible = false; scene.add(pegasus.root);
+  hippo = makeHippo(); hippo.root.visible = false; scene.add(hippo.root);
+  ship = makeShip(); ship.root.visible = false; scene.add(ship.root);
+  torch = new THREE.PointLight(0xffa050, 0, 32, 1.6); scene.add(torch);
+  buildNPCs(); buildIslandNPCs(); buildInteractables(); buildEnemies(); spawnMythCreatures(); spawnDungeonEnemies();
   buildPickups();
   buildMapCanvas();
   resizeOverlay();
@@ -1987,7 +2545,7 @@ function init() {
   if (loadSave()) $('btnLoad').classList.remove('hidden');
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { CHESTS, RUINS, talkTown, foundTown, upgradeTown, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);
