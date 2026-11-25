@@ -31,87 +31,132 @@ function segDist(px, pz, ax, az, bx, bz) { const dx = bx - ax, dz = bz - az; con
 // ============================================================
 // Welt-Definition
 // ============================================================
-const WORLD = 2000, SEG = 400, CELL = WORLD / SEG, N = SEG + 1, HALF = WORLD / 2;
-const BLOBS = [
-  { x: -300, z: -80, r: 480 },   // Attika / Mittelgriechenland
-  { x: 0, z: -560, r: 340 },     // Thessalien / Olymp
-  { x: -350, z: 360, r: 330 },   // Peloponnes
-  { x: -650, z: -300, r: 250 },  // Westen
-  { x: 480, z: 660, r: 170 },    // Kreta
-  { x: 650, z: 255, r: 110 },    // Thera
-  { x: 620, z: -365, r: 115 },   // Seriphos
-  { x: 375, z: -222, r: 66 },    // Sireneninsel
-  { x: -875, z: 330, r: 95 },    // Ithaka
+// Echte Geografie: Längen-/Breitengrad -> Welt (Athen = Ursprung, 1 Einheit ≈ 300 m)
+const WORLD = 2800, SEG = 440, CELL = WORLD / SEG, N = SEG + 1, HALF = WORLD / 2;
+const GEO = { lon0: 23.727, lat0: 37.972, kx: 285, kz: 370 };
+const ll = (lon, lat) => [(lon - GEO.lon0) * GEO.kx, -(lat - GEO.lat0) * GEO.kz];
+const COAST = {
+  festland: [[19.0, 41.9], [29.0, 41.9], [29.0, 41.0], [28.0, 40.98], [27.5, 40.98], [27.0, 40.75], [26.7, 40.45], [26.4, 40.2], [26.18, 40.05], [26.25, 40.25], [26.55, 40.5], [26.78, 40.62], [26.3, 40.72], [25.95, 40.82], [25.4, 40.88], [24.9, 40.93], [24.4, 40.93], [24.0, 40.8], [23.85, 40.75], [23.95, 40.4], [24.2, 40.3], [24.42, 40.15], [24.1, 40.25], [23.95, 40.15], [23.95, 39.98], [23.75, 40.15], [23.6, 40.22], [23.6, 40.05], [23.4, 39.95], [23.35, 40.15], [23.0, 40.45], [22.95, 40.62], [22.75, 40.55], [22.6, 40.4], [22.6, 40.25], [22.6, 40.05], [22.75, 39.9], [23.0, 39.65], [23.25, 39.45], [23.35, 39.17], [23.05, 39.03], [22.85, 38.95], [22.55, 38.85], [22.7, 38.8], [23.0, 38.7], [23.25, 38.55], [23.55, 38.45], [23.75, 38.32], [23.98, 38.15], [24.02, 38.0], [24.05, 37.75], [24.02, 37.65], [23.85, 37.78], [23.7, 37.9], [23.62, 37.93], [23.55, 38.02], [23.4, 37.98], [23.15, 37.93], [23.0, 37.92], [23.05, 37.82], [23.15, 37.63], [23.4, 37.6], [23.45, 37.45], [23.2, 37.35], [23.05, 37.45], [22.85, 37.5], [22.8, 37.58], [22.72, 37.5], [22.75, 37.2], [22.95, 36.95], [23.05, 36.7], [23.18, 36.45], [22.95, 36.5], [22.8, 36.65], [22.6, 36.78], [22.5, 36.6], [22.48, 36.39], [22.38, 36.6], [22.25, 36.85], [22.12, 37.02], [21.98, 36.85], [21.9, 36.78], [21.7, 36.8], [21.68, 36.92], [21.65, 37.1], [21.67, 37.25], [21.5, 37.5], [21.32, 37.65], [21.15, 37.85], [21.35, 38.15], [21.72, 38.25], [21.8, 38.3], [22.1, 38.23], [22.5, 38.1], [22.75, 38.02], [22.95, 37.95], [22.98, 37.99], [22.9, 38.05], [22.6, 38.2], [22.42, 38.43], [22.2, 38.35], [21.95, 38.38], [21.83, 38.39], [21.77, 38.33], [21.45, 38.35], [21.1, 38.5], [20.95, 38.75], [20.75, 38.95], [20.55, 39.15], [20.27, 39.5], [20.0, 39.85], [19.75, 40.1], [19.4, 40.4], [19.48, 40.6], [19.45, 41.3], [19.0, 41.4]],
+  kleinasien: [[29.0, 40.4], [28.0, 40.38], [27.5, 40.32], [26.7, 40.38], [26.4, 40.15], [26.2, 40.0], [26.15, 39.85], [26.07, 39.48], [26.4, 39.5], [26.85, 39.55], [26.7, 39.3], [26.9, 39.05], [26.75, 38.7], [27.05, 38.45], [26.65, 38.45], [26.38, 38.62], [26.3, 38.32], [26.65, 38.2], [26.95, 38.05], [27.25, 37.85], [27.3, 37.6], [27.25, 37.37], [27.45, 37.2], [27.35, 37.03], [27.7, 36.95], [27.4, 36.68], [28.1, 36.8], [28.3, 36.75], [28.6, 36.6], [29.0, 36.6]],
+  euboea: [[22.85, 39.03], [23.2, 39.02], [23.45, 38.95], [23.65, 38.75], [24.1, 38.62], [24.35, 38.45], [24.58, 38.15], [24.58, 38.0], [24.45, 37.98], [24.25, 38.15], [24.0, 38.25], [23.75, 38.35], [23.6, 38.47], [23.4, 38.6], [23.15, 38.78], [22.9, 38.92]],
+  kreta: [[23.52, 35.3], [23.6, 35.58], [23.75, 35.55], [24.05, 35.52], [24.2, 35.58], [24.3, 35.38], [24.5, 35.37], [24.95, 35.42], [25.15, 35.34], [25.45, 35.3], [25.72, 35.25], [26.1, 35.22], [26.3, 35.3], [26.25, 35.05], [26.1, 35.02], [25.75, 35.0], [25.4, 34.98], [25.0, 34.93], [24.75, 34.92], [24.5, 35.1], [24.2, 35.2], [23.85, 35.23], [23.55, 35.22]],
+};
+// Inseln als Ellipsen: [Länge, Breite, Radius Länge°, Radius Breite°, Drehung°]
+const ISLES = [
+  [19.88, 39.62, 0.12, 0.33, -35], [20.55, 38.22, 0.22, 0.13, -20], [20.67, 38.4, 0.09, 0.14, 10], [20.82, 37.78, 0.13, 0.12, 0], [20.65, 38.72, 0.08, 0.12, 0],
+  [22.98, 36.24, 0.09, 0.13, 0], [23.48, 37.74, 0.07, 0.05, 0], [23.47, 37.93, 0.08, 0.05, 0], [24.85, 37.83, 0.15, 0.07, -35], [25.12, 37.6, 0.11, 0.05, -30],
+  [25.36, 37.45, 0.07, 0.04, 0], [25.27, 37.4, 0.06, 0.06, 0], [25.47, 37.07, 0.12, 0.14, 0], [25.15, 37.07, 0.08, 0.08, 0], [24.42, 36.71, 0.13, 0.06, 0],
+  [24.48, 37.15, 0.12, 0.1, 0], [24.7, 36.97, 0.04, 0.06, 0], [25.43, 36.4, 0.13, 0.12, 0], [25.3, 36.72, 0.05, 0.05, 0], [25.9, 36.85, 0.13, 0.04, -30],
+  [27.15, 36.83, 0.22, 0.06, -15], [28.0, 36.2, 0.22, 0.38, -35], [27.15, 35.65, 0.06, 0.2, 0], [26.78, 37.73, 0.2, 0.07, -10], [26.15, 37.62, 0.15, 0.05, -20],
+  [26.0, 38.38, 0.12, 0.25, 0], [26.25, 39.17, 0.33, 0.2, -15], [25.25, 39.88, 0.15, 0.12, 0], [25.85, 40.18, 0.1, 0.06, 0], [24.7, 40.68, 0.12, 0.11, 0],
+  [25.55, 40.47, 0.08, 0.05, 0], [24.55, 38.88, 0.14, 0.07, -30], [23.45, 39.16, 0.06, 0.04, 0], [23.65, 39.12, 0.06, 0.05, 0], [24.33, 37.62, 0.06, 0.08, 0],
+  [24.93, 37.44, 0.05, 0.07, 0], [24.43, 37.4, 0.05, 0.07, 0], [21.0, 37.2, 0.08, 0.07, 0],
 ];
+const POLYS = Object.values(COAST).map(pts => { const p = pts.map(([lo, la]) => ll(lo, la)); const xs = p.map(q => q[0]), zs = p.map(q => q[1]); return { p, minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) }; });
+const ELL = ISLES.map(([lo, la, rlo, rla, rot]) => { const [x, z] = ll(lo, la); return { x, z, rx: Math.max(10, rlo * GEO.kx), rz: Math.max(10, rla * GEO.kz), c: Math.cos(rot * Math.PI / 180), s: Math.sin(rot * Math.PI / 180) }; });
+function coastDist(x, z) {
+  // vorzeichenbehafteter Abstand zur Küste (positiv = Land)
+  let best = -1e9;
+  for (const P of POLYS) {
+    if (x < P.minX - 150 || x > P.maxX + 150 || z < P.minZ - 150 || z > P.maxZ + 150) continue;
+    const p = P.p; let inside = false, md = 1e9;
+    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+      const [xi, zi] = p[i], [xj, zj] = p[j];
+      if (((zi > z) !== (zj > z)) && (x < (xj - xi) * (z - zi) / (zj - zi) + xi)) inside = !inside;
+      const d = segDist(x, z, xi, zi, xj, zj); if (d < md) md = d;
+    }
+    const sd = inside ? md : -md; if (sd > best) best = sd;
+  }
+  for (const E of ELL) {
+    const dx = x - E.x, dz = z - E.z, u = (dx * E.c + dz * E.s) / E.rx, v = (-dx * E.s + dz * E.c) / E.rz;
+    const sd = (1 - Math.hypot(u, v)) * Math.min(E.rx, E.rz); if (sd > best) best = sd;
+  }
+  return best;
+}
 const PEAKS = [
-  { x: 100, z: -680, h: 175, s: 80 },  // Olymp
-  { x: -480, z: -430, h: 80, s: 70 },  // Parnass
-  { x: -400, z: 560, h: 60, s: 55 },   // Taygetos
-  { x: 540, z: 620, h: 30, s: 45 },    // Ida (Kreta)
-  { x: 665, z: 235, h: 85, s: 30 },    // Vulkan von Thera
-  { x: 660, z: -400, h: 30, s: 40 },   // Seriphos
-  { x: -905, z: 300, h: 38, s: 35 },   // Ithaka
-];
+  [22.35, 40.08, 175, 70], [22.6, 38.53, 85, 50], [22.35, 36.95, 70, 40], [24.77, 35.23, 80, 40], [21.2, 39.7, 80, 85], [21.5, 39.2, 65, 75], [21.9, 38.85, 60, 65],
+  [23.05, 39.42, 45, 35], [24.33, 40.16, 60, 20], [22.4, 37.95, 55, 40], [21.8, 37.97, 50, 40], [22.6, 37.25, 45, 35], [22.85, 38.35, 40, 35], [23.3, 38.18, 30, 30],
+  [23.8, 37.95, 22, 18], [22.7, 39.8, 50, 30], [25.39, 36.43, 40, 14], [26.85, 39.7, 70, 55], [21.4, 40.5, 70, 90], [27.8, 38.3, 60, 80], [22.15, 37.45, 45, 35],
+].map(([lo, la, h, s]) => { const [x, z] = ll(lo, la); return { x, z, h, s }; });
+// Orte an ihren echten Positionen
+const L_ = (lon, lat, o) => { const [x, z] = ll(lon, lat); return Object.assign({ x, z, h: null }, o); };
 const LOCS = {
-  athen:     { name: 'Athen', sub: 'Stadt der Athene', x: 0, z: 0, r: 78, h: 6, city: true },
+  athen:     { name: 'Athen', sub: 'Stadt der Athene', x: 0, z: 0, r: 60, h: 6, city: true },
   akropolis: { name: 'Akropolis', x: 0, z: -35, r: 30, h: 22, hidden: true },
-  piraeus:   { name: 'Piräus', sub: 'Hafen von Athen', x: 140, z: 70, r: 36, h: 2, city: true },
-  theben:    { name: 'Theben', sub: 'Stadt des Kadmos', x: -170, z: -260, r: 40, h: 12, city: true },
-  delphi:    { name: 'Delphi', sub: 'Heiligtum des Apollon', x: -420, z: -330, r: 46, h: 38, city: true },
-  olympia:   { name: 'Olympia', sub: 'Heiligtum des Zeus', x: -560, z: 130, r: 78, h: 5, city: true },
-  sparta:    { name: 'Sparta', sub: 'Stadt der Krieger', x: -260, z: 520, r: 70, h: 8, city: true },
-  banditen:  { name: 'Banditenlager', sub: 'Vorsicht, Wanderer', x: -120, z: 430, r: 26, h: null },
-  olymp:     { name: 'Gipfel des Olymp', sub: 'Thron der Götter', x: 100, z: -680, r: 14, h: null },
-  kreta:     { name: 'Knossos', sub: 'Insel Kreta', x: 460, z: 690, r: 62, h: 6, city: true },
-  thera:     { name: 'Thera', sub: 'Die Vulkaninsel', x: 590, z: 300, r: 26, h: null, city: true },
-  seriphos:  { name: 'Seriphos', sub: 'Insel der Medusa', x: 595, z: -330, r: 26, h: null, city: true },
-  sirenen:   { name: 'Sireneninsel', sub: 'Hüte dich vor ihrem Gesang', x: 372, z: -218, r: 16, h: null },
-  ithaka:    { name: 'Ithaka', sub: 'Heimat des Odysseus', x: -860, z: 340, r: 30, h: null, city: true },
-  hadesTor:  { name: 'Tor zur Unterwelt', sub: 'Reich des Hades', x: -330, z: 615, r: 9, h: null, hidden: true },
-  hephTor:   { name: 'Schmiede des Hephaistos', x: 640, z: 262, r: 8, h: null, hidden: true },
-  poseidonTor: { name: 'Grotte des Poseidon', x: 392, z: -238, r: 7, h: null, hidden: true },
-  medusaTor: { name: 'Hort der Medusa', x: 650, z: -395, r: 8, h: null, hidden: true },
-  typhonTor: { name: 'Gipfel der Stürme', x: 150, z: -640, r: 8, h: null, hidden: true },
-  polyphemTor: { name: 'Höhle des Polyphem', x: -905, z: 310, r: 8, h: null, hidden: true },
-  heimat:    { name: 'Siedlungsplatz', sub: 'Gründe hier deine eigene Stadt', x: 60, z: -220, r: 45, h: null },
-  eleusis:   { name: 'Siedlungsplatz', x: -200, z: 340, r: 45, h: null },
-  lebadeia:  { name: 'Siedlungsplatz', x: -560, z: -240, r: 45, h: null },
-  chalkis:   { name: 'Siedlungsplatz', x: -100, z: -780, r: 45, h: null },
-  megara:    { name: 'Megara', x: -200, z: -100, r: 45, h: null },
-  argos:     { name: 'Argos', x: -380, z: 340, r: 45, h: null },
-  korinth:   { name: 'Korinth', x: -300, z: 100, r: 45, h: null },
+  piraeus:   { name: 'Piräus', sub: 'Hafen von Athen', x: -30, z: 82, r: 34, h: 2, city: true },
+  theben:    L_(23.32, 38.32, { name: 'Theben', sub: 'Stadt des Kadmos', r: 40, h: 12, city: true }),
+  delphi:    L_(22.50, 38.48, { name: 'Delphi', sub: 'Heiligtum des Apollon', r: 46, h: 38, city: true }),
+  olympia:   L_(21.63, 37.64, { name: 'Olympia', sub: 'Heiligtum des Zeus', r: 78, h: 5, city: true }),
+  sparta:    L_(22.43, 37.07, { name: 'Sparta', sub: 'Stadt der Krieger', r: 62, h: 8, city: true }),
+  banditen:  L_(22.75, 37.22, { name: 'Banditenlager', sub: 'Vorsicht, Wanderer', r: 26 }),
+  olymp:     L_(22.35, 40.08, { name: 'Gipfel des Olymp', sub: 'Thron der Götter', r: 14 }),
+  kreta:     L_(25.16, 35.28, { name: 'Knossos', sub: 'Insel Kreta', r: 62, h: 6, city: true }),
+  thera:     L_(25.47, 36.37, { name: 'Thera', sub: 'Die Vulkaninsel', r: 26, city: true }),
+  seriphos:  L_(24.48, 37.15, { name: 'Seriphos', sub: 'Insel der Medusa', r: 26, city: true }),
+  sirenen:   L_(21.0, 37.2, { name: 'Sireneninsel', sub: 'Hüte dich vor ihrem Gesang', r: 16 }),
+  ithaka:    L_(20.69, 38.38, { name: 'Ithaka', sub: 'Heimat des Odysseus', r: 30, city: true }),
+  hadesTor:  L_(22.47, 36.45, { name: 'Tor zur Unterwelt', sub: 'Kap Tainaron – Eingang zum Hades', r: 9, hidden: true }),
+  hephTor:   L_(25.40, 36.42, { name: 'Schmiede des Hephaistos', r: 8, hidden: true }),
+  poseidonTor: L_(21.05, 37.17, { name: 'Grotte des Poseidon', r: 7, hidden: true }),
+  medusaTor: L_(24.53, 37.11, { name: 'Hort der Medusa', r: 8, hidden: true }),
+  typhonTor: L_(22.45, 40.03, { name: 'Gipfel der Stürme', r: 8, hidden: true }),
+  polyphemTor: L_(20.64, 38.44, { name: 'Höhle des Polyphem', r: 8, hidden: true }),
+  heimat:    L_(21.80, 37.05, { name: 'Siedlungsplatz', sub: 'Freier Bauplatz bei Pylos', r: 45 }),
+  eleusis:   L_(22.42, 39.64, { name: 'Siedlungsplatz', sub: 'Freier Bauplatz bei Larissa', r: 45 }),
+  lebadeia:  L_(22.52, 40.76, { name: 'Siedlungsplatz', sub: 'Freier Bauplatz bei Pella', r: 45 }),
+  chalkis:   L_(26.25, 39.2, { name: 'Siedlungsplatz', sub: 'Freier Bauplatz auf Lesbos', r: 45 }),
+  megara:    L_(23.35, 38.0, { name: 'Megara', r: 45 }),
+  argos:     L_(22.73, 37.63, { name: 'Argos', r: 45 }),
+  korinth:   L_(22.88, 37.91, { name: 'Korinth', r: 45 }),
+  troja:     L_(26.24, 39.96, { name: 'Troja', sub: 'Die Stadt des Priamos', r: 55, city: true }),
+  marathon:  L_(23.97, 38.15, { name: 'Marathon', sub: 'Schlachtfeld von 490 v. Chr.', r: 18 }),
+  thermopylen: L_(22.53, 38.8, { name: 'Thermopylen', sub: 'Hier standen die 300', r: 18 }),
+  dodona:    L_(20.79, 39.55, { name: 'Dodona', sub: 'Orakel des Zeus', r: 20 }),
+  rhodos:    L_(28.22, 36.44, { name: 'Rhodos', sub: 'Stadt des Koloss', r: 38, city: true }),
+  delos:     L_(25.27, 37.40, { name: 'Delos', sub: 'Heilige Insel des Apollon', r: 18 }),
+  ephesos:   L_(27.34, 37.94, { name: 'Ephesos', sub: 'Tempel der Artemis', r: 40, city: true }),
+  milet:     L_(27.28, 37.53, { name: 'Milet', sub: 'Stadt des Thales', r: 30, city: true }),
+  halikarnassos: L_(27.43, 37.04, { name: 'Halikarnassos', sub: 'Das Mausoleum', r: 30, city: true }),
+  samos:     L_(26.85, 37.70, { name: 'Samos', sub: 'Heimat des Pythagoras', r: 24, city: true }),
+  kos:       L_(27.18, 36.85, { name: 'Kos', sub: 'Insel des Hippokrates', r: 24, city: true }),
+  chios:     L_(26.1, 38.37, { name: 'Chios', sub: 'Insel Homers', r: 22, city: true }),
+  stagira:   L_(23.75, 40.53, { name: 'Stagira', sub: 'Geburtsort des Aristoteles', r: 22, city: true }),
+  korkyra:   L_(19.92, 39.6, { name: 'Korkyra', sub: 'Die Insel Korfu', r: 25, city: true }),
 };
 const LOC_LIST = Object.values(LOCS);
+const RP = (k, dx = 0, dz = 0) => [LOCS[k].x + dx, LOCS[k].z + dz];
 const ROADS = [
-  [[0, 0], [-80, -120], [-170, -260], [-300, -300], [-420, -330]],
-  [[0, 0], [70, 40], [140, 70]],
-  [[0, 0], [-150, 40], [-330, 80], [-560, 130]],
-  [[-560, 130], [-450, 300], [-260, 520]],
-  [[0, 0], [-60, 180], [-150, 350], [-260, 520]],
-  [[-170, -260], [-60, -420], [40, -560], [90, -660]],
-  [[-260, 520], [-120, 430]],
-  [[460, 690], [400, 600]],
+  [RP('athen'), RP('megara'), RP('korinth'), RP('argos'), RP('sparta'), RP('hadesTor')],
+  [RP('athen'), RP('piraeus')],
+  [RP('athen'), RP('marathon')],
+  [RP('athen'), RP('theben'), RP('delphi')],
+  [RP('theben'), RP('thermopylen'), RP('eleusis'), RP('typhonTor', -60, 90), RP('lebadeia'), RP('stagira')],
+  [RP('korinth'), ll(22.3, 38.05), RP('olympia'), RP('heimat'), RP('sparta')],
+  [RP('sparta'), RP('banditen')],
+  [RP('delphi'), ll(21.6, 38.9), RP('dodona')],
+  [RP('kreta'), ll(25.16, 35.34)],
+  [RP('troja'), ll(26.8, 39.3), ll(27.15, 38.6), RP('ephesos'), RP('milet'), RP('halikarnassos')],
 ];
 const ROAD_SEGS = [];
 for (const r of ROADS) for (let i = 0; i < r.length - 1; i++) ROAD_SEGS.push([r[i][0], r[i][1], r[i + 1][0], r[i + 1][1]]);
 function roadDist(x, z) { let m = 1e9; for (const s of ROAD_SEGS) { const d = segDist(x, z, s[0], s[1], s[2], s[3]); if (d < m) m = d; } return m; }
 const FORESTS = [
-  { x: -250, z: -150, r: 85 }, { x: -540, z: -170, r: 90 }, { x: -60, z: -380, r: 80 },
-  { x: -430, z: 330, r: 80 }, { x: -680, z: -360, r: 90 }, { x: 160, z: -470, r: 70 },
-  { x: -220, z: -680, r: 85, myth: true }, { x: -580, z: 420, r: 80, myth: true }, { x: -740, z: -140, r: 85, myth: true },
-];
+  [21.9, 37.3, 80], [21.4, 39.5, 90], [22.9, 39.3, 70], [22.9, 38.3, 60], [22.2, 40.4, 90], [27.2, 38.8, 90],
+].map(([lo, la, r]) => { const [x, z] = ll(lo, la); return { x, z, r }; });
+const MYTH_SPOTS = { dryaden: ll(20.95, 39.25), nemea: ll(22.25, 37.8), kalydon: ll(21.5, 38.45) };
+for (const k in MYTH_SPOTS) FORESTS.push({ x: MYTH_SPOTS[k][0], z: MYTH_SPOTS[k][1], r: 80, myth: true });
 
 function rawHeight(x, z) {
-  let land = -9;
-  for (const b of BLOBS) { const d = Math.hypot(x - b.x, z - b.z) / b.r; land = Math.max(land, 1 - d); }
-  land += fbm(x * 0.0035 + 11, z * 0.0035 - 7, 4) * 0.28;
+  const sd = coastDist(x, z) + fbm(x * 0.012 + 11, z * 0.012 - 7, 3) * 7;
   let h;
-  if (land < 0) h = Math.max(-38, land * 110);
+  if (sd < 0) h = Math.max(-38, sd * 0.9);
   else {
-    const hills = fbm(x * 0.009, z * 0.009, 5) * 0.5 + 0.5;
-    h = Math.min(land, 0.5) * 14 + hills * hills * 42 * smooth(0.0, 0.3, land);
+    const land = Math.min(1, sd / 90);
+    const hills = fbm(x * 0.008, z * 0.008, 5) * 0.5 + 0.5;
+    h = Math.min(sd * 0.25, 4) + land * 10 + hills * hills * 40 * smooth(0, 0.5, land);
   }
-  for (const p of PEAKS) { const d2 = (x - p.x) ** 2 + (z - p.z) ** 2; h += p.h * Math.exp(-d2 / (2 * p.s * p.s)); }
+  const onLand = smooth(-4, 30, sd);
+  if (onLand > 0) for (const p of PEAKS) { const d2 = (x - p.x) ** 2 + (z - p.z) ** 2; if (d2 < 9 * p.s * p.s) h += p.h * Math.exp(-d2 / (2 * p.s * p.s)) * onLand; }
   return h;
 }
 for (const L of LOC_LIST) if (L.h === null) L.h = Math.max(3, rawHeight(L.x, L.z));
@@ -528,7 +573,7 @@ function buildRuins() {
   let tries = 0;
   while (RUINS.length < 8 && tries < 4000) {
     tries++;
-    const x = rr(-850, 480), z = rr(-850, 820), h = heightAt(x, z);
+    const x = rr(-HALF + 70, HALF - 70), z = rr(-HALF + 70, HALF - 70), h = heightAt(x, z);
     if (h < 4 || h > 90) continue;
     if (inCity(x, z, 1.8) || roadDist(x, z) < 25 || !isFree(x, z, 22)) continue;
     let ok = true;
@@ -923,7 +968,7 @@ function dock(L, dirx, dirz) {
 }
 function buildPiraeus() {
   const L = LOCS.piraeus;
-  piraeusDock = dock(L, 1, 0.15);
+  piraeusDock = dock(L, 0, 1);
   for (let i = 0; i < 12; i++) {
     const x = L.x + rr(-34, 10), z = L.z + rr(-30, 30);
     if (roadDist(x, z) < 6 || heightAt(x, z) < 1.2) continue;
@@ -935,7 +980,7 @@ function buildPiraeus() {
 const MAZE = { n: 9, cell: 6, x0: 0, z0: 0 };
 function buildKreta() {
   const L = LOCS.kreta;
-  kretaDock = dock(L, -0.7, -0.9);
+  kretaDock = dock(L, 0, -1);
   const n = MAZE.n, C = MAZE.cell, x0 = L.x - n * C / 2, z0 = L.z + 4 - n * C / 2;
   MAZE.x0 = x0; MAZE.z0 = z0;
   const hW = [], vW = [];
@@ -993,7 +1038,7 @@ function buildMisc() {
   // Bauernhöfe
   let farms = 0;
   for (let i = 0; i < 400 && farms < 18; i++) {
-    const x = rr(-800, 300), z = rr(-700, 650), h = heightAt(x, z);
+    const x = rr(-HALF + 70, HALF - 70), z = rr(-HALF + 70, HALF - 70), h = heightAt(x, z);
     if (h < 3 || h > 40 || slopeAt(x, z) > 0.25 || inCity(x, z, 1.8) || roadDist(x, z) < 10 || roadDist(x, z) > 50) continue;
     house(x, z, rand() * 6.28, 6, 5, 3.5);
     for (let k = 0; k < 14; k++) tree(x + rr(-25, 25), z + rr(-25, 25), 'olive');
@@ -1006,7 +1051,7 @@ function buildMisc() {
 // ============================================================
 function buildVegetation() {
   // zufällige Verteilung
-  for (let i = 0; i < 26000; i++) {
+  for (let i = 0; i < 44000; i++) {
     const x = rr(-HALF + 20, HALF - 20), z = rr(-HALF + 20, HALF - 20);
     const h = heightAt(x, z);
     if (h < 2 || h > 115) continue;
@@ -1108,13 +1153,13 @@ function makeHumanoid(o = {}) {
   }
   const armL = limb(0.15, 0.64, 0.15, skin, -0.37, 1.66), armR = limb(0.15, 0.64, 0.15, skin, 0.37, 1.66);
   let weapon = null, shield = null;
-  if (o.shield) { shield = mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.07, 18), lam(o.shieldCol ?? 0xb98d3a), -0.05, -0.42, 0.16, armL); shield.rotation.z = Math.PI / 2; shield.rotation.y = Math.PI / 2; mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 10), lam(o.shieldEmblem ?? 0x8a1a1a), 0, 0.04, 0, shield); }
+  if (o.shield && o.weapon !== 'bow') { shield = mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.07, 18), lam(o.shieldCol ?? 0xb98d3a), -0.05, -0.42, 0.16, armL); shield.rotation.z = Math.PI / 2; shield.rotation.y = Math.PI / 2; mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 10), lam(o.shieldEmblem ?? 0x8a1a1a), 0, 0.04, 0, shield); }
   if (o.weapon === 'sword') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); mesh(new THREE.BoxGeometry(0.07, 0.04, 0.85), lam(0xd8d8d0), 0, 0, 0.5, weapon); mesh(new THREE.BoxGeometry(0.28, 0.05, 0.06), M.bronze, 0, 0, 0.08, weapon); }
   if (o.weapon === 'spear') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.6, 6), M.wood, 0, 0, 0.6, weapon).rotation.x = Math.PI / 2; mesh(new THREE.ConeGeometry(0.07, 0.3, 6), lam(0xd8d8d0), 0, 0, 2.0, weapon).rotation.x = Math.PI / 2; }
   if (o.weapon === 'axe') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), M.wood, 0, 0, 0.5, weapon).rotation.x = Math.PI / 2; for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.04, 0.42, 0.3), lam(0x9a9a9a), 0, s * 0.2, 1.05, weapon); }
   if (o.weapon === 'fireSword') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); mesh(new THREE.BoxGeometry(0.1, 0.05, 1.15), lam(0xff8a30, 0xff4a00), 0, 0, 0.65, weapon); mesh(new THREE.BoxGeometry(0.34, 0.06, 0.08), M.gold, 0, 0, 0.08, weapon); }
   if (o.weapon === 'trident') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.6, 6), lam(0x2a8a8a), 0, 0, 0.6, weapon).rotation.x = Math.PI / 2; for (const sx of [-0.12, 0, 0.12]) mesh(new THREE.ConeGeometry(0.04, 0.4, 5), M.gold, sx, 0, 2.05, weapon).rotation.x = Math.PI / 2; mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05), M.gold, 0, 0, 1.85, weapon); }
-  if (o.weapon === 'bow') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.1); armR.add(weapon); const arc = mesh(new THREE.TorusGeometry(0.55, 0.03, 6, 16, Math.PI), M.darkwood, 0, 0, 0.1, weapon); arc.rotation.y = Math.PI / 2; arc.rotation.x = Math.PI / 2; mesh(new THREE.BoxGeometry(0.01, 0.01, 1.1), lam(0xe8e0cc), 0, 0, 0.1, weapon).rotation.x = Math.PI / 2; }
+  if (o.weapon === 'bow') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armL.add(weapon); const R = 0.55, arcG = new THREE.TorusGeometry(R, 0.035, 6, 18, Math.PI); arcG.rotateZ(Math.PI); arcG.rotateY(Math.PI / 2); const arc = mesh(arcG, M.darkwood, 0, R * 0.55, 0, weapon); arc.scale.set(1, 0.55, 1); mesh(new THREE.BoxGeometry(0.012, 0.012, R * 2), lam(0xf2ecdc), 0, R * 0.55, 0, weapon); mesh(new THREE.BoxGeometry(0.09, 0.14, 0.09), lam(0x3a2a1a), 0, 0, 0, weapon); }
   if (o.weapon === 'keraunos') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); const bm = lam(0xfff6a0, 0xffd020); [[0, 0.2, 0.5], [0.1, 0.55, -0.6], [0, 0.95, 0.5]].forEach(([x, z, r]) => { const m = mesh(new THREE.BoxGeometry(0.09, 0.09, 0.45), bm, x, 0, z, weapon); m.rotation.y = r; }); }
   if (o.weapon === 'club') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.16, 0.06, 1.3, 7), M.darkwood, 0, 0, 0.55, weapon).rotation.x = Math.PI / 2; }
   if (o.weapon === 'staff') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.9, 6), M.darkwood, 0, 0.3, 0.05, weapon); }
@@ -1132,7 +1177,7 @@ function animateHumanoid(h, speed, dt, opt = {}) {
   if (opt.attack !== undefined && opt.attack > 0) { const t = 1 - opt.attack; h.armR.rotation.x = t < 0.35 ? lerp(-0.3, -2.7, t / 0.35) : lerp(-2.7, -0.4, (t - 0.35) / 0.65); }
   else h.armR.rotation.x = opt.sitting ? -0.6 : s * 0.8 - (h.weapon ? 0.25 : 0);
   if (opt.idleTalk) h.armR.rotation.x = -0.6 + Math.sin(performance.now() / 300) * 0.25;
-  if (opt.bow) { h.armR.rotation.x = -1.5; h.armL.rotation.x = -1.4; h.armL.rotation.z = 0.3; }
+  if (opt.bow) { h.armL.rotation.x = -1.5; h.armL.rotation.z = 0; h.armR.rotation.x = -1.35; h.armR.rotation.z = -0.55 + (opt.attack > 0 ? opt.attack * 0.4 : 0); }
 }
 function makeWolf(col = 0x6e6a64, heads = 1) {
   const g = new THREE.Group(), m = lam(col), d = lam(0x3c3a36);
@@ -1356,7 +1401,7 @@ function talkPerikles() {
     { who: W, text: 'Wunderbar! Athene wird zufrieden sein. Hier, nimm diese Drachmen für deine Mühe.', fn: () => { addMoney(30); player.potions += 1; toast('+1 Ambrosia', 'gold'); } },
     { who: W, text: 'Nun reise nach Delphi im Nordwesten, hinter Theben. Die Pythia wird dir sagen, was die Götter verlangen.' },
     { who: W, text: 'Tipp: Drücke R, um dein Pferd zu rufen. Und Kleon dort am Markt verkauft nützliche Dinge.' },
-    { who: W, text: 'Noch etwas: Überall in Hellas gibt es freie Siedlungsplätze – der nächste liegt nördlich von Athen. Dort kannst du am Grenzstein deine eigene Stadt gründen. Und in den Tempeln von Hellas warten Opfergaben auf Helden!', fn: () => setStage(3) },
+    { who: W, text: 'Noch etwas: Überall in Hellas gibt es freie Siedlungsplätze – zum Beispiel bei Pylos, Larissa, Pella und auf Lesbos. Dort kannst du am Grenzstein deine eigene Stadt gründen. Und in den Tempeln von Hellas warten Opfergaben auf Helden!', fn: () => setStage(3) },
   ]);
   else if (S.stage === 11) talk([
     { who: W, text: 'Bei Zeus! Der Minotauros ist tot? Ganz Athen wird deinen Namen besingen!' },
@@ -1498,7 +1543,7 @@ function buildEnemies() {
   }
   const B = LOCS.banditen;
   for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; spawnEnemy('bandit', B.x + Math.cos(a) * 6, B.z + Math.sin(a) * 6); }
-  for (const [x, z] of [[-430, 190], [-440, 205], [-100, 255], [-85, 262], [-480, 270]]) spawnEnemy('bandit', x, z);
+  for (const [a, b2, t] of [['korinth', 'olympia', 0.4], ['korinth', 'olympia', 0.42], ['athen', 'theben', 0.55], ['athen', 'theben', 0.57], ['argos', 'sparta', 0.5]]) { const A = LOCS[a], B = LOCS[b2]; spawnEnemy('bandit', lerp(A.x, B.x, t) + rr(-8, 8), lerp(A.z, B.z, t) + rr(-8, 8)); }
   spawnEnemy('minotaur', SPOTS.mazeCenter[0], SPOTS.mazeCenter[1]);
   RUINS.forEach((r, i) => { r.guards.forEach(([gx, gz], k) => { const e = spawnEnemy(r.kind === 'old' ? 'skelett' : r.kind === 'forest' ? r.guardTypes[k] : 'guard', gx, gz); e.ruin = i; }); });
 }
@@ -1508,7 +1553,7 @@ function hurtPlayer(dmg, from) {
     const fx = Math.sin(player.yaw), fz = Math.cos(player.yaw);
     const dx = from.x - player.pos.x, dz = from.z - player.pos.z, d = Math.hypot(dx, dz) || 1;
     if ((dx * fx + dz * fz) / d > -0.1) {
-      if (clock.elapsedTime - (player.blockStart || 0) < 0.35) {
+      if (clock.elapsedTime - (player.blockStart || 0) < 0.35 || player.gear.includes('aigis')) {
         sfx('block'); floatText(player.pos.x, player.pos.y + 2.6, player.pos.z, 'Parade!', '#ffd24a', true);
         if (from.def && !from.def.boss) { from.stunT = 1.5; floatText(from.x, from.y + 2.6, from.z, 'Betäubt', '#9ad0ff'); }
         return;
@@ -1520,6 +1565,7 @@ function hurtPlayer(dmg, from) {
   if (player.hasArmor) dmg *= 0.85;
   if (player.relics.includes('achilles')) dmg *= 0.8;
   if (player.gear.includes('hadeshelm')) dmg *= 0.7;
+  if (player.gear.includes('aigis')) dmg *= 0.6;
   dmg *= 1 - ARMORS[player.aTier || 0].red;
   dmg = Math.round(dmg);
   if (OLY && OLY.ev === 'ringen' && player.hp - dmg < player.maxHp * 0.1) { player.hp = player.maxHp * 0.5; olyCleanup(); banner('Pankration verloren', 'Der Champion war heute stärker. Versuch es noch einmal!'); return; }
@@ -1649,6 +1695,7 @@ function revive(e) { e.dead = false; e.hp = e.maxHp; e.x = e.home[0]; e.z = e.ho
 
 // ---------- Spieler-Angriffe ----------
 function playerAttack() {
+  if (sirenTap()) return;
   if (dialog || heroOpen || player.dead || (player.swimming && !player.gear.includes('poseidon') && !player.bird) || player.stoned > 0 || player.sailing) return;
   if (OLY && OLY.ev === 'speer') { throwJavelin(); return; }
   if (player.blocking) { shieldBash(); return; }
@@ -1726,7 +1773,7 @@ function buildPickups() {
   rand = mulberry32(777);
   while (n < 40 && tries < 5000) {
     tries++;
-    const x = rr(-850, 600), z = rr(-850, 850), h = heightAt(x, z);
+    const x = rr(-HALF + 70, HALF - 70), z = rr(-HALF + 70, HALF - 70), h = heightAt(x, z);
     if (h < 2 || h > 120 || inCity(x, z, 0.5)) continue;
     const m = new THREE.Mesh(ampGeo, ampMat); m.scale.setScalar(1.4); m.position.set(x, h, z); m.castShadow = true; scene.add(m);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.05, 6, 24), oliveMat); ring.rotation.x = Math.PI / 2; ring.position.set(x, h + 0.1, z); scene.add(ring);
@@ -1838,7 +1885,7 @@ function drawBigMap() {
   ctx.save(); ctx.translate(x, y); ctx.rotate(-player.yaw + Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(8, 9); ctx.lineTo(0, 4); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
   ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('HELLAS', 20, 36);
-  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Rätsel: ' + S.quiz.length + '/30   ·   Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen', 20, 58);
+  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Rätsel: ' + S.quiz.length + '/' + QUIZZERS.length + '   ·   Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen', 20, 58);
   ctx.textAlign = 'center';
   ctx.textAlign = 'center'; ctx.font = '700 14px Alegreya Sans, sans-serif';
   for (const q2 of QUIZZERS) { const x = w2m(q2.x) * k, y = w2m(q2.z) * k; ctx.fillStyle = S.quiz.includes(q2.id) ? '#4a5a6a' : '#1a3a5a'; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.fillStyle = S.quiz.includes(q2.id) ? '#9aa' : '#8fe0ff'; ctx.fillText(S.quiz.includes(q2.id) ? '✓' : '?', x, y + 5); }
@@ -1944,8 +1991,8 @@ function drawOverlay(dt) {
 // Inseln, Schiffe, Dungeons, Höhlen, alte Ruinen, Mythen
 // ============================================================
 const DOCKS = {};
-const DOCK_TITLES = { piraeus: 'Piräus', kreta: 'Kreta', thera: 'Thera', seriphos: 'Seriphos', sirenen: 'die Sireneninsel', ithaka: 'Ithaka' };
-const DOCK_PRICE = { piraeus: 10, kreta: 10, thera: 15, seriphos: 15, sirenen: 12, ithaka: 20 };
+const DOCK_TITLES = { piraeus: 'Piräus', kreta: 'Kreta', thera: 'Thera', seriphos: 'Seriphos', ithaka: 'Ithaka', troja: 'Troja', rhodos: 'Rhodos', ephesos: 'Ephesos', sirenen: 'die Sireneninsel' };
+const DOCK_PRICE = { piraeus: 10, kreta: 10, thera: 15, seriphos: 15, sirenen: 12, ithaka: 20, troja: 25, rhodos: 25, ephesos: 22 };
 const GEAR = {
   hephklinge: { name: 'Klinge des Hephaistos', desc: 'Eine glühende Götterklinge: +25 Schaden' },
   hadeshelm: { name: 'Helm des Hades', desc: 'Du erleidest 30 % weniger Schaden' },
@@ -2097,7 +2144,7 @@ function buildDungeons() {
   const placed = [];
   while (n < names.length && tries < 6000) {
     tries++;
-    const x = rr(-900, 700), z = rr(-900, 900), h = heightAt(x, z), sl = slopeAt(x, z);
+    const x = rr(-HALF + 70, HALF - 70), z = rr(-HALF + 70, HALF - 70), h = heightAt(x, z), sl = slopeAt(x, z);
     if (h < 8 || h > 95 || sl < 0.28 || sl > 1.2 || inCity(x, z, 1.6) || roadDist(x, z) < 14 || !isFree(x, z, 20)) continue;
     if (placed.some(p => Math.hypot(p[0] - x, p[1] - z) < 160) || RUINS.some(r => Math.hypot(r.x - x, r.z - z) < 60)) continue;
     const r = downhillRot(x, z), ox = x + Math.sin(r) * 6, oz = z + Math.cos(r) * 6;
@@ -2114,7 +2161,7 @@ function buildOldRuins() {
   let tries = 0, n = 0;
   while (n < OLD_RUIN_NAMES.length && tries < 5000) {
     tries++;
-    const x = rr(-900, 700), z = rr(-900, 900), h = heightAt(x, z);
+    const x = rr(-HALF + 70, HALF - 70), z = rr(-HALF + 70, HALF - 70), h = heightAt(x, z);
     if (h < 3 || h > 85 || slopeAt(x, z) > 0.35 || inCity(x, z, 1.7) || roadDist(x, z) < 18 || !isFree(x, z, 18)) continue;
     if (RUINS.some(r => Math.hypot(r.x - x, r.z - z) < 140)) continue;
     buildOldRuin(x, z, OLD_RUIN_NAMES[n]); n++;
@@ -2147,14 +2194,15 @@ function buildIslands() {
   const T = LOCS.thera, Se = LOCS.seriphos, Si = LOCS.sirenen, I = LOCS.ithaka;
   DOCKS.piraeus = piraeusDock; DOCKS.kreta = kretaDock;
   DOCKS.thera = dock(T, ...toP(T)); DOCKS.seriphos = dock(Se, ...toP(Se)); DOCKS.sirenen = dock(Si, ...toP(Si)); DOCKS.ithaka = dock(I, 1, 0.2);
+  for (const k of ['troja', 'rhodos', 'ephesos']) { const L = LOCS[k]; DOCKS[k] = dock(L, ...toP(L)); }
   // Thera: weiße Häuser mit blauen Dächern, kleiner Tempel des Hephaistos, Vulkan
   for (let i = 0; i < 9; i++) house(T.x + rr(-24, 24), T.z + rr(-24, 24), Math.floor(rand() * 4) * Math.PI / 2, rr(4.5, 6), rr(4.5, 6), rr(3, 4), { wall: lam(0xf6f2ea), roof: M.blue });
   temple(new Frame(T.x - 4, T.z + 26, Math.PI), 7, 11, 4, 5, 4.5, { tier: 1 });
-  { const px = 665, pz = 235, py = heightAt(px, pz); const lava = new THREE.Mesh(G.cyl, lam(0xff5a10, 0xff3a00)); lava.position.set(px, py - 1.2, pz); lava.scale.set(14, 1, 14); scene.add(lava); const lava2 = new THREE.Mesh(G.cone, lam(0xff8a20, 0xff5000)); lava2.position.set(px, py + 1, pz); lava2.scale.set(5, 3, 5); scene.add(lava2); fires.push(lava2); }
+  { const px = T.x - 25, pz = T.z + 18, py = heightAt(px, pz); const lava = new THREE.Mesh(G.cyl, lam(0xff5a10, 0xff3a00)); lava.position.set(px, py - 1.2, pz); lava.scale.set(14, 1, 14); scene.add(lava); const lava2 = new THREE.Mesh(G.cone, lam(0xff8a20, 0xff5000)); lava2.position.set(px, py + 1, pz); lava2.scale.set(5, 3, 5); scene.add(lava2); fires.push(lava2); }
   // Seriphos: versteinerte Helden
   for (let i = 0; i < 6; i++) house(Se.x + rr(-22, 22), Se.z + rr(-22, 22), Math.floor(rand() * 4) * Math.PI / 2, rr(5, 6.5), rr(5, 6.5), 3.6);
   let st = 0;
-  for (let i = 0; i < 200 && st < 12; i++) { const a = rand() * 6.28, d = rr(35, 95); const x = 620 + Math.cos(a) * d, z = -370 + Math.sin(a) * d; if (heightAt(x, z) < 2 || !isFree(x, z, 3)) continue; statue(x, z, rand() * 6.28, rr(0.9, 1.15), lam(0x8e8a80)); st++; }
+  for (let i = 0; i < 200 && st < 12; i++) { const a = rand() * 6.28, d = rr(35, 95); const x = Se.x + Math.cos(a) * d * 0.6, z = Se.z + Math.sin(a) * d * 0.6; if (heightAt(x, z) < 2 || !isFree(x, z, 3)) continue; statue(x, z, rand() * 6.28, rr(0.9, 1.15), lam(0x8e8a80)); st++; }
   // Sireneninsel: Felsen
   for (let i = 0; i < 16; i++) { const x = Si.x + rr(-50, 50), z = Si.z + rr(-50, 50); if (heightAt(x, z) < 0.5) continue; addStatic(G.rock, lam(0x7a746a), x, heightAt(x, z) + 0.5, z, rand(), rand(), 0, rr(1.5, 4), rr(1.5, 5), rr(1.5, 4)); circleCol(x, z, 2); }
   // Ithaka: Palast des Odysseus
@@ -2163,7 +2211,7 @@ function buildIslands() {
   fountain(I.x - 8, I.z + 2);
 }
 function buildIslandNPCs() {
-  const names = { thera: 'Fährmann Iason', seriphos: 'Fährmann Glaukos', sirenen: 'Fährmann Nereus', ithaka: 'Fährmann Eumaios' };
+  const names = { thera: 'Fährmann Iason', seriphos: 'Fährmann Glaukos', sirenen: 'Fährmann Nereus', ithaka: 'Fährmann Eumaios', troja: 'Fährmann Aineias', rhodos: 'Fährmann Helios', ephesos: 'Fährmann Kroisos' };
   for (const [k, nm] of Object.entries(names)) { const d = DOCKS[k]; if (d) addNPC(nm, d.boatman[0], d.boatman[1], { tunic: 0x6a5a3a, beard: true, pants: 0x3a3024 }, () => talkFerry(k)); }
   const vl = (L, n) => { for (let i = 0; i < n; i++) { let x, z, t = 0; do { x = L.x + rr(-L.r, L.r); z = L.z + rr(-L.r, L.r); t++; } while (t < 20 && heightAt(x, z) < 1); const line = pick(ISLAND_LINES[L === LOCS.thera ? 'thera' : L === LOCS.seriphos ? 'seriphos' : 'ithaka']); addNPC(pick(['Ariadne', 'Phoibe', 'Demetrios', 'Nikolaos', 'Kostas', 'Eirene']), x, z, { tunic: pick([0xe8e0cc, 0x3a5a8a, 0x9b3b2b]), pants: 0x3a3024, beard: rand() < 0.5 }, function () { talk([{ who: this.name, text: line }]); }, 10); } };
   vl(LOCS.thera, 3); vl(LOCS.seriphos, 3); vl(LOCS.ithaka, 3);
@@ -2171,7 +2219,7 @@ function buildIslandNPCs() {
   for (let i = 0; i < 2; i++) { let x, z, t = 0; do { x = Si.x + rr(-12, 12); z = Si.z + rr(-12, 12); t++; } while (t < 20 && heightAt(x, z) < 1); addNPC('Sirene', x, z, { tunic: 0xbfe6f0, pants: 0x8fbcc8, veil: 0xe0f4ff, skin: 0xe8c8b0, wreath: true }, function () { talk([{ who: 'Sirene', text: pick(['♪ Komm näher, Held … bleib bei uns für immer … ♪', '♪ Wir kennen alle Geheimnisse des Meeres … in der Grotte des Poseidon wartet die Skylla … ♪', '♪ Odysseus band sich an den Mast, um uns zu hören. Und du? ♪']) }]); }, 4); }
   const I = LOCS.ithaka;
   addNPC('Penelope', I.x + 4, I.z - 10, { tunic: 0xe8dcc0, pants: 0xc8bca0, veil: 0x6b2f7a, skin: 0xd9a577 }, function () { talk([{ who: 'Penelope', text: 'Seit zwanzig Jahren webe ich und warte auf Odysseus. Er hat den Zyklopen Polyphem geblendet – nun haust das Ungeheuer in einer Höhle im Westen der Insel. Nimm dich in Acht!' }]); });
-  addNPC('Chiron, der Kentaur', 60, -540, { model: makeCentaur({ tunic: 0xe8e0cc, beard: true, hair: 0xb8b0a0, body: 0x8a6a4a, weapon: 'staff' }) }, talkChiron);
+  addNPC('Chiron, der Kentaur', ...ll(23.1, 39.33), { model: makeCentaur({ tunic: 0xe8e0cc, beard: true, hair: 0xb8b0a0, body: 0x8a6a4a, weapon: 'staff' }) }, talkChiron);
 }
 const ISLAND_LINES = {
   thera: ['Der Vulkan grollt jede Nacht. Man sagt, Hephaistos schmiedet darin.', 'Am Hang des Vulkans gibt es einen Eingang – aber nur Narren gehen hinein.', 'Ein bronzener Riese bewacht die Schmiede. Talos heißt er.'],
@@ -2250,10 +2298,10 @@ function sailTo(k, price) {
 function talkFerry(from) {
   const D = DOCKS[from]; if (!D) return;
   const opts = [];
-  for (const k of Object.keys(DOCK_TITLES)) { if (k === from || !DOCKS[k]) continue; opts.push({ label: 'Nach ' + DOCK_TITLES[k] + ' segeln (' + DOCK_PRICE[k] + ' Drachmen)', fn: () => sailTo(k, DOCK_PRICE[k]) }); }
+  for (const k of Object.keys(DOCK_TITLES)) { if (k === from || !DOCKS[k] || (k === 'sirenen' && from === 'piraeus')) continue; opts.push({ label: 'Nach ' + DOCK_TITLES[k] + ' segeln (' + DOCK_PRICE[k] + ' Drachmen)', fn: () => sailTo(k, DOCK_PRICE[k]) }); }
   if (!player.hasShip) opts.push({ label: 'Eigenes Schiff kaufen (Schiffsbauer)', fn: buyShip });
   opts.push({ label: 'Nein danke.', fn: () => { } });
-  talk([{ who: 'Fährmann', text: from === 'piraeus' ? 'Meine Schiffe fahren zu allen Inseln der Ägäis: Kreta, Thera, Seriphos, die Sireneninsel und Ithaka. Wohin soll es gehen?' : 'Wohin soll ich dich bringen, Wanderer?', opts }]);
+  talk([{ who: 'Fährmann', text: from === 'piraeus' ? 'Meine Schiffe fahren durch die ganze Ägäis: Kreta, Thera, Seriphos, Ithaka, Troja, Rhodos und Ephesos. Zur Sireneninsel fährt niemand freiwillig – dafür brauchst du ein eigenes Schiff!' : 'Wohin soll ich dich bringen, Wanderer?', opts }]);
 }
 function toggleFly() {
   if (!player.gear.includes('pegasus')) { toast('Besiege Medusa auf Seriphos, um Pegasus zu erhalten.'); return; }
@@ -2555,6 +2603,11 @@ function toggleAdmin() {
   if (adminOpen) { for (const k in keys) keys[k] = false; if (document.pointerLockElement) document.exitPointerLock(); renderAdmin(); }
 }
 function adminBtn(label, fn, cls = '') { const b = document.createElement('button'); b.textContent = label; b.className = 'abtn ' + cls; b.onclick = (e) => { e.stopPropagation(); fn(); }; return b; }
+async function adminPromote(name) {
+  try { const j = await accCall({ op: 'promote', token: NET.account.token, name }, '/api/admin'); toast(j.name + ' ist jetzt Admin (nach neuem Anmelden).', 'gold'); }
+  catch (e) { toast('⚠ ' + e.message); }
+  renderAdmin();
+}
 async function adminBan(name, ban) {
   try { const j = await accCall({ op: ban ? 'ban' : 'unban', token: NET.account.token, name }, '/api/admin'); toast((ban ? 'Gebannt: ' : 'Entbannt: ') + j.name, 'gold'); }
   catch (e) { toast('⚠ ' + e.message); }
@@ -2566,6 +2619,11 @@ async function renderAdmin() {
   sec('Bewegung');
   body.appendChild(adminBtn(player.adminFly ? '✈ Fliegen: AN (klicken zum Ausschalten)' : '✈ Fliegen: AUS (klicken zum Einschalten)', () => { player.adminFly = !player.adminFly; if (player.adminFly) { if (player.mounted) dismount(); player.flying = false; player.sailing = false; toast('Admin-Flug: WASD, Leertaste hoch, C runter, Shift schnell'); } else player.vy = 0; renderAdmin(); }, player.adminFly ? 'on' : ''));
   const hint = document.createElement('div'); hint.className = 'ahint'; hint.textContent = 'Im Flug: Leertaste = hoch, C = runter, Shift = schnell. Du bist unverwundbar und unsichtbar für Gegner.'; body.appendChild(hint);
+  sec('Geld');
+  { const row = document.createElement('div'); row.className = 'arow';
+    const inp = document.createElement('input'); inp.className = 'ainp'; inp.type = 'number'; inp.value = '1000'; inp.min = '1'; row.appendChild(inp);
+    row.appendChild(adminBtn('Mir geben', () => { const n = Math.max(0, Math.min(1000000, Math.floor(+inp.value || 0))); if (n) { addMoney(n); save(); renderAdmin(); } }));
+    body.appendChild(row); }
   sec('Spieler in dieser Lobby');
   if (!NET.others.size) { const d = document.createElement('div'); d.className = 'ahint'; d.textContent = NET.online ? 'Niemand sonst online.' : 'Nicht verbunden.'; body.appendChild(d); }
   for (const r of NET.others.values()) {
@@ -2580,6 +2638,7 @@ async function renderAdmin() {
   const inp = document.createElement('input'); inp.placeholder = 'Spielername'; inp.className = 'ainp'; row.appendChild(inp);
   row.appendChild(adminBtn('Bannen', () => inp.value.trim() && adminBan(inp.value.trim(), true), 'danger'));
   row.appendChild(adminBtn('Entbannen', () => inp.value.trim() && adminBan(inp.value.trim(), false)));
+  row.appendChild(adminBtn('Zum Admin', () => inp.value.trim() && confirm(inp.value.trim() + ' zum Admin machen?') && adminPromote(inp.value.trim())));
   body.appendChild(row);
   sec('Alle Konten');
   const list = document.createElement('div'); list.className = 'alist'; list.textContent = 'Lade …'; body.appendChild(list);
@@ -2589,7 +2648,7 @@ async function renderAdmin() {
     for (const a of j.accounts) {
       const r = document.createElement('div'); r.className = 'arow';
       const n = document.createElement('span'); n.textContent = a.name + (a.admin ? ' ★ Admin' : '') + (a.banned ? ' – GEBANNT' : ''); if (a.banned) n.style.color = '#ff7a6a'; r.appendChild(n);
-      if (!a.admin) r.appendChild(a.banned ? adminBtn('Entbannen', () => adminBan(a.name, false)) : adminBtn('Bannen', () => { if (confirm(a.name + ' wirklich bannen?')) adminBan(a.name, true); }, 'danger'));
+      if (!a.admin) { r.appendChild(adminBtn('Zum Admin', () => { if (confirm(a.name + ' wirklich zum Admin machen?')) adminPromote(a.name); })); r.appendChild(a.banned ? adminBtn('Entbannen', () => adminBan(a.name, false)) : adminBtn('Bannen', () => { if (confirm(a.name + ' wirklich bannen?')) adminBan(a.name, true); }, 'danger')); }
       list.appendChild(r);
     }
   } catch (e) { list.textContent = '⚠ ' + e.message; }
@@ -2637,7 +2696,7 @@ const MERCS = {
 };
 const MAX_ALLIES = 4;
 const allies = [];
-const playerDamage = () => (player.dmg + WEAPONS[player.wTier || 0].dmg) * (player.mounted && HORSES[player.horse || 'gaul'].chariot ? 1.3 : 1);
+const playerDamage = () => (player.dmg + WEAPONS[player.wTier || 0].dmg + upLvl('dmg') * 3) * (player.mounted && HORSES[player.horse || 'gaul'].chariot ? 1.3 : 1) * (clock.elapsedTime < (player.powerUntil || 0) ? 1.2 : 1);
 
 function findSpotNear(L, rMin, rMax, rad) {
   for (let i = 0; i < 400; i++) {
@@ -2646,8 +2705,8 @@ function findSpotNear(L, rMin, rMax, rad) {
   }
   return null;
 }
-const TAVERN_NAMES = ['Zum Goldenen Widder', 'Zum Durstigen Zyklopen', 'Die Lachende Amphore', 'Zum Einäugigen Polyphem', 'Zur Weinrebe des Dionysos', 'Zum Fliegenden Pegasus', 'Die Rostige Lanze', 'Zum Schlafenden Kentauren', 'Die Salzige Möwe', 'Zum Bronzenen Stier'];
-const KEEPERS = ['Wirt Lysandros', 'Wirtin Agathe', 'Wirt Dorkas', 'Wirtin Myrto', 'Wirt Bion', 'Wirtin Korinna', 'Wirt Phaidon', 'Wirtin Ismene', 'Wirt Kallias', 'Wirtin Nausikaa'];
+const TAVERN_NAMES = ['Zum Trojanischen Pferd', 'Zur Sirene', 'Zum Koloss', 'Zur Eule der Athene', 'Zum Goldenen Widder', 'Zum Durstigen Zyklopen', 'Die Lachende Amphore', 'Zum Einäugigen Polyphem', 'Zur Weinrebe des Dionysos', 'Zum Fliegenden Pegasus', 'Die Rostige Lanze', 'Zum Schlafenden Kentauren', 'Die Salzige Möwe', 'Zum Bronzenen Stier'];
+const KEEPERS = ['Wirt Glaukos', 'Wirtin Thalia', 'Wirt Nikias', 'Wirtin Eudora', 'Wirt Lysandros', 'Wirtin Agathe', 'Wirt Dorkas', 'Wirtin Myrto', 'Wirt Bion', 'Wirtin Korinna', 'Wirt Phaidon', 'Wirtin Ismene', 'Wirt Kallias', 'Wirtin Nausikaa'];
 const RUMORS = [
   'Man sagt, im Hain der Dryaden ganz im Norden liegt ein Schatz – aber die Baumgeister verteidigen ihn.',
   'Im Wald von Nemea haust ein Löwe, dessen Fell kein Schwert durchdringt … fast keines.',
@@ -2660,18 +2719,10 @@ const RUMORS = [
 ];
 const TAVERNS = [];
 function buildServices() {
-  const tavernAt = ['athen', 'sparta', 'theben', 'piraeus', 'olympia', 'delphi', 'kreta', 'thera', 'ithaka', 'seriphos'];
+  const tavernAt = ['athen', 'sparta', 'theben', 'piraeus', 'olympia', 'delphi', 'kreta', 'thera', 'ithaka', 'seriphos', 'troja', 'rhodos', 'ephesos', 'korkyra'];
   tavernAt.forEach((k, i) => {
-    const L = LOCS[k]; const sp = findSpotNear(L, 12, L.r * 1.15, 6.5); if (!sp) return;
-    const rot = Math.atan2(L.x - sp[0], L.z - sp[1]);
-    const f = house(sp[0], sp[1], rot, 9, 7, 4.6, { wall: lam(0xd8c4a0), roof: M.roof2 });
-    if (!f) return;
-    f.box(M.wood, 1.8, 2.6, 3.6, 2.2, 0.9, 0.12); f.box(M.red, 1.8, 2.75, 3.68, 1.8, 0.55, 0.05);
-    for (const tx of [-3.2, 3.6]) { f.box(M.wood, tx, 0, 6, 1.4, 0.9, 1.0, true); f.put(G.sphere, M.terracotta, tx, 1.1, 6, 0, 0, 0, 0.3, 0.45, 0.3); }
-    const [nx, nz] = f.w(0, 5);
-    const tv = { name: 'Taverne „' + TAVERN_NAMES[i] + '“', keeper: KEEPERS[i], loc: k };
-    const n = addNPC(KEEPERS[i], nx, nz, { tunic: 0x8a5a2a, pants: 0x3a2a1a, beard: i % 2 === 0, veil: i % 2 ? 0xc8b090 : null, hair: 0x3a2a1a }, () => talkTavern(tv));
-    n.yaw = rot; tv.x = nx; tv.z = nz; TAVERNS.push(tv);
+    const tv = { name: 'Taverne „' + TAVERN_NAMES[i % TAVERN_NAMES.length] + '“', keeper: KEEPERS[i % KEEPERS.length], loc: k };
+    if (buildTavernHall(LOCS[k], i, tv)) TAVERNS.push(tv);
   });
   for (const k of ['athen', 'sparta', 'olympia', 'theben', 'delphi']) {
     const L = LOCS[k]; const sp = findSpotNear(L, 15, L.r * 1.3, 9); if (!sp) continue;
@@ -2706,6 +2757,7 @@ function buildServices() {
 function talkTavern(tv) {
   const W = tv.keeper, opts = [
     { label: 'Essen und ein Bett (10 Drachmen) – volle Heilung', fn: () => { if (spend(10)) { player.hp = player.maxHp; player.stamina = 100; for (const a of allies) a.hp = a.maxHp; toast('Gut gegessen und geschlafen – Leben voll!', 'gold'); sfx('drink'); } } },
+    { label: '🍲 Speisekarte – antikes griechisches Essen', fn: () => talkFood(tv) },
     { label: 'Söldner anheuern (' + allies.length + '/' + MAX_ALLIES + ')', fn: () => talkHire(tv) },
     { label: 'Kopfgeldbrett ansehen', fn: () => talkBounties(tv) },
   ];
@@ -2881,9 +2933,9 @@ function setShipModel() {
 
 // ---------- Mythenwälder ----------
 const MYTH_FORESTS = [
-  { name: 'Hain der Dryaden', x: -220, z: -680, r: 85, guards: ['dryade', 'dryade', 'satyr', 'dryade'], roam: ['satyr', 'dryade', 'satyr', 'dryade'] },
-  { name: 'Wald von Nemea', x: -580, z: 420, r: 80, guards: ['loewe', 'satyr', 'satyr'], roam: ['satyr', 'eber', 'satyr'] },
-  { name: 'Kalydonischer Wald', x: -740, z: -140, r: 85, guards: ['eber_boss', 'eber', 'eber'], roam: ['eber', 'satyr', 'eber'] },
+  { name: 'Hain der Dryaden', x: MYTH_SPOTS.dryaden[0], z: MYTH_SPOTS.dryaden[1], r: 80, guards: ['dryade', 'dryade', 'satyr', 'dryade'], roam: ['satyr', 'dryade', 'satyr', 'dryade'] },
+  { name: 'Wald von Nemea', x: MYTH_SPOTS.nemea[0], z: MYTH_SPOTS.nemea[1], r: 80, guards: ['loewe', 'satyr', 'satyr'], roam: ['satyr', 'eber', 'satyr'] },
+  { name: 'Kalydonischer Wald', x: MYTH_SPOTS.kalydon[0], z: MYTH_SPOTS.kalydon[1], r: 80, guards: ['eber_boss', 'eber', 'eber'], roam: ['eber', 'satyr', 'eber'] },
 ];
 function buildMythForests() {
   for (const F of MYTH_FORESTS) {
@@ -2973,28 +3025,118 @@ const QUIZ = [
   ['Wer ist die Göttin der Ernte und des Getreides?', 'Demeter', 'Aphrodite', 'Athene'],
   ['Wie hieß der dreiköpfige Hund der Unterwelt?', 'Kerberos', 'Bello', 'Pegasus'],
 ];
+QUIZ.push(
+  ['Wie heißt die griechische Hauptstadt der Insel Kreta in der Antike?', 'Knossos', 'Sparta', 'Rom'],
+  ['Wer schrieb den Satz des Pythagoras auf?', 'Pythagoras', 'Homer', 'Zeus'],
+  ['Wie lautet der Satz des Pythagoras?', 'a² + b² = c²', 'a + b = c', 'a · b = 1'],
+  ['Welcher Arzt gilt als Vater der Medizin?', 'Hippokrates', 'Sokrates', 'Leonidas'],
+  ['Wer rief „Heureka!“ in der Badewanne?', 'Archimedes', 'Platon', 'Hermes'],
+  ['Wie viele Spartaner kämpften bei den Thermopylen?', '300', '3', '3000000'],
+  ['Wie lang ist ein Marathonlauf ungefähr?', 'Etwa 42 Kilometer', 'Etwa 1 Kilometer', 'Etwa 500 Kilometer'],
+  ['Welche Stadt belagerten die Griechen zehn Jahre lang?', 'Troja', 'Athen', 'Delphi'],
+  ['Wer schrieb die Odyssee?', 'Homer', 'Platon', 'Hermes'],
+  ['Was war der Koloss von Rhodos?', 'Eine riesige Statue', 'Ein Schiff', 'Ein Berg'],
+  ['Zu den sieben Weltwundern gehörte der Tempel der …', 'Artemis in Ephesos', 'Medusa in Paris', 'Hera in London'],
+  ['Wer war der Lehrer von Platon?', 'Sokrates', 'Herakles', 'Zeus'],
+  ['Was bedeutet das griechische Wort „Demokratie“?', 'Herrschaft des Volkes', 'Herrschaft der Tiere', 'Herrschaft des Meeres'],
+  ['In welcher Stadt entstand die Demokratie?', 'Athen', 'Sparta', 'Troja'],
+  ['Was bedeutet das griechische Wort „auto“?', 'Selbst', 'Pferd', 'Rad'],
+  ['Was ist ein Mosaik?', 'Ein Bild aus kleinen Steinchen', 'Ein Lied', 'Ein Schwert'],
+  ['Welcher Gott trägt einen Dreizack?', 'Poseidon', 'Apollon', 'Hermes'],
+  ['Wer ist die Göttin des Herdfeuers?', 'Hestia', 'Medusa', 'Nike'],
+  ['Wer ist die Siegesgöttin, nach der heute Turnschuhe heißen?', 'Nike', 'Hera', 'Gaia'],
+  ['Wie hieß der Sohn des Zeus mit großer Kraft (römisch: Herkules)?', 'Herakles', 'Ares', 'Hades'],
+  ['Wer öffnete die Büchse mit allen Übeln der Welt?', 'Pandora', 'Penelope', 'Sappho'],
+  ['Wie hieß die treue Frau von Odysseus?', 'Penelope', 'Medusa', 'Helena'],
+  ['Wegen welcher schönen Frau begann der Trojanische Krieg?', 'Helena', 'Athene', 'Kassandra'],
+  ['Wie hieß der griechische Held mit der verwundbaren Ferse?', 'Achilles', 'Odysseus', 'Perseus'],
+  ['Wie heißt der letzte Buchstabe des griechischen Alphabets?', 'Omega', 'Alpha', 'Gamma'],
+  ['Welche Zahl schrieben die Griechen als Π (Pi) berühmt?', 'Etwa 3,14', 'Genau 10', 'Etwa 100'],
+  ['Wie nennt man ein griechisches Gefäß für Wein und Öl mit zwei Henkeln?', 'Amphore', 'Helm', 'Amulett'],
+  ['Welches Tier zog den Wagen des Sonnengottes?', 'Pferde', 'Hühner', 'Katzen'],
+  ['Wo lebte der Philosoph Diogenes angeblich?', 'In einer Tonne', 'In einem Palast', 'Auf dem Mond'],
+  ['Welches Getreide aßen die Griechen sehr oft?', 'Gerste', 'Reis', 'Mais'],
+  ['Wer war Alexander der Große?', 'Ein König aus Makedonien', 'Ein Gott des Meeres', 'Ein Fisch'],
+  ['Welches Meer liegt westlich von Griechenland?', 'Das Ionische Meer', 'Die Nordsee', 'Der Pazifik'],
+  ['Auf welcher Insel lebte die Dichterin Sappho?', 'Lesbos', 'Kreta', 'Rhodos'],
+  ['Was ist ein Orakel?', 'Ein Ort für Weissagungen', 'Ein Kriegsschiff', 'Ein Kuchen'],
+  ['Wer half Theseus mit einem Faden aus dem Labyrinth?', 'Ariadne', 'Medusa', 'Hera'],
+  ['Welcher Bote der Götter hat einen geflügelten Helm?', 'Hermes', 'Hades', 'Ares'],
+  ['Was trugen griechische Soldaten am Arm, um sich zu schützen?', 'Einen Schild', 'Ein Kissen', 'Eine Amphore'],
+  ['Was ist die Akropolis?', 'Ein Burgberg mit Tempeln', 'Ein Fluss', 'Ein Gericht'],
+  ['Woher kommt das Wort „Olympiade“?', 'Von Olympia', 'Von Oliven', 'Von Omega'],
+  ['Welches Tier ist Pegasus’ Mutter Medusa NICHT?', 'Ein Pferd', 'Eine Gorgone', 'Ein Ungeheuer'],
+  ['Welcher Berg war das Zuhause der Musen?', 'Der Helikon', 'Der Mount Everest', 'Der Vesuv'],
+  ['Was ist eine Trireme?', 'Ein Schiff mit drei Ruderreihen', 'Ein Tempel mit drei Säulen', 'Ein Pferd mit drei Beinen'],
+  ['Was bedeutet das griechische Wort „Philosophie“?', 'Liebe zur Weisheit', 'Liebe zum Essen', 'Angst vor Spinnen'],
+  ['Wer erfand der Sage nach die Flügel für sich und Ikarus?', 'Dädalus', 'Zeus', 'Perikles'],
+  ['Welches Insekt machte den Honig, den die Griechen liebten?', 'Die Biene', 'Die Ameise', 'Die Mücke'],
+);
+const QUIZ_SPECIAL = [
+  ['Sokrates', 'athen', 'Ich weiß, dass ich nichts weiß! Aber DU weißt vielleicht etwas …'],
+  ['Platon', 'athen', 'Willkommen an meiner Akademie! Lass uns denken.'],
+  ['Pythagoras', 'samos', 'a² + b² = c²! Alles ist Zahl, mein Freund!'],
+  ['Thales', 'milet', 'Ich habe eine Sonnenfinsternis vorhergesagt. Kannst du meine Fragen vorhersagen?'],
+  ['Heraklit', 'ephesos', 'Alles fließt! Auch diese Fragen.'],
+  ['Hippokrates', 'kos', 'Ich bin Arzt. Ein kluger Kopf ist die beste Medizin!'],
+  ['Sappho', 'chalkis', 'Ich dichte Lieder hier auf Lesbos. Kennst du die Antworten?'],
+  ['Homer', 'chios', 'Ich habe die Ilias und die Odyssee gedichtet. Hör gut zu!'],
+  ['Herodot', 'halikarnassos', 'Ich bin der Vater der Geschichtsschreibung. Prüfe dein Wissen!'],
+  ['Aristoteles', 'stagira', 'Ich bin der Lehrer Alexanders des Großen. Und jetzt deiner!'],
+  ['Alexander', 'lebadeia', 'Ich bin Alexander von Makedonien! Eines Tages erobere ich die Welt. Aber erst: Fragen!'],
+  ['Diogenes', 'korinth', 'Geh mir aus der Sonne! … Na gut, ein paar Fragen.'],
+  ['Archimedes', 'rhodos', 'Heureka! Ich hab’s! Hast du es auch?'],
+  ['Pindar', 'theben', 'Ich besinge die Sieger von Olympia. Wirst du auch ein Sieger?'],
+  ['Hesiod', 'theben', 'Ich habe aufgeschrieben, wie die Götter entstanden sind.'],
+  ['Xenophon', 'sparta', 'Ich habe bei den Spartanern gelebt. Sie reden wenig – du hoffentlich mehr.'],
+  ['Solon', 'piraeus', 'Ich habe Athen gute Gesetze gegeben. Kennst du dich aus?'],
+  ['Phidias', 'olympia', 'Ich habe die große Zeusstatue in Olympia gebaut!'],
+  ['Aspasia', 'milet', 'Selbst Perikles fragt mich um Rat. Nun frage ich dich.'],
+  ['Demokrit', 'stagira', 'Alles besteht aus winzigen Teilchen – Atomen! Und aus Fragen.'],
+  ['Euklid', 'kreta', 'Geometrie ist schön! Und Geschichte auch.'],
+  ['Sophokles', 'athen', 'Ich schreibe Theaterstücke. Bist du bereit für deinen Auftritt?'],
+  ['Äsop', 'samos', 'Kennst du die Fabel vom Fuchs und den Trauben? Ich habe sie erfunden!'],
+  ['Thukydides', 'korkyra', 'Ich beschreibe den großen Krieg zwischen Athen und Sparta.'],
+];
+const QUIZ_MORE = ['Platon', 'Aristoteles', 'Thales', 'Pythagoras', 'Heraklit', 'Demokrit', 'Hypatia', 'Sappho', 'Herodot', 'Thukydides', 'Euklid', 'Archimedes', 'Hippokrates', 'Diogenes', 'Anaxagoras', 'Zenon', 'Epikur', 'Empedokles', 'Parmenides', 'Aspasia', 'Theano', 'Äsop', 'Homer', 'Hesiod', 'Pindar', 'Solon', 'Kleisthenes', 'Xenophon', 'Protagoras', 'Euripides', 'Aischylos', 'Aristophanes', 'Menander', 'Demosthenes', 'Theophrast', 'Eratosthenes', 'Aristarch', 'Hipparch', 'Anaximander', 'Anaximenes', 'Xenophanes', 'Gorgias', 'Prodikos', 'Antisthenes', 'Praxiteles', 'Myron', 'Iktinos', 'Kallikrates', 'Apelles', 'Lykurg', 'Pittakos', 'Bias', 'Chilon', 'Kleobulos', 'Periander', 'Theognis', 'Simonides', 'Bakchylides', 'Korinna', 'Telesilla'];
+const QUIZ_TOTAL = 64;
+
 const QUIZ_NAMES = ['Sokrates', 'Platon', 'Aristoteles', 'Thales', 'Pythagoras', 'Heraklit', 'Demokrit', 'Hypatia', 'Sappho', 'Herodot', 'Thukydides', 'Euklid', 'Archimedes', 'Hippokrates', 'Diogenes', 'Anaxagoras', 'Zenon', 'Epikur', 'Empedokles', 'Parmenides', 'Aspasia', 'Theano', 'Äsop', 'Homer', 'Hesiod', 'Pindar', 'Solon', 'Kleisthenes', 'Xenophon', 'Protagoras'];
 const QUIZZERS = [];
 function buildQuizNPCs() {
-  let tries = 0;
-  while (QUIZZERS.length < 30 && tries < 20000) {
-    tries++;
-    const x = rr(-920, 720), z = rr(-920, 920), h = heightAt(x, z);
-    if (h < 2 || h > 90 || slopeAt(x, z) > 0.45 || !isFree(x, z, 3) || inCity(x, z, 0.9)) continue;
-    if (QUIZZERS.some(q => Math.hypot(q.x - x, q.z - z) < (tries < 12000 ? 110 : 70))) continue;
+  const makeQ = (x, z, name, intro) => {
     const id = QUIZZERS.length, qr = mulberry32(5000 + id * 97), qs = [];
     while (qs.length < 5) { const k = Math.floor(qr() * QUIZ.length); if (!qs.includes(k)) qs.push(k); }
-    const q = { id, x, z, name: QUIZ_NAMES[id], qs };
+    const q = { id, x, z, name, qs, intro };
     reserve(x, z, 2);
     const f = new Frame(x, z, rand() * 6.28); f.box(M.marble2, 0, -0.3, -1.2, 1.4, 0.8, 0.5, true);
-    q.npc = addNPC(q.name + ', der Gelehrte', x, z, { tunic: 0xf2ecdc, pants: 0xd8d0c0, beard: id % 3 !== 1, hair: pick([0xb8b0a0, 0x6a5a4a, 0x2a1a0e]), cape: 0x3a5a8a, weapon: 'staff', wreath: id % 2 === 0 }, () => talkQuiz(q));
+    q.npc = addNPC(name + ', der Gelehrte', x, z, { tunic: 0xf2ecdc, pants: 0xd8d0c0, beard: !['Sappho', 'Hypatia', 'Aspasia', 'Theano', 'Korinna', 'Telesilla'].includes(name), hair: pick([0xb8b0a0, 0x6a5a4a, 0x2a1a0e]), cape: pick([0x3a5a8a, 0x6b2f7a, 0x2a6a4a]), weapon: 'staff', wreath: id % 2 === 0 }, () => talkQuiz(q));
     QUIZZERS.push(q);
+  };
+  for (const [name, loc, intro] of QUIZ_SPECIAL) { const L = LOCS[loc]; const sp = findSpotNear(L, 10, L.r + 35, 2.5); if (sp) makeQ(sp[0], sp[1], name, intro); }
+  const used = new Set(QUIZZERS.map(q => q.name));
+  const names = QUIZ_MORE.filter(n => !used.has(n));
+  let tries = 0, ni = 0;
+  while (QUIZZERS.length < QUIZ_TOTAL && tries < 40000) {
+    tries++;
+    const x = rr(-HALF + 70, HALF - 70), z = rr(-HALF + 70, HALF - 70), h = heightAt(x, z);
+    if (h < 2 || h > 90 || slopeAt(x, z) > 0.45 || !isFree(x, z, 3) || inCity(x, z, 0.9)) continue;
+    if (QUIZZERS.some(q => Math.hypot(q.x - x, q.z - z) < (tries < 20000 ? 120 : 70))) continue;
+    makeQ(x, z, names[ni++ % names.length] + (ni > names.length ? ' der Jüngere' : ''), null);
   }
+}
+GEAR.aigis = { name: 'Aigis der Athene', desc: '+100 Leben, 40 % weniger Schaden, jeder Block wird zur Parade' };
+function athenaReward() {
+  if (player.gear.includes('aigis')) return;
+  flash = 1.2; sfx('zap');
+  talk([
+    { who: 'Athene, Göttin der Weisheit', text: 'Ich habe dich beobachtet, Sterblicher. Du hast ALLE Gelehrten von Hellas überzeugt – kein Held vor dir war so klug!' },
+    { who: 'Athene, Göttin der Weisheit', text: 'Nimm meine Aigis, den Schild der Götter. Kein Schwert, kein Pfeil, kein Ungeheuer wird dich mehr leicht verletzen.', fn: () => { player.maxHp += 100; player.hp = player.maxHp; gainGear('aigis'); banner('MEISTER DES WISSENS', 'Athene schenkt dir die Aigis!'); } }]);
 }
 function talkQuiz(q) {
   const W = q.name;
-  if (S.quiz.includes(q.id)) { talk([{ who: W, text: 'Du hast meine Fragen schon gelöst. Es gibt noch ' + (30 - S.quiz.length) + ' andere Gelehrte in Hellas!' }]); return; }
-  talk([{ who: W, text: 'Chaire! Ich bin ' + W + '. Beantworte mir 5 Fragen über Griechenland – für jede richtige Antwort gibt es Drachmen!', opts: [
+  if (S.quiz.includes(q.id)) { talk([{ who: W, text: 'Du hast meine Fragen schon gelöst. ' + (QUIZZERS.length - S.quiz.length > 0 ? 'Es gibt noch ' + (QUIZZERS.length - S.quiz.length) + ' andere Gelehrte in Hellas!' : 'Du hast ALLE Gelehrten überzeugt!') }]); return; }
+  talk([{ who: W, text: (q.intro ? q.intro + ' ' : '') + 'Chaire! Ich bin ' + W + '. Beantworte mir 5 Fragen über Griechenland – für jede richtige Antwort gibt es Drachmen!', opts: [
     { label: 'Ich bin bereit!', fn: () => askQuiz(q, 0, 0) }, { label: 'Später', fn: () => { } }] }]);
 }
 function askQuiz(q, i, correct) {
@@ -3004,7 +3146,7 @@ function askQuiz(q, i, correct) {
     const pages = [{ who: W, text: correct + ' von 5 richtig! ' + (correct === 5 ? 'Perfekt – du bist ein wahrer Weiser!' : correct >= 3 ? 'Gut gemacht!' : 'Komm wieder, wenn du mehr weißt.'), fn: () => {
       if (reward) addMoney(reward);
       if (correct === 5) { player.potions++; toast('+1 Ambrosia', 'gold'); }
-      if (correct >= 3) { S.quiz.push(q.id); toast('Rätsel gelöst: ' + S.quiz.length + '/30 Gelehrte', 'gold'); if (S.quiz.length === 30) banner('MEISTER DES WISSENS', 'Du hast alle 30 Gelehrten überzeugt!'); }
+      if (correct >= 3) { S.quiz.push(q.id); toast('Rätsel gelöst: ' + S.quiz.length + '/' + QUIZZERS.length + ' Gelehrte', 'gold'); if (S.quiz.length >= QUIZZERS.length) setTimeout(athenaReward, 1500); }
       save();
     } }];
     talk(pages); return;
@@ -3019,11 +3161,11 @@ function askQuiz(q, i, correct) {
 
 function spawnMythCreatures() {
   const put = (type, x, z) => { if (heightAt(x, z) > 1.2) spawnEnemy(type, x, z); };
-  for (const [x, z] of [[150, -460], [175, -480], [140, -490], [-520, -160], [-555, -185], [-480, 430]]) put('zentaur', x, z);
-  for (const [x, z] of [[-850, 365], [210, -575], [-660, -420]]) put('zyklop', x, z);
+  for (const [lo, la] of [[23.0, 39.45], [23.05, 39.38], [22.98, 39.4], [22.1, 37.6], [22.15, 37.55], [21.5, 39.45]]) put('zentaur', ...ll(lo, la));
+  for (const [lo, la] of [[20.62, 38.36], [22.95, 36.27], [26.9, 39.5]]) put('zyklop', ...ll(lo, la));
   const Si = LOCS.sirenen;
   for (let i = 0; i < 4; i++) put('harpyie', Si.x + rr(-35, 35), Si.z + rr(-35, 35));
-  for (let i = 0; i < 3; i++) put('harpyie', -470 + rr(-30, 30), -410 + rr(-30, 30));
+  for (let i = 0; i < 3; i++) put('harpyie', LOCS.delphi.x - 40 + rr(-30, 30), LOCS.delphi.z - 60 + rr(-30, 30));
   for (let i = 0; i < 3; i++) put('skelett', LOCS.seriphos.x + rr(20, 60), LOCS.seriphos.z + rr(-60, -20));
   for (const F of MYTH_FORESTS) for (const t of F.roam) put(t, F.x + rr(-F.r * 0.7, F.r * 0.7), F.z + rr(-F.r * 0.7, F.r * 0.7));
 }
@@ -3054,7 +3196,7 @@ addEventListener('keydown', (e) => {
   if (k === 'KeyB') toggleShip();
   if (k === 'KeyG') medusaHead();
   if (k === 'KeyM') { mapOpen = !mapOpen; $('bigmap').classList.toggle('hidden', !mapOpen); if (mapOpen) showLeaderboard(); }
-  if (k === 'Space') e.preventDefault();
+  if (k === 'Space') { e.preventDefault(); sirenTap(); }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 canvas.addEventListener('mousedown', (e) => {
@@ -3101,7 +3243,7 @@ function skinUnlocked(sk) { if (sk.id === 'olympia') return OLY_EVENTS.every(e =
 const upLvl = (k) => (player.up && player.up[k]) || 0;
 const bowDamage = () => 12 + upLvl('bow') * 5 + WEAPONS[player.wTier || 0].dmg * 0.5;
 
-let heroOpen = false, heroTab = 'up';
+let heroOpen = false, heroTab = 'gear';
 function toggleHero() {
   heroOpen = !heroOpen;
   $('heroPanel').classList.toggle('hidden', !heroOpen);
@@ -3110,7 +3252,7 @@ function toggleHero() {
 function renderHero() {
   const body = $('heroBody'); body.textContent = '';
   const tabs = document.createElement('div'); tabs.className = 'htabs';
-  for (const [id, lab] of [['up', 'Upgrades'], ['skin', 'Skins'], ['gear', 'Ausrüstung'], ['oly', 'Olympia']]) tabs.appendChild(adminBtn(lab, () => { heroTab = id; renderHero(); }, heroTab === id ? 'on' : ''));
+  for (const [id, lab] of [['gear', 'Inventar & Waffen'], ['up', 'Upgrades'], ['skin', 'Skins'], ['oly', 'Olympia']]) tabs.appendChild(adminBtn(lab, () => { heroTab = id; renderHero(); }, heroTab === id ? 'on' : ''));
   body.appendChild(tabs);
   const info = document.createElement('div'); info.className = 'ahint'; info.textContent = '⚱ ' + player.money + ' Drachmen'; body.appendChild(info);
   const row = (label, btn) => { const r = document.createElement('div'); r.className = 'arow'; const s = document.createElement('span'); s.textContent = label; r.appendChild(s); if (btn) r.appendChild(btn); body.appendChild(r); };
@@ -3135,6 +3277,10 @@ function renderHero() {
       row(sk.name + (sk.unlock && !unl ? ' – ' + sk.unlock : ''), btn);
     }
   } else if (heroTab === 'gear') {
+    const cur = player.bowMode ? 'bow' : player.blitzMode ? 'blitz' : 'sword';
+    const wr = document.createElement('div'); wr.className = 'htabs';
+    for (const [w, lab] of [['sword', '⚔ Schwert'], ['bow', '🏹 Bogen'], ['blitz', '⚡ Keraunos']]) { if (w === 'blitz' && !player.gear.includes('keraunos')) continue; wr.appendChild(adminBtn(lab + (cur === w ? ' ✔' : ''), () => { setWeapon(w); renderHero(); }, cur === w ? 'on' : '')); }
+    const wl = document.createElement('div'); wl.className = 'ahint'; wl.textContent = 'Waffe ausrüsten:'; body.appendChild(wl); body.appendChild(wr);
     row('Waffe: ' + WEAPONS[player.wTier || 0].name + ' (' + Math.round(playerDamage()) + ' Schaden)');
     row('Bogen: ' + Math.round(bowDamage()) + ' Schaden pro Pfeil – Taste X / 🏹 zum Wechseln');
     row('Rüstung: ' + ARMORS[player.aTier || 0].name + ' (−' + Math.round(ARMORS[player.aTier || 0].red * 100) + ' % Schaden)');
@@ -3347,9 +3493,9 @@ GEAR.keraunos = { name: 'Keraunos – Blitz des Zeus', desc: 'X: Blitzwaffe wäh
 GEAR.blitzvogel = { name: 'Gestalt des Blitzadlers', desc: 'U: Verwandle dich in den Blitzadler – fliege und schleudere Blitze' };
 THEMES.storm = { wall: 0x2a2e3a, floor: 0x22252e, col: 0x4a5060, fire: 0x9ad0ff, light: 0xa8ccff, H: 10, pool: 0x3a6aff };
 const ZEUS_ALTARS = [
-  { name: 'Altar von Dodona', x: -700, z: -480 },
-  { name: 'Altar auf dem Lykaion', x: -380, z: 470 },
-  { name: 'Altar im Ida-Gebirge', x: 540, z: 630 },
+  { name: 'Altar von Dodona', x: LOCS.dodona.x + 12, z: LOCS.dodona.z - 6 },
+  { name: 'Altar auf dem Lykaion', x: ll(22.0, 37.45)[0], z: ll(22.0, 37.45)[1] },
+  { name: 'Altar im Ida-Gebirge', x: ll(24.77, 35.25)[0], z: ll(24.77, 35.25)[1] },
 ];
 const ZEUS_STEPS = [
   () => 'Sprich mit Hermes beim Zeustempel in Olympia.',
@@ -3390,7 +3536,7 @@ function setZeus(n) {
 function spawnGiants() {
   for (const e of enemies.filter(e => e.type === 'gigant')) removeEnemy(e);
   const left = 3 - (S.zeusKills || 0);
-  const spots = [[40, -590], [170, -600], [90, -560]];
+  const O = LOCS.olymp, spots = [[O.x - 60, O.z + 90], [O.x + 70, O.z + 80], [O.x + 10, O.z + 120]];
   for (let i = 0; i < left; i++) { let [x, z] = spots[i]; for (let k = 0; k < 50 && heightAt(x, z) < 3; k++) { x = spots[i][0] + rr(-40, 40); z = spots[i][1] + rr(-40, 40); } spawnEnemy('gigant', x, z); }
 }
 function updateZeusText() { const el = $('zeusText'); if (el) el.textContent = S.zeus > 0 && S.zeus < 6 ? '⚡ ' + ZEUS_STEPS[S.zeus]() : ''; }
@@ -3423,6 +3569,13 @@ function zeusShrine() {
 }
 
 // ---------- Keraunos: Schlagen & Werfen ----------
+function setWeapon(w) {
+  if (w === 'blitz' && !player.gear.includes('keraunos')) { toast('Den Keraunos gibt dir nur Zeus.'); return; }
+  player.bowMode = w === 'bow'; player.blitzMode = w === 'blitz';
+  document.body.classList.toggle('bow', player.bowMode || player.blitzMode);
+  refreshHeroLook();
+  toast(w === 'bow' ? '🏹 Bogen ausgerüstet – zielen und Angriff drücken' : w === 'blitz' ? '⚡ Keraunos ausgerüstet' : '⚔ Schwert ausgerüstet');
+}
 function cycleWeapon() {
   if (player.sailing || player.bird) return;
   const has = player.gear.includes('keraunos');
@@ -3544,6 +3697,217 @@ function updateStrikes(dt) {
 }
 
 // ============================================================
+// Orte der Antike: Troja, Koloss, Artemision, Mausoleum, Marathon, Thermopylen, Dodona, Delos …
+// Besondere Figuren: Odysseus, Erfinder Heron, Herr Mara, UFO; Sirenenfelsen mit Minispiel
+// ============================================================
+function buildPolis(key, n, opt = {}) {
+  const L = LOCS[key];
+  for (let i = 0; i < n; i++) { const a = rand() * 6.28, r = rr(12, L.r * 0.9); house(L.x + Math.cos(a) * r, L.z + Math.sin(a) * r, Math.floor(rand() * 4) * Math.PI / 2, rr(5, 7), rr(5, 7), rr(3.4, 4.5), opt); }
+}
+function woodenHorse(x, z, rot, s = 1) {
+  const f = new Frame(x, z, rot), w = lam(0x8a5a30), d = lam(0x5a3a1e);
+  reserve(x, z, 9 * s);
+  f.box(d, 0, 0, 0, 5 * s, 0.6 * s, 11 * s, true);
+  for (const [wx, wz] of [[-2.6, -4], [2.6, -4], [-2.6, 4], [2.6, 4]]) f.put(G.cyl, d, wx * s, 0.7 * s, wz * s, 0, 0, Math.PI / 2, 1.4 * s, 0.5 * s, 1.4 * s);
+  for (const [lx, lz] of [[-1.4, -3.4], [1.4, -3.4], [-1.4, 3.4], [1.4, 3.4]]) f.box(w, lx * s, 0.6 * s, lz * s, 1.2 * s, 5 * s, 1.2 * s);
+  f.box(w, 0, 5.4 * s, 0, 4.2 * s, 4 * s, 10 * s, true, 9.4 * s);
+  f.put(G.box, w, 0, 10 * s, 5.6 * s, -0.6, 0, 0, 2.4 * s, 6 * s, 2.6 * s);
+  f.box(w, 0, 12.2 * s, 8.4 * s, 2.2 * s, 2.2 * s, 4.2 * s);
+  f.box(d, 0, 12.6 * s, 6.6 * s, 0.6 * s, 3 * s, 3.2 * s);
+  for (const e of [-1, 1]) f.box(d, e * 0.6 * s, 14.4 * s, 7.4 * s, 0.35 * s, 1 * s, 0.4 * s);
+  f.put(G.box, d, 0, 8 * s, -5.6 * s, 0.5, 0, 0, 0.7 * s, 5 * s, 0.7 * s);
+  f.box(d, 2.15 * s, 6 * s, 0, 0.1 * s, 1.4 * s, 1.6 * s);
+}
+function buildAncientWorld() {
+  // Troja: Mauern, Türme, Skäisches Tor und das Trojanische Pferd
+  const T = LOCS.troja, wm = lam(0xb8a07a);
+  for (let i = 0; i < 48; i++) {
+    const a = i / 48 * Math.PI * 2; if (Math.abs(a - Math.PI * 0.5) < 0.1) continue;
+    const f = new Frame(T.x + Math.cos(a) * 46, T.z + Math.sin(a) * 46, -a);
+    f.box(wm, 0, -1, 0, 1.6, 8, 6.4, true);
+    if (i % 6 === 0) { f.box(wm, 0, -1, 0, 4.5, 11, 4.5, true); f.box(lam(0x9a8460), 0, 10, 0, 5, 0.6, 5); }
+  }
+  temple(new Frame(T.x, T.z - 22, 0), 9, 14, 4, 6, 5, { tier: 1 });
+  buildPolis('troja', 12, { wall: lam(0xe0cfa8), roof: M.roof2 });
+  woodenHorse(T.x, T.z + 60, 0, 1);
+  SPOTS.trojanHorse = [T.x, T.z + 60];
+  addNPC('Kassandra', T.x + 6, T.z + 50, { tunic: 0x6a2a6a, pants: 0x3a1a3a, veil: 0xf4f0e6, skin: 0xe0b08a, wreath: true }, () => talk([{ who: 'Kassandra', text: 'Holt das Pferd nicht in die Stadt! Fürchtet die Griechen, auch wenn sie Geschenke bringen! … Ach, mir glaubt ja doch niemand.' }]));
+  addNPC('Wache von Troja', T.x - 6, T.z + 48, { tunic: 0x7a4a1a, armor: 0xb98d3a, helmet: true, crest: 0x1a4a8a, shield: true, weapon: 'spear', pants: 0x3a2a1a }, () => talk([{ who: 'Wache', text: 'Die Griechen sind abgezogen und haben uns dieses schöne Pferd geschenkt. Was soll da schon schiefgehen?' }]));
+  // Rhodos: Koloss am Hafen
+  const R = LOCS.rhodos;
+  buildPolis('rhodos', 10);
+  { const s = findShore(R.x, R.z, ...toPiraeus(R), 200); const [cx, cz] = s ? s.land : [R.x + 20, R.z]; const f = new Frame(cx, cz, Math.atan2(R.x - cx, R.z - cz) + Math.PI);
+    f.box(M.marble2, 0, -2, 0, 7, 6, 7, true);
+    const b = lam(0xb98d3a, 0x201000);
+    for (const sx of [-1, 1]) f.put(G.cyl8, b, sx * 1.6, 4 + 6, 0, 0, 0, sx * 0.12, 1.3, 12, 1.3);
+    f.put(G.cyl, b, 0, 4 + 14, 0, 0, 0, 0, 4.2, 6, 2.6); f.put(G.sphere, b, 0, 4 + 19, 0, 0, 0, 0, 2.6, 2.8, 2.6);
+    f.put(G.cyl8, b, 2.6, 4 + 21, 0, 0, 0, -0.3, 0.9, 7, 0.9); f.put(G.cone, lam(0xff9a2a, 0xff6a00), 3.6, 4 + 25.5, 0, 0, 0, 0, 1.4, 2.6, 1.4);
+    f.put(G.cyl8, b, -2.6, 4 + 13, 0, 0, 0, 0.4, 0.8, 6, 0.8);
+    for (let k = 0; k < 7; k++) { const a = k / 7 * 6.28; f.put(G.cone, b, Math.cos(a) * 1.4, 4 + 21.6, Math.sin(a) * 1.4, Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6, 0.5, 1.6, 0.5); }
+    SPOTS.koloss = [cx, cz]; }
+  // Ephesos: Tempel der Artemis (Artemision)
+  const E = LOCS.ephesos; temple(new Frame(E.x, E.z - 10, 0), 18, 34, 8, 14, 9, { tier: 1, friezeMat: lam(0xc9bda5) }); buildPolis('ephesos', 9);
+  // Halikarnassos: Mausoleum
+  { const H2 = LOCS.halikarnassos, f = new Frame(H2.x, H2.z - 6, 0); reserve(f.x, f.z, 14);
+    f.box(M.marble2, 0, -2, 0, 16, 9, 16, true); f.platform(0, 0, 16, 16, 7);
+    for (let i = 0; i < 12; i++) { const a = i / 12 * 6.28; f.put(G.col, M.marble, Math.cos(a) * 6.2, 7 + 3, Math.sin(a) * 6.2, 0, 0, 0, 1, 6, 1); }
+    for (let k = 0; k < 6; k++) f.box(M.marble, 0, 13 + k * 0.8, 0, 14 - k * 2, 0.8, 14 - k * 2);
+    statue(H2.x, H2.z - 6, 0, 1.2, M.bronze, f.y + 17.8); buildPolis('halikarnassos', 7); }
+  // Marathon: Grabhügel und Gedenkstein
+  { const Mr = LOCS.marathon, f = new Frame(Mr.x, Mr.z, 0); f.put(G.sphere, lam(0x7a8a4a), 0, -2, 0, 0, 0, 0, 22, 12, 22); circleCol(Mr.x, Mr.z, 9); f.box(M.marble, 13, 0, 0, 1.2, 3, 0.6, true); reserve(Mr.x, Mr.z, 14);
+    interactables.push({ pos: () => new V3(Mr.x + 13, heightAt(Mr.x + 13, Mr.z), Mr.z), label: 'Gedenkstein lesen', r: 3, fn: () => talk([{ who: 'Gedenkstein von Marathon', text: 'Hier besiegten 490 v. Chr. die Athener die Perser. Der Läufer Pheidippides rannte bis nach Athen, rief „Wir haben gesiegt!“ – und brach zusammen. Daher kommt der Marathonlauf.' }]) }); }
+  // Thermopylen: Leonidas-Denkmal und Mauer
+  { const Th = LOCS.thermopylen; statue(Th.x, Th.z, 0, 2.2, M.bronze); const f = new Frame(Th.x, Th.z + 10, 0); f.box(M.stone2, 0, -0.5, 0, 20, 2.4, 1.2, true);
+    interactables.push({ pos: () => new V3(Th.x, heightAt(Th.x, Th.z), Th.z + 3), label: 'Inschrift lesen', r: 3.5, fn: () => talk([{ who: 'Inschrift', text: '„Wanderer, kommst du nach Sparta, verkündige dorten, du habest uns hier liegen gesehn, wie das Gesetz es befahl.“ – Für die 300 Spartaner des Leonidas, 480 v. Chr.' }]) }); }
+  // Dodona: heilige Eiche des Zeus
+  { const D = LOCS.dodona, f = new Frame(D.x, D.z, 0); reserve(D.x, D.z, 10);
+    f.put(G.cyl, lam(0x5a4028), 0, 4, 0, 0, 0, 0, 2.2, 8, 2.2); circleCol(D.x, D.z, 1.3);
+    for (const [dx, dy, dz, sc] of [[0, 11, 0, 9], [3, 9.5, 2, 6], [-3, 9.5, -2, 6], [2, 10, -3, 5.5]]) f.put(G.sphere, lam(0x4a6a2a), dx, dy, dz, 0, 0, 0, sc, sc * 0.75, sc);
+    temple(new Frame(D.x + 18, D.z + 6, Math.PI / 2), 6, 9, 3, 4, 4, { tier: 1, guards: false });
+    addNPC('Priesterin von Dodona', D.x - 3, D.z + 5, { tunic: 0xf4f0e6, pants: 0xe8e0cc, veil: 0xf4f0e6, wreath: true }, () => talk([{ who: 'Priesterin', text: 'Hör, wie die Blätter der heiligen Eiche rauschen … Zeus spricht durch sie. Er sagt: „Wer alle Prüfungen besteht, wird zum Blitz.“' }])); }
+  // Delos: Löwenterrasse und Apollontempel
+  { const Dl = LOCS.delos; temple(new Frame(Dl.x, Dl.z - 8, 0), 7, 12, 4, 6, 4.6, { tier: 1, guards: false });
+    for (let i = 0; i < 5; i++) { const f = new Frame(Dl.x - 10 + i * 5, Dl.z + 10, 0); f.box(M.marble2, 0, 0, 0, 1.6, 1, 2.6, true); f.box(M.marble, 0, 1, 0, 1, 1.3, 2.2); f.put(G.sphere, M.marble, 0, 2.6, 1, 0, 0, 0, 1, 1.1, 1); } }
+  // weitere Poleis
+  for (const [k, n] of [['milet', 7], ['samos', 6], ['kos', 6], ['chios', 5], ['stagira', 5], ['korkyra', 7]]) { buildPolis(k, n); const L = LOCS[k]; temple(new Frame(L.x + 4, L.z - 14, 0), 7, 11, 4, 5, 4.5, { tier: 1, guards: false }); }
+  // Athen: Werkstatt des Erfinders mit Holzauto
+  { const A = LOCS.athen, sp = findSpotNear(A, 30, 58, 6) || [30, 30]; reserve(sp[0], sp[1], 6);
+    const f = new Frame(sp[0], sp[1], Math.round(Math.atan2(-sp[0], -sp[1]) / (Math.PI / 2)) * Math.PI / 2);
+    for (const [px, pz] of [[-3.5, -2.5], [3.5, -2.5], [-3.5, 2.5], [3.5, 2.5]]) f.box(M.wood, px, 0, pz, 0.3, 3.2, 0.3, true);
+    f.put(G.prism, M.terracotta, 0, 3.2, 0, 0, Math.PI / 2, 0, 6, 1.2, 8);
+    f.box(M.wood, -2, 0, -2, 3, 1, 1, true);
+    const car = lam(0xa0703a); f.box(car, 0.8, 0.7, 0.5, 2.2, 0.6, 3.6); f.box(car, 0.8, 1.3, -0.2, 1.8, 0.6, 1.2);
+    for (const [wx, wz] of [[-0.35, -0.9], [1.95, -0.9], [-0.35, 1.9], [1.95, 1.9]]) f.put(G.cyl, M.darkwood, wx, 0.55, wz, 0, 0, Math.PI / 2, 1.1, 0.25, 1.1);
+    f.put(G.cyl, M.darkwood, 0.8, 1.9, 0.8, 0.6, 0, 0, 0.7, 0.08, 0.7);
+    const [nx, nz] = f.w(-1.5, 1.8);
+    addNPC('Erfinder Heron', nx, nz, { tunic: 0x6a5a3a, pants: 0x3a3024, beard: true, hair: 0x8a7a6a, belt: 0x2a1a0e }, () => talk([
+      { who: 'Erfinder Heron', text: 'Psst, schau dir das an! Ich baue ein „Auto“ – auf Griechisch heißt das „selbst“! Ein Wagen, der SELBST fährt. Ganz ohne Pferd!' },
+      { who: 'Erfinder Heron', text: 'Glaub mir: Eines Tages wird jeder so einen fahren. Es fehlt nur noch … äh … irgendetwas, das ihn antreibt. Dampf vielleicht?' },
+      { who: 'Erfinder Heron', text: 'Die anderen lachen mich aus. Aber wart\'s nur ab – in zweitausend Jahren reden alle vom Auto!' }])); }
+  // Athen: Herr Mara
+  { const A = LOCS.athen, sp = findSpotNear(A, 18, 45, 2) || [8, 20];
+    addNPC('Herr Mara', sp[0], sp[1], { tunic: 0x3a6a4a, pants: 0x2a3a2a, beard: true, hair: 0x2a1a0e }, () => talk([{ who: 'Herr Mara', text: pick([
+      'Chaire! Ich bin Herr Mara. Später will ich Lehrer werden – oder Soldat. Ich kann mich einfach nicht entscheiden!',
+      'Als Lehrer könnte ich den Kindern das Alphabet beibringen: Alpha, Beta, Gamma … Aber als Soldat bekäme ich einen glänzenden Helm!',
+      'Lehrer oder Soldat … Sokrates sagt, ich soll mich selbst erkennen. Leichter gesagt als getan!',
+      'Wenn ich Lehrer werde, gibt es bei mir jeden Tag Mathe. Und wenn ich Soldat werde … auch. Man muss ja die Pfeile zählen.']) }]), 6); }
+  // Odysseus am Strand mit gestrandetem Schiff
+  { const O = LOCS.olympia, s = findShore(O.x, O.z + 60, -1, 0.1, 260);
+    if (s) { const [lx, lz] = s.land, [dx, dz] = s.dir, rot = Math.atan2(dx, dz);
+      const f = new Frame(lx + dx * 4, lz + dz * 4, rot + 0.6, heightAt(lx, lz) - 0.6);
+      f.put(G.box, M.darkwood, 0, 0.4, 0, 0, 0, 0.35, 3.2, 1.6, 13); f.put(G.cyl8, M.wood, 0, 3, 1, 0.5, 0, 0.35, 0.25, 6, 0.25);
+      f.put(G.box, lam(0xd8ccb0), 1.5, 2.2, 1.5, 0.3, 0.4, 0.9, 3.5, 0.06, 2.8); circleCol(f.x, f.z, 3);
+      SPOTS.odysseus = [lx - dx * 3, lz - dz * 3];
+      addNPC('Odysseus (angeblich)', lx - dx * 3, lz - dz * 3, { tunic: 0x8a7a5a, pants: 0x4a3a2a, beard: true, hair: 0x4a3a2a, beardCol: 0x6a5a4a, weapon: 'staff' }, () => talk([
+        { who: 'Odysseus', text: 'Fremder! Weißt du, wer ich bin? Ich bin ODYSSEUS! Der Listenreiche! Ich habe Troja besiegt – mit einem hölzernen Pferd!' },
+        { who: 'Odysseus', text: 'Seit zehn Jahren irre ich übers Meer: Zyklopen, Sirenen, eine Zauberin, die Männer in Schweine verwandelt … und jetzt ist auch noch mein Schiff gestrandet.' },
+        { who: 'Odysseus', text: 'Ithaka liegt da drüben im Westen. Meine Penelope wartet auf mich! … Glaube ich. Hoffe ich. Hast du zufällig ein Schiff?', fn: () => { if (!S.odyssey) { S.odyssey = true; addMoney(25); toast('Odysseus schenkt dir eine Münze „für die Geschichte“.'); } } }])); } }
+  // UFO am Strand (südlich von Kreta)
+  { const K = LOCS.kreta, s = findShore(K.x - 60, K.z + 20, 0, 1, 260);
+    if (s) { const [ux, uz] = s.land; const y = heightAt(ux, uz); reserve(ux, uz, 8);
+      const g = new THREE.Group(); g.position.set(ux, y + 0.6, uz); g.rotation.set(0.25, rand() * 6, 0.12); scene.add(g);
+      const metal = new THREE.MeshPhongMaterial({ color: 0xc8ccd4, specular: 0xffffff, shininess: 90 });
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5.2, 0.9, 32), metal); g.add(disc);
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 3.5, 0.6, 32), metal); rim.position.y = -0.7; g.add(rim);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(2.2, 20, 12, 0, 6.3, 0, Math.PI / 2), new THREE.MeshPhongMaterial({ color: 0x8fe0ff, transparent: true, opacity: 0.55, emissive: 0x104050 })); dome.position.y = 0.45; g.add(dome);
+      for (let i = 0; i < 12; i++) { const a = i / 12 * 6.28, l = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), lam(i % 2 ? 0x7aff7a : 0xff5a5a, i % 2 ? 0x3aff3a : 0xff2a2a)); l.position.set(Math.cos(a) * 4.9, -0.1, Math.sin(a) * 4.9); g.add(l); fires.push(l); }
+      circleCol(ux, uz, 5);
+      interactables.push({ pos: () => new V3(ux, y, uz), label: 'Das seltsame Metallding untersuchen', r: 7, fn: () => talk([
+        { who: '???', text: 'Ein riesiger glänzender Teller aus Metall liegt halb im Sand. Er summt leise. Durch die Glaskuppel siehst du blinkende Lichter.' },
+        { who: 'Kleines grünes Wesen', text: 'Bliep! Bloop! … Ähm, hallo. Wir wollten eigentlich nur die Akropolis fotografieren. Dann sind wir hier gelandet. Unsanft.' },
+        { who: 'Kleines grünes Wesen', text: 'Bitte erzähl Zeus nichts davon. Hier, nimm diese komischen Münzen, die hier überall herumliegen.', fn: () => { if (!S.ufo) { S.ufo = true; addMoney(77); } else toast('Das Wesen winkt dir zu. Bliep.'); } }]) });
+      SPOTS.ufo = [ux, uz]; } }
+}
+function toPiraeus(L) { return [LOCS.piraeus.x - L.x, LOCS.piraeus.z - L.z]; }
+
+// ---------- Sirenenfelsen & Minispiel ----------
+const SIREN_ROCKS = [];
+let SIRENMG = null;
+function buildSirenRocks() {
+  const C = LOCS.sirenen;
+  for (let i = 0; i < 5; i++) {
+    const a = i / 5 * Math.PI * 2 + 0.3; let x = C.x + Math.cos(a) * 85, z = C.z + Math.sin(a) * 75;
+    if (heightAt(x, z) > -3) continue;
+    const top = 3.2;
+    addStatic(G.rock, lam(0x6a645a), x, 0.8, z, rand(), rand(), 0, 4.5, 4.5, 4.5); addPlatform(x - 3, x + 3, z - 3, z + 3, top); circleCol(x, z, 3.5);
+    SIREN_ROCKS.push({ x, z });
+    addNPC('Sirene', x, z, { tunic: 0xbfe6f0, pants: 0x8fbcc8, veil: 0xe0f4ff, skin: 0xe8c8b0, wreath: true }, () => talk([{ who: 'Sirene', text: pick(['♪ Komm zu uns, Held … nur ein kleines Stück näher … ♪', '♪ Lass das Ruder los … hör uns zu … für immer … ♪', '♪ Odysseus hat sich die Ohren nicht zugehalten, er ließ sich nur festbinden … ♪']) }]));
+  }
+}
+function updateSirens(dt) {
+  const C = LOCS.sirenen, P = player.pos, d = Math.hypot(P.x - C.x, P.z - C.z), hud = $('sirenHud');
+  if (!SIRENMG) {
+    if (hud.style.display !== 'none') hud.style.display = 'none';
+    const exposed = (player.sailing || player.swimming) && d < 130 && d > 25 && clock.elapsedTime > (player.sirenSafe || 0) && !curD;
+    if (exposed) { SIRENMG = { t: 0, res: 35 }; for (const k in keys) keys[k] = false; sfx('quest'); }
+    return;
+  }
+  SIRENMG.t += dt; SIRENMG.res -= dt * 16;
+  if (d > 4) { const pull = 6 * dt; P.x += (C.x - P.x) / d * pull; P.z += (C.z - P.z) / d * pull; if (player.sailing) player.shipSpeed = 0; }
+  hud.style.display = 'block';
+  const f = Math.round(clamp(SIRENMG.res, 0, 100) / 5);
+  hud.innerHTML = '<b>♪ Die Sirenen singen! ♪</b><br>Halte dir die Ohren zu – tippe schnell auf ⚔ (oder Leertaste)!<br>' + '█'.repeat(f) + '░'.repeat(20 - f) + '<br><small>' + Math.max(0, 10 - SIRENMG.t).toFixed(1) + ' s</small>';
+  if (SIRENMG.res >= 100) { SIRENMG = null; player.sirenSafe = clock.elapsedTime + 120; banner('Widerstanden!', 'Du hast dem Gesang der Sirenen getrotzt – für eine Weile bist du sicher.'); sfx('quest'); }
+  else if (SIRENMG.res <= 0 || SIRENMG.t > 10) {
+    SIRENMG = null; player.sirenSafe = clock.elapsedTime + 45;
+    const D = DOCKS.sirenen;
+    if (player.sailing) { player.sailing = false; ship.root.visible = false; }
+    if (D) player.pos.set(D.land[0], groundAt(D.land[0], D.land[1]) + 0.5, D.land[1]);
+    hurtPlayer(25, { x: C.x, z: C.z });
+    banner('Betört von den Sirenen!', 'Dein Schiff ist an den Felsen zerschellt – du wurdest auf die Insel gespült.');
+  }
+}
+function sirenTap() { if (SIRENMG) { SIRENMG.res = Math.min(100, SIRENMG.res + 8); sfx('block'); return true; } return false; }
+
+// ---------- Begehbare Tavernen ----------
+const FOODS = [
+  { name: 'Gerstenbrot mit Oliven', cost: 4, hp: 20, text: 'Knuspriges Gerstenbrot (Maza) mit schwarzen Oliven.' },
+  { name: 'Linsensuppe (Phakē)', cost: 6, hp: 30, text: 'Eine dampfende Schale Linsensuppe – das Leibgericht der Philosophen.' },
+  { name: 'Ziegenkäse mit Honig', cost: 8, hp: 40, text: 'Würziger Ziegenkäse, übergossen mit Thymianhonig vom Hymettos.' },
+  { name: 'Feigen und Datteln', cost: 5, hp: 25, st: true, text: 'Süße Feigen – sie geben dir neue Ausdauer!' },
+  { name: 'Gegrillter Fisch', cost: 12, hp: 60, text: 'Frischer Thunfisch vom Grill, mit Salz und Oregano.' },
+  { name: 'Kykeon (Gerstentrank)', cost: 9, hp: 10, regen: true, text: 'Ein Trank aus Gerste, Wasser und Minze. Du regenerierst eine Weile schneller.' },
+  { name: 'Krasis (Wein mit Wasser)', cost: 3, hp: 5, st: true, text: 'Verdünnter Wein, wie es sich gehört. Pur trinken nur Barbaren!' },
+  { name: 'Schwarze Suppe (spartanisch)', cost: 10, hp: 45, power: true, sparta: true, text: 'Blutsuppe mit Essig. Schmeckt furchtbar – aber du fühlst dich stark wie ein Spartaner! (+20 % Schaden für 60 s)' },
+];
+function talkFood(tv) {
+  const list = FOODS.filter(f => !f.sparta || tv.loc === 'sparta');
+  talk([{ who: tv.keeper, text: 'Was darf es sein? Alles frisch – so wie man es in Hellas isst!', opts: list.map(f => ({ label: f.name + ' – ' + f.cost + ' Dr', fn: () => {
+    if (!spend(f.cost)) return;
+    player.hp = Math.min(player.maxHp, player.hp + f.hp); if (f.st) player.stamina = 100;
+    if (f.regen) player.regenUntil = clock.elapsedTime + 60; if (f.power) player.powerUntil = clock.elapsedTime + 60;
+    sfx('drink'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, '+' + f.hp, '#7aff8a');
+    talk([{ who: tv.keeper, text: f.text, fn: () => talkFood(tv) }]);
+  } })).concat([{ label: 'Zurück', fn: () => talkTavern(tv) }]) }]);
+}
+function buildTavernHall(L, i, tv) {
+  const sp = findSpotNear(L, 14, L.r * 1.2, 9); if (!sp) return false;
+  const rot = Math.round(Math.atan2(L.x - sp[0], L.z - sp[1]) / (Math.PI / 2)) * Math.PI / 2;
+  reserve(sp[0], sp[1], 9);
+  const f = new Frame(sp[0], sp[1], rot);
+  f.y = Math.max(f.y, heightAt(...f.w(-6, -5)), heightAt(...f.w(6, 5)), heightAt(...f.w(-6, 5)), heightAt(...f.w(6, -5)));
+  const W = 12, D = 10, H = 4.6, wall = lam(0xd8c4a0);
+  f.box(M.stone2, 0, -3, 0, W + 0.6, 3.2, D + 0.6); f.platform(0, 0, W, D, 0.2); f.box(M.wood, 0, 0, 0, W - 0.4, 0.2, D - 0.4);
+  f.box(wall, 0, 0, -D / 2, W, H, 0.5, true); f.box(wall, -W / 2, 0, 0, 0.5, H, D, true); f.box(wall, W / 2, 0, 0, 0.5, H, D, true);
+  f.box(wall, -3.6, 0, D / 2, W / 2 - 1.2, H, 0.5, true); f.box(wall, 3.6, 0, D / 2, W / 2 - 1.2, H, 0.5, true); f.box(wall, 0, 3, D / 2, 2.6, H - 3, 0.5);
+  f.put(G.prism, M.roof2, 0, H, 0, 0, Math.PI / 2, 0, D + 0.8, 1.8, W + 0.8);
+  f.box(M.wood, 0, H, 0, W, 0.15, D);
+  f.box(M.wood, 1.8, 2.6, D / 2 + 0.3, 2.2, 0.9, 0.12); f.box(M.red, 1.8, 2.75, D / 2 + 0.38, 1.8, 0.55, 0.05);
+  f.box(M.darkwood, 0, 0.2, -D / 2 + 2.4, 6, 1.1, 0.8, true);
+  for (let k = 0; k < 4; k++) f.put(G.sphere, M.terracotta, -2.2 + k * 1.4, 1.6, -D / 2 + 2.4, 0, 0, 0, 0.35, 0.55, 0.35);
+  for (const [tx, tz] of [[-3.5, 0.8], [3.5, 0.8], [-3.5, 3.2]]) { f.box(M.wood, tx, 0.2, tz, 1.6, 0.8, 1.1, true); for (const sx of [-1.2, 1.2]) f.box(M.darkwood, tx + sx, 0.2, tz, 0.5, 0.5, 0.5); f.put(G.sphere, M.terracotta, tx, 1.2, tz, 0, 0, 0, 0.2, 0.3, 0.2); }
+  f.box(M.stone, W / 2 - 1.3, 0.2, -D / 2 + 1.3, 1.6, 0.5, 1.6, true);
+  const [hx, hz] = f.w(W / 2 - 1.3, -D / 2 + 1.3); const fm = new THREE.Mesh(G.cone, M.fire); fm.position.set(hx, f.y + 1.2, hz); fm.scale.set(0.6, 0.8, 0.6); scene.add(fm); fires.push(fm);
+  const [kx, kz] = f.w(0, -D / 2 + 1.2);
+  const n = addNPC(tv.keeper, kx, kz, { tunic: 0x8a5a2a, pants: 0x3a2a1a, beard: i % 2 === 0, veil: i % 2 ? 0xc8b090 : null, hair: 0x3a2a1a }, () => talkTavern(tv));
+  n.yaw = rot; tv.x = kx; tv.z = kz;
+  const pts = [f.w(-W / 2, -D / 2), f.w(W / 2, D / 2)];
+  tv.box = { minX: Math.min(pts[0][0], pts[1][0]), maxX: Math.max(pts[0][0], pts[1][0]), minZ: Math.min(pts[0][1], pts[1][1]), maxZ: Math.max(pts[0][1], pts[1][1]), y: f.y };
+  return true;
+}
+function insideTavern(P) { for (const tv of TAVERNS) { const b = tv.box; if (b && P.x > b.minX && P.x < b.maxX && P.z > b.minZ && P.z < b.maxZ) return tv; } return null; }
+
+// ============================================================
 // Touch-Steuerung (iPad / Handy)
 // ============================================================
 const TOUCH = { on: false, jx: 0, jy: 0, sprint: false, btns: {} };
@@ -3589,8 +3953,9 @@ function setupTouch() {
   mk('jmp', '⤒', 'mid', () => pressKey('Space', true), () => pressKey('Space', false));
   mk('use', 'E', 'mid gold', () => pressKey('KeyE', true), () => pressKey('KeyE', false));
   mk('dn', '⤓', 'mid', () => pressKey('KeyC', true), () => pressKey('KeyC', false));
-  const side = [['I', '🎒', 'KeyI'], ['X', '🏹', 'KeyX'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
-  for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, id === 'R' ? ui : row);
+  mk('wpn', '🏹', 'mid', () => pressKey('KeyX', true), () => pressKey('KeyX', false));
+  const side = [['I', '🎒', 'KeyI'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
+  for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, (id === 'R' || id === 'M') ? ui : row);
   // Kamera: mit dem Finger über das Bild wischen, zwei Finger = Zoom
   const pts = new Map(); let pinch = 0;
   canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
@@ -3701,13 +4066,13 @@ function updatePlayer(dt) {
     if (canMove && keys.Space && player.onGround) { player.vy = player.mounted ? 12 : 10.5; player.onGround = false; }
   }
   // Regeneration
-  if (!player.dead && clock.elapsedTime - player.lastHurt > 6 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * 4);
+  if (!player.dead && clock.elapsedTime - player.lastHurt > 6 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * (clock.elapsedTime < (player.regenUntil || 0) ? 14 : 4));
   // Modell
   const hy = player.mounted ? 1.3 : 0;
   const riding = player.swimming && hasHippo;
   hero.root.position.set(P.x, P.y + hy + (riding ? 1.0 : player.swimming ? -0.85 : 0), P.z);
   hero.root.rotation.y = player.yaw;
-  animateHumanoid(hero, player.mounted || riding ? 0 : player.speedNow, dt, { attack: player.atkAnim, block: player.blocking, sitting: player.mounted || riding, bow: player.bowMode && !player.blocking });
+  animateHumanoid(hero, player.mounted || riding ? 0 : player.speedNow, dt, { attack: player.atkAnim, block: player.blocking, sitting: player.mounted || riding, bow: player.bowMode });
   hippo.root.visible = riding; if (riding) { hippo.root.position.set(P.x, P.y - 0.4, P.z); hippo.root.rotation.y = player.yaw; animateQuad(hippo, player.speedNow * 0.4, dt); }
   pegasus.root.visible = false; ship.root.visible = false;
   if (player.swimming && !riding) { hero.armL.rotation.x = -2.6 + Math.sin(clock.elapsedTime * 4) * 0.6; hero.armR.rotation.x = -2.6 - Math.sin(clock.elapsedTime * 4) * 0.6; }
@@ -3842,13 +4207,14 @@ function updateCamera(dt) {
   const P = player.pos;
   const tgt = new V3(P.x, P.y + (player.bird ? 1.5 : player.sailing ? 3.5 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
   if (player.bowMode && !player.sailing) { tgt.x += Math.cos(camYaw) * 0.8; tgt.z -= Math.sin(camYaw) * 0.8; tgt.y += 0.2; }
-  let dist = (player.bird ? 12 : player.sailing ? 17 : player.flying ? 11 : player.mounted ? 9 : 6.5) * camZoom * (player.bowMode && !player.sailing ? 0.7 : 1);
+  const inTav = !curD && insideTavern(P);
+  let dist = (inTav ? 4 : player.bird ? 12 : player.sailing ? 17 : player.flying ? 11 : player.mounted ? 9 : 6.5) * camZoom * (player.bowMode && !player.sailing ? 0.7 : 1);
   const dx = Math.sin(camYaw) * Math.cos(camPitch), dy = Math.sin(camPitch), dz = Math.cos(camYaw) * Math.cos(camPitch);
   for (let k = 0.12; k <= 1.0001; k += 0.08) { if (camBlocked(tgt.x + dx * dist * k, tgt.y + dy * dist * k, tgt.z + dz * dist * k)) { dist *= Math.max(0.12, k - 0.1); break; } }
   const cx = tgt.x + dx * dist, cz = tgt.z + dz * dist;
   let cy = tgt.y + dy * dist;
   if (curD) cy = Math.min(cy, curD.O.y + curD.H - 0.8);
-  else cy = Math.max(cy, heightAt(cx, cz) + 0.6, 0.4);
+  else { cy = Math.max(cy, heightAt(cx, cz) + 0.6, 0.4); const tv = insideTavern(P); if (tv) cy = Math.min(cy, tv.box.y + 3.9); }
   camera.position.set(cx, cy, cz);
   camera.lookAt(tgt);
 }
@@ -3899,7 +4265,7 @@ function loop() {
     updatePlayer(dt);
     for (const e of enemies) updateEnemy(e, dt);
     updateNPCs(dt);
-    updateRemotes(dt); netSend(dt); updateAllies(dt); updateWanted(dt); updateArrows(dt); updateOly(dt); updateStrikes(dt);
+    updateRemotes(dt); netSend(dt); updateAllies(dt); updateWanted(dt); updateArrows(dt); updateOly(dt); updateStrikes(dt); updateSirens(dt);
     updatePickups(dt, t);
     updateSky(dt);
     animateWorld(dt, t);
@@ -3975,7 +4341,7 @@ function init() {
   buildTerrain();
   buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
   buildIslands();
-  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildServices(); buildQuizNPCs(); buildZeusQuest();
+  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildAncientWorld(); buildSirenRocks(); buildServices(); buildQuizNPCs(); buildZeusQuest();
   buildVegetation();
   finalizeStatic();
   buildClouds();
@@ -3999,7 +4365,7 @@ function init() {
   $('heroClose').onclick = (e) => { e.stopPropagation(); if (heroOpen) toggleHero(); };
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);

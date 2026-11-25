@@ -9,7 +9,14 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
 
 ## Die Welt
 
-- **Athen** mit Akropolis, Parthenon und Agora
+Die Karte ist dem **echten Griechenland** nachgebildet (Küstenlinien nach Längen- und Breitengraden): Festland mit Attika, Böotien, Thessalien und Makedonien, die Peloponnes, Euböa, Kreta, die Kykladen, die Inseln der Ostägäis und die Küste Kleinasiens mit Troja.
+
+
+- **Athen** mit Akropolis, Parthenon, Agora, der Werkstatt des Erfinders Heron (er baut ein „Auto“!) und Herrn Mara
+- **Troja** mit Mauern und dem **Trojanischen Pferd**, **Rhodos** mit dem **Koloss**, **Ephesos** (Artemistempel), **Halikarnassos** (Mausoleum), **Milet, Samos, Kos, Chios, Delos, Korkyra, Stagira**
+- **Marathon**, die **Thermopylen**, das Orakel von **Dodona**
+- Odysseus mit gestrandetem Schiff an der Westküste – und irgendwo am Strand von Kreta liegt ein **UFO** …
+- **Sirenenfelsen** im Ionischen Meer: Wer zu nah heransegelt, muss im Minispiel widerstehen
 - **Piräus** – Hafen mit Fähre nach Kreta
 - **Theben**, **Delphi** (Orakel), **Olympia** (Stadion), **Sparta**
 - **Olymp** – der schneebedeckte Gipfel mit dem Schrein des Zeus
@@ -45,13 +52,13 @@ Hermes in Olympia startet die Reihe: Alle 5 Olympia-Goldmedaillen → 3 Giganten
 
 ## Tavernen, Händler & Nebenmissionen
 
-- **10 Tavernen** (🍺 auf der Karte): Essen & Bett zum Heilen, **Söldner anheuern** (Speerträger, Hoplit, Spartanischer Veteran – bis zu 4 folgen dir und kämpfen mit), **Kopfgeldbrett** mit Gesetzlosen zum Jagen, Gerüchte und das eigene Kopfgeld begleichen
+- **14 begehbare Tavernen** (🍺 auf der Karte): antikes griechisches Essen (Gerstenbrot, Linsensuppe, Ziegenkäse mit Honig, Thunfisch, Kykeon, Krasis, in Sparta die Schwarze Suppe), Bett zum Heilen, **Söldner anheuern** (Speerträger, Hoplit, Spartanischer Veteran – bis zu 4 folgen dir und kämpfen mit), **Kopfgeldbrett** mit Gesetzlosen zum Jagen, Gerüchte und das eigene Kopfgeld begleichen
 - **Fahndung**: Wer Stadtsoldaten erschlägt oder Städte erobert, wird gesucht (★–★★★★★) und von Stadtwachen gejagt. Abhauen, warten oder in der Taverne bezahlen.
 - **Pferdeställe**: Thessalischer Rappe, Arabischer Schimmel und der **Streitwagen**
 - **Schmiede**: Waffen (bis Xiphos des Champions) und Rüstungen (bis Hoplitenrüstung)
 - **Schiffsbauer** in Piräus, Kreta und Ithaka: Fischerboot, Handelsschiff, Trireme
 - **3 Mythenwälder**: Hain der Dryaden, Wald von Nemea (Nemeischer Löwe), Kalydonischer Wald (Kalydonischer Eber) – mit Satyrn, Dryaden und einem Schatz
-- **30 Gelehrte** (❓ auf der Karte) überall in Hellas stellen je **5 leichte Fragen über Griechenland**
+- **64 Gelehrte** (❓ auf der Karte) – darunter Sokrates, Platon, Pythagoras, Thales, Hippokrates, Homer, Sappho und Alexander an ihren echten Orten – stellen je **5 leichte Fragen über Griechenland**. Wer alle überzeugt, bekommt von **Athene die Aigis**.
 - **Eigene Stadt**: Bürger zu Soldaten ausbilden (Gefolge) und die Stadtwache trainieren (mehr Verteidiger gegen Eroberer)
 
 ## Mehrspieler & Städte
@@ -61,7 +68,7 @@ Hermes in Olympia startet die Reihe: Alle 5 Olympia-Goldmedaillen → 3 Giganten
 - **Städten beitreten**: Für 50 Drachmen Tribut wirst du Bürger einer fremden Stadt (auch Megara, Argos, Korinth). Ihre Soldaten werden deine Verbündeten, du kannst beim Ausbau helfen und die Stadtwache mitfinanzieren. Herrscher können Bürger verbannen.
 - **Städte erobern**: Besiege die Garnison einer fremden Stadt und erobere sie am Grenzstein. Du erhältst ihre Schatzkammer, ihre Steuern und kannst sie weiter ausbauen. Im Mehrspieler können andere Helden auch deine Städte erobern!
 - **Konto mit Name und Passwort**: Spielstand liegt in der Cloud – auf jedem Gerät weiterspielen. Rangliste auf der Weltkarte (**M**).
-- **Admins** haben ein Admin-Menü (**P**): Spieler bannen/entbannen und frei herumfliegen.
+- **Admins** haben ein Admin-Menü (**P**): sich Drachmen geben, Spieler bannen/entbannen, andere zum Admin machen und frei herumfliegen.
 
 Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code liegt im Ordner [`server/`](server/README.md) (Cloudflare Worker). Ist er nicht erreichbar, läuft das Spiel als Einzelspieler.
 

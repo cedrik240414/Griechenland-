@@ -65,7 +65,8 @@
   .tbtn.gold { color:var(--gold); font-family:'Cinzel',serif; font-weight:700; }
   #tb_blk { right:150px; bottom:34px; } #tb_jmp { right:140px; bottom:118px; } #tb_use { right:56px; bottom:150px; } #tb_dn { right:214px; bottom:110px; }
   .tbtn.small { width:46px; height:46px; font-size:20px; right:calc(18px + env(safe-area-inset-right)); }
-  #tb_sR { top:250px; }
+  #tb_sR { top:250px; } #tb_sM { top:304px; right:calc(18px + env(safe-area-inset-right)); }
+  #tb_wpn { right:236px; bottom:34px; }
   #tRow { position:absolute; top:calc(24px + env(safe-area-inset-top)); right:calc(236px + env(safe-area-inset-right)); display:flex; flex-direction:row-reverse; gap:8px; pointer-events:none; }
   #tRow .tbtn.small { position:static; }
   body.touch #crosshair, body.touch #pause { display:none !important; }
@@ -75,7 +76,7 @@
   body.touch #chatInput { bottom:auto; top:120px; }
   body.touch #prompt { bottom:42%; }
   @media (max-height:500px) { #joyBase { bottom:90px; width:120px; height:120px; } .tbtn.big { width:80px; height:80px; bottom:20px; }
-    #tb_sR { top:130px; } #tRow { top:12px; right:136px; } #minimapWrap { width:100px; height:100px; } }
+    #tb_sR { top:130px; } #tb_sM { top:182px; } #tb_wpn { right:196px; bottom:20px; } #tRow { top:12px; right:136px; } #minimapWrap { width:100px; height:100px; } }
   @media (max-width:760px) { #tRow { top:auto; bottom:250px; right:12px; flex-direction:column-reverse; } }
   #toasts { position:absolute; right:20px; bottom:20px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
   .toast { padding:8px 14px; font-size:15px; animation:tin .3s ease-out; }
@@ -128,6 +129,7 @@
   #heroClose { position:absolute; top:10px; right:12px; font-size:20px; background:none; border:none; color:#bfb293; cursor:pointer; }
   .htabs { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; } .htabs .abtn { font-size:15px; padding:7px 12px; }
   #heroPanel .arow { padding:5px 0; border-bottom:1px solid rgba(232,196,106,.15); } #heroPanel .arow span { font-size:15px; }
+  #sirenHud { position:absolute; top:28%; left:50%; transform:translateX(-50%); text-align:center; padding:12px 18px; font-size:18px; color:#bfe6ff; background:rgba(10,20,40,.75); border:1px solid #8fd0ff; border-radius:8px; text-shadow:0 1px 4px #000; white-space:nowrap; }
   #olyHud { position:absolute; top:56px; left:50%; transform:translateX(-50%); font-size:18px; color:#ffd24a; text-shadow:0 2px 6px #000; white-space:nowrap; font-family:'Cinzel',serif; }
   body.touch.bow #crosshair { display:block !important; }
   body.bow #crosshair { width:10px; height:10px; margin:-5px; background:none; border:2px solid rgba(255,240,200,.9); }
@@ -159,6 +161,7 @@
   <div id="questBox" class="panel"><div class="qtitle">AUFGABE</div><div id="questText"></div><div id="zeusText"></div><div id="bountyText"></div><div id="allyText"></div></div>
   <div id="wanted"></div>
   <div id="olyHud"></div>
+  <div id="sirenHud" style="display:none"></div>
   <div id="minimapWrap"><canvas id="minimap" width="200" height="200"></canvas></div>
   <div id="minimapN">N</div>
   <div id="clock"></div>

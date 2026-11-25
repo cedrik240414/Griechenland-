@@ -1,6 +1,6 @@
 // Hellas – Multiplayer- und Datenbank-Server (Cloudflare Worker)
 // POST /api/account   Konto: register | login | session | logout | save
-// POST /api/admin     Admin: list | ban | unban
+// POST /api/admin     Admin: list | ban | unban | promote
 // GET  /api/leaderboard, /api/lobbies
 // GET  /ws?room=lobby-N  WebSocket in eine Lobby (max. 30 Helden)
 
@@ -119,13 +119,14 @@ export class Store {
         this.sql.exec('UPDATE accounts SET data = ?, score = ?, updated = ? WHERE name_lc = ?', raw, scoreOf(b.data || {}), Date.now(), a.name_lc);
         return out({ ok: true });
       }
-      case 'admin_list': case 'admin_ban': case 'admin_unban': {
+      case 'admin_list': case 'admin_ban': case 'admin_unban': case 'admin_promote': {
         const me = this.bySession(b.token);
         if (!me || !me.admin) return out({ error: 'Nur für Admins' }, 403);
         if (b.op === 'admin_list') return out({ accounts: this.sql.exec('SELECT name, admin, banned, updated, created FROM accounts ORDER BY (updated > created) DESC, updated DESC, created DESC LIMIT 300').toArray() });
         const lc = String(b.name || '').trim().toLowerCase();
         const t = this.acc(lc);
         if (!t) return out({ error: 'Spieler nicht gefunden' }, 404);
+        if (b.op === 'admin_promote') { this.sql.exec('UPDATE accounts SET admin = 1, banned = 0 WHERE name_lc = ?', lc); return out({ ok: true, name: t.name, admin: true }); }
         if (t.admin) return out({ error: 'Admins können nicht gebannt werden' }, 403);
         const ban = b.op === 'admin_ban';
         this.sql.exec('UPDATE accounts SET banned = ? WHERE name_lc = ?', ban ? 1 : 0, lc);
