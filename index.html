@@ -2,7 +2,9 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Hellas – Pfad der Helden</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Alegreya+Sans:wght@400;700&display=swap" rel="stylesheet">
@@ -48,6 +50,31 @@
     border-radius:5px; padding:6px 10px; cursor:pointer; }
   #dlgOpts button:hover { background:rgba(232,196,106,.28); }
   #dlgHint { margin-top:8px; font-size:13px; color:#bfb293; text-align:right; }
+  html, body { touch-action:manipulation; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; overscroll-behavior:none; }
+  canvas#game { touch-action:none; }
+  #dlgClose { position:absolute; top:8px; right:10px; font-size:18px; background:none; border:none; color:#bfb293; cursor:pointer; padding:4px 8px; }
+  #touchUI { position:fixed; inset:0; pointer-events:none; z-index:3; }
+  #joyBase { position:absolute; left:calc(28px + env(safe-area-inset-left)); bottom:150px; width:140px; height:140px; border-radius:50%;
+    background:rgba(20,14,8,.35); border:2px solid rgba(232,196,106,.45); pointer-events:auto; touch-action:none; }
+  #joyKnob { position:absolute; left:50%; top:50%; width:60px; height:60px; margin:-30px; border-radius:50%; background:rgba(232,196,106,.65); box-shadow:0 2px 8px rgba(0,0,0,.5); }
+  .tbtn { position:absolute; pointer-events:auto; touch-action:none; border-radius:50%; border:2px solid rgba(232,196,106,.55); background:rgba(28,20,12,.55);
+    color:#f3e9d2; font-size:26px; display:flex; align-items:center; justify-content:center; user-select:none; -webkit-user-select:none; padding:0; }
+  .tbtn.down { background:rgba(232,196,106,.55); color:#1b140c; }
+  .tbtn.big { width:96px; height:96px; right:calc(34px + env(safe-area-inset-right)); bottom:40px; font-size:40px; }
+  .tbtn.mid { width:64px; height:64px; }
+  .tbtn.gold { color:var(--gold); font-family:'Cinzel',serif; font-weight:700; }
+  #tb_blk { right:150px; bottom:34px; } #tb_jmp { right:140px; bottom:118px; } #tb_use { right:56px; bottom:150px; } #tb_dn { right:214px; bottom:110px; }
+  .tbtn.small { width:46px; height:46px; font-size:20px; right:calc(18px + env(safe-area-inset-right)); }
+  #tb_sR { top:250px; } #tb_sF { top:302px; } #tb_sM { top:354px; } #tb_sQ { top:406px; } #tb_sT { top:250px; right:72px !important; } #tb_sB { top:302px; right:72px !important; }
+  #tb_sG { top:354px; right:72px !important; } #tb_sC { top:406px; right:72px !important; } #tb_sP { top:458px; }
+  body.touch #crosshair, body.touch #pause { display:none !important; }
+  body.touch #toasts { bottom:auto; top:250px; right:130px; }
+  body.touch #bars { bottom:20px; }
+  body.touch #chatLog { bottom:300px; }
+  body.touch #chatInput { bottom:auto; top:120px; }
+  body.touch #prompt { bottom:42%; }
+  @media (max-height:500px) { #joyBase { bottom:90px; width:120px; height:120px; } .tbtn.big { width:80px; height:80px; bottom:20px; }
+    #tb_sR { top:110px; } #tb_sF { top:158px; } #tb_sM { top:206px; } #tb_sQ { top:254px; } #tb_sT { top:110px; } #tb_sB { top:158px; } #tb_sG { top:206px; } #tb_sC { top:254px; } #tb_sP { top:302px; } #minimapWrap { width:100px; height:100px; } }
   #toasts { position:absolute; right:20px; bottom:20px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
   .toast { padding:8px 14px; font-size:15px; animation:tin .3s ease-out; }
   .toast.gold { border-color:var(--gold); color:var(--gold); }
@@ -135,7 +162,7 @@
   <div id="prompt"></div>
   <div id="crosshair"></div>
   <div id="toasts"></div>
-  <div id="dialog" class="panel hidden"><div id="dlgName"></div><div id="dlgText"></div><div id="dlgOpts"></div><div id="dlgHint">[E] Weiter</div></div>
+  <div id="dialog" class="panel hidden"><div id="dlgName"></div><div id="dlgText"></div><div id="dlgOpts"></div><div id="dlgHint">[E] Weiter</div><button id="dlgClose" aria-label="Schließen">✕</button></div>
 </div>
 <div id="adminPanel" class="panel hidden"><h3>⚙ Admin-Menü</h3><div class="ahint">[P] schließen – danach ins Spiel klicken</div><div id="adminBody"></div></div>
 <div id="damageFlash"></div>
@@ -182,6 +209,7 @@
       <b>Enter</b><span>Chat (online)</span>
       <b>1 – 9</b><span>Antwort im Gespräch wählen</span>
       <b>P</b><span>Admin-Menü (nur Admins)</span>
+      <b>Touch</b><span>Joystick links laufen (ganz ausgelenkt = sprinten), rechts wischen = Kamera, zwei Finger = Zoom, ⚔ angreifen, 🛡 blocken</span>
     </div>
   </div>
 </div>

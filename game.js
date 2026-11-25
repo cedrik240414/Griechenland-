@@ -2985,7 +2985,7 @@ function spawnMythCreatures() {
 addEventListener('keydown', (e) => {
   if (!started) return;
   const k = e.code;
-  if (NET.chatOpen) { if (k === 'Enter') closeChat(true); if (k === 'Escape') closeChat(false); return; }
+  if (NET.chatOpen) { if (k === 'Enter' || e.key === 'Enter') closeChat(true); if (k === 'Escape' || e.key === 'Escape') closeChat(false); return; }
   if (k === 'Enter' && !dialog) { e.preventDefault(); openChat(); return; }
   keys[k] = true;
   if (k === 'KeyE') { if (dialog) advanceDialog(); else interact(); }
@@ -3006,6 +3006,7 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 canvas.addEventListener('mousedown', (e) => {
   if (!started) return;
+  if (TOUCH.on && e.pointerType === 'touch') return;
   if (document.pointerLockElement !== canvas) { canvas.requestPointerLock && canvas.requestPointerLock(); }
   if (e.button === 0) { mouse.left = true; if (dialog) { if (!dialog.pages[dialog.i].opts) advanceDialog(); } else playerAttack(); }
   if (e.button === 2) mouse.right = true;
@@ -3021,6 +3022,80 @@ addEventListener('wheel', (e) => { camZoom = clamp(camZoom * (e.deltaY > 0 ? 1.1
 document.addEventListener('pointerlockchange', () => { paused = started && document.pointerLockElement !== canvas && !dialog && !mapOpen && !adminOpen && !NET.chatOpen; $('pause').classList.toggle('hidden', !paused); });
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeOverlay(); });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.left = mouse.right = false; });
+
+// ============================================================
+// Touch-Steuerung (iPad / Handy)
+// ============================================================
+const TOUCH = { on: false, jx: 0, jy: 0, sprint: false, btns: {} };
+function isTouchDevice() { return ('ontouchstart' in window) || navigator.maxTouchPoints > 0; }
+// Kein Zoomen durch Doppeltippen oder Zwei-Finger-Geste
+(function noZoom() {
+  let lastEnd = 0;
+  document.addEventListener('touchend', (e) => { const now = Date.now(); if (now - lastEnd < 350 && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') e.preventDefault(); lastEnd = now; }, { passive: false });
+  document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', (e) => { if (e.touches.length > 1 || (started && e.target.tagName !== 'INPUT' && !e.target.closest('#adminPanel, #dialog, #bigmap, #menu'))) e.preventDefault(); }, { passive: false });
+})();
+function pressKey(code, down) { window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: code })); }
+function setupTouch() {
+  if (!isTouchDevice()) return;
+  TOUCH.on = true;
+  document.body.classList.add('touch');
+  const ui = document.createElement('div'); ui.id = 'touchUI'; document.body.appendChild(ui);
+  // Joystick
+  const base = document.createElement('div'); base.id = 'joyBase'; const knob = document.createElement('div'); knob.id = 'joyKnob'; base.appendChild(knob); ui.appendChild(base);
+  let joyId = null;
+  const joyMove = (e) => {
+    const r = base.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, R = r.width / 2;
+    let dx = (e.clientX - cx) / R, dy = (e.clientY - cy) / R; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; }
+    TOUCH.jx = dx; TOUCH.jy = dy; TOUCH.sprint = l > 0.95;
+    knob.style.transform = 'translate(' + dx * R * 0.6 + 'px,' + dy * R * 0.6 + 'px)';
+  };
+  base.addEventListener('pointerdown', (e) => { e.preventDefault(); joyId = e.pointerId; base.setPointerCapture(e.pointerId); joyMove(e); });
+  base.addEventListener('pointermove', (e) => { if (e.pointerId === joyId) joyMove(e); });
+  const joyEnd = (e) => { if (e.pointerId !== joyId) return; joyId = null; TOUCH.jx = TOUCH.jy = 0; TOUCH.sprint = false; knob.style.transform = ''; };
+  base.addEventListener('pointerup', joyEnd); base.addEventListener('pointercancel', joyEnd);
+  // Knöpfe: [id, Symbol, Klasse, gedrückt-Funktion, losgelassen-Funktion]
+  const mk = (id, label, cls, down, up) => {
+    const b = document.createElement('button'); b.id = 'tb_' + id; b.className = 'tbtn ' + cls; b.innerHTML = label; ui.appendChild(b); TOUCH.btns[id] = b;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.classList.add('down'); b.setPointerCapture(e.pointerId); down && down(); });
+    const rel = (e) => { b.classList.remove('down'); up && up(); };
+    b.addEventListener('pointerup', rel); b.addEventListener('pointercancel', rel);
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
+  };
+  mk('atk', '⚔', 'big', () => { if (dialog) { if (!dialog.pages[dialog.i].opts) advanceDialog(); } else playerAttack(); });
+  mk('blk', '🛡', 'mid', () => { mouse.right = true; }, () => { mouse.right = false; });
+  mk('jmp', '⤒', 'mid', () => pressKey('Space', true), () => pressKey('Space', false));
+  mk('use', 'E', 'mid gold', () => pressKey('KeyE', true), () => pressKey('KeyE', false));
+  mk('dn', '⤓', 'mid', () => pressKey('KeyC', true), () => pressKey('KeyC', false));
+  const side = [['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
+  for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); });
+  // Kamera: mit dem Finger über das Bild wischen, zwei Finger = Zoom
+  const pts = new Map(); let pinch = 0;
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+  canvas.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); } });
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'touch' || !pts.has(e.pointerId)) return;
+    const p = pts.get(e.pointerId);
+    if (pts.size === 1) { camYaw -= (e.clientX - p.x) * 0.006; camPitch = clamp(camPitch + (e.clientY - p.y) * 0.005, -0.35, 1.25); }
+    p.x = e.clientX; p.y = e.clientY;
+    if (pts.size === 2) { const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (pinch) camZoom = clamp(camZoom * pinch / d, 0.45, 2.2); pinch = d; }
+  });
+  const end = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; };
+  canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+  // Gespräche per Antippen weiterklicken
+  $('dialog').addEventListener('click', (e) => { if (e.target.tagName !== 'BUTTON' && dialog && !dialog.pages[dialog.i].opts) advanceDialog(); });
+  $('bigmap').addEventListener('click', () => { if (mapOpen) pressKey('KeyM', true); });
+}
+function updateTouchUI() {
+  if (!TOUCH.on) return;
+  const show = (id, v) => { const b = TOUCH.btns[id]; if (b && (b.style.display === 'none') === v) b.style.display = v ? '' : 'none'; };
+  const fly = player.flying || player.adminFly;
+  show('dn', fly); show('sQ', player.blessed); show('sT', player.gear.includes('pegasus')); show('sG', player.gear.includes('pegasus'));
+  show('sB', player.hasShip); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
+  show('use', !!nearInter || !!dialog);
+  const u = $('touchUI'); if (u) u.style.display = started ? '' : 'none';
+}
 
 let nearInter = null;
 function interact() { if (nearInter && !player.dead) nearInter.fn(); }
@@ -3052,11 +3127,12 @@ function updatePlayer(dt) {
     if (keys.KeyS || keys.ArrowDown) _mv.sub(_fwd);
     if (keys.KeyD || keys.ArrowRight) _mv.add(_right);
     if (keys.KeyA || keys.ArrowLeft) _mv.sub(_right);
+    if (TOUCH.jx || TOUCH.jy) { _mv.addScaledVector(_right, TOUCH.jx); _mv.addScaledVector(_fwd, -TOUCH.jy); }
   }
   player.blocking = canMove && mouse.right && !player.mounted && !player.swimming;
   const moving = _mv.lengthSq() > 0;
   if (moving) _mv.normalize();
-  const sprint = (keys.ShiftLeft || keys.ShiftRight) && moving && player.stamina > 1 && !player.blocking;
+  const sprint = (keys.ShiftLeft || keys.ShiftRight || TOUCH.sprint) && moving && player.stamina > 1 && !player.blocking;
   if (player.adminFly) { updateAdminFly(dt, moving, sprint, canMove); return; }
   if (player.sailing) { updateSailing(dt, moving, sprint); return; }
   if (player.flying) { updateFlying(dt, moving, sprint, canMove); return; }
@@ -3268,6 +3344,7 @@ function updateHUD() {
   $('bountyText').textContent = S.bounty ? '☠ Kopfgeld: ' + S.bounty.name + ' – ' + S.bounty.reward + ' Drachmen' : '';
   $('allyText').textContent = allies.length ? '⚔ Gefolge: ' + allies.map(a => a.def.name.split(' ').pop() + ' ' + Math.ceil(a.hp)).join(', ') : '';
   nearInter = dialog ? null : findInteractable();
+  updateTouchUI();
   $('prompt').innerHTML = nearInter ? '<b>E</b>' + (typeof nearInter.label === 'function' ? nearInter.label() : nearInter.label) : '';
   // Ortsnamen
   let cur = null;
@@ -3354,7 +3431,7 @@ function startGame(fromSave) {
   updateQuestText();
   camYaw = 0; camPitch = 0.3; if (!sv) player.yaw = Math.PI;
   if (sv) for (const d of DUNGEONS) if (Math.hypot(player.pos.x - d.at[0], player.pos.z - d.at[1]) < 12) { const r = downhillRot(d.at[0], d.at[1]); camYaw = r + Math.PI; player.yaw = r; }
-  canvas.requestPointerLock && canvas.requestPointerLock();
+  if (!TOUCH.on) canvas.requestPointerLock && canvas.requestPointerLock();
   showLoc(LOCS.athen);
   refreshHeroLook();
   if (mpEnabled()) NET.room = chooseRoom();
@@ -3386,7 +3463,8 @@ function init() {
   $('loading').textContent = '';
   $('btnNew').disabled = false;
   if (loadSave()) $('btnLoad').classList.remove('hidden');
-  setupMenuNet();
+  setupMenuNet(); setupTouch();
+  $('dlgClose').onclick = (e) => { e.stopPropagation(); dialog = null; renderDialog(); };
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
   window.__hellas = { allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
