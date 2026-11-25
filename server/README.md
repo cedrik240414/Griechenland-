@@ -1,7 +1,7 @@
 # Hellas-Server (Mehrspieler & Datenbank)
 
 Cloudflare Worker mit
-- **Durable Object `World`**: eine Lobby mit bis zu 10 Helden (Positionen, Chat, gemeinsame Städte, die man gründen und erobern kann)
+- **Durable Object `World`**: eine Lobby mit bis zu 30 Helden (Positionen, Chat, gemeinsame Städte, die man gründen, erobern und denen man beitreten kann)
 - **Durable Object `Directory`**: Liste der aktiven Lobbys
 - **Durable Object `Store`** (SQLite-Datenbank): Konten (Name + Passwort, PBKDF2-gehasht), Sitzungen, Cloud-Spielstände, Bann-Status und Rangliste
 

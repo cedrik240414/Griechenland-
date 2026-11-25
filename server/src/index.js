@@ -2,9 +2,9 @@
 // POST /api/account   Konto: register | login | session | logout | save
 // POST /api/admin     Admin: list | ban | unban
 // GET  /api/leaderboard, /api/lobbies
-// GET  /ws?room=lobby-N  WebSocket in eine Lobby (max. 10 Helden)
+// GET  /ws?room=lobby-N  WebSocket in eine Lobby (max. 30 Helden)
 
-const MAX_PLAYERS = 10;
+const MAX_PLAYERS = 30;
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...CORS } });
 const NAME_RE = /^[A-Za-z0-9ÄÖÜäöüß_\-]{3,20}$/;
@@ -230,9 +230,12 @@ export class World {
       const T = this.towns[site];
       let event = null;
       if (msg.action === 'found' && !T) { this.towns[site] = { owner: a.cid, ownerName: a.name, name: cleanName(msg.name, 24), lvl: 1, def: 0, collected: now }; event = a.name + ' hat die Stadt ' + this.towns[site].name + ' gegründet.'; }
-      else if (msg.action === 'upgrade' && T && T.owner === a.cid && T.lvl < 4) { T.lvl++; event = a.name + ' hat ' + T.name + ' auf Stufe ' + T.lvl + ' ausgebaut.'; }
-      else if (msg.action === 'train' && T && T.owner === a.cid && (T.def || 0) < 10) { T.def = Math.min(10, (T.def || 0) + 2); }
-      else if (msg.action === 'conquer' && T && T.owner !== a.cid) { const prev = T.ownerName; T.owner = a.cid; T.ownerName = a.name; T.collected = now; T.def = 0; event = '⚔ ' + a.name + ' hat ' + T.name + ' von ' + prev + ' erobert!'; }
+      else if (msg.action === 'upgrade' && T && (T.owner === a.cid || isMember(T, a.cid)) && T.lvl < 4) { T.lvl++; event = a.name + ' hat ' + T.name + ' auf Stufe ' + T.lvl + ' ausgebaut.'; }
+      else if (msg.action === 'train' && T && (T.owner === a.cid || isMember(T, a.cid)) && (T.def || 0) < 10) { T.def = Math.min(10, (T.def || 0) + 2); }
+      else if (msg.action === 'conquer' && T && T.owner !== a.cid && !isMember(T, a.cid)) { const prev = T.ownerName; T.owner = a.cid; T.ownerName = a.name; T.collected = now; T.def = 0; T.members = []; event = '⚔ ' + a.name + ' hat ' + T.name + ' von ' + prev + ' erobert!'; }
+      else if (msg.action === 'join' && T && T.owner !== a.cid && !isMember(T, a.cid) && (T.members || []).length < 30) { T.members = (T.members || []).concat([{ cid: a.cid, name: a.name }]); event = a.name + ' ist jetzt Bürger von ' + T.name + '.'; }
+      else if (msg.action === 'leave' && T && isMember(T, a.cid)) { T.members = T.members.filter(m => m.cid !== a.cid); event = a.name + ' hat ' + T.name + ' verlassen.'; }
+      else if (msg.action === 'kick' && T && T.owner === a.cid && isMember(T, String(msg.member || ''))) { const m = T.members.find(m => m.cid === msg.member); T.members = T.members.filter(x => x.cid !== msg.member); event = m.name + ' wurde aus ' + T.name + ' verbannt.'; }
       else if (msg.action === 'collect' && T && T.owner === a.cid) { T.collected = now; }
       else return;
       await this.ctx.storage.put('towns', this.towns);
@@ -248,6 +251,7 @@ export class World {
     await this.reportCount();
   }
 }
+function isMember(T, cid) { return !!T && (T.members || []).some(m => m.cid === cid); }
 function sanitizeLook(l) {
   const out = {};
   if (l && typeof l === 'object') for (const k of ['tunic', 'cape', 'crest', 'armor', 'helmetCol', 'shieldEmblem']) { const v = l[k]; if (typeof v === 'number' && v >= 0 && v <= 0xffffff) out[k] = v; }

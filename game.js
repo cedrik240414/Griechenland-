@@ -598,6 +598,7 @@ function defaultTowns() { const o = {}; for (const s of TOWN_SITES) o[s.key] = s
 function myCid() { return NET.account ? 'acc:' + NET.account.name.toLowerCase() : 'me'; }
 function townsState() { return NET.towns || S.towns; }
 function isMine(T) { return !!T && (T.owner === 'me' || T.owner === myCid()); }
+function isMember(T) { return !!T && (T.members || []).some(m => m.cid === myCid()); }
 const townCap = (T) => TOWN_LEVELS[T.lvl].income * 25;
 const townTreasury = (T) => Math.floor(Math.min(townCap(T), TOWN_LEVELS[T.lvl].income * Math.max(0, Date.now() - (T.collected || Date.now())) / 60000));
 function townNPC(site, name, dx, dz, look, wander = 10) {
@@ -669,13 +670,14 @@ function syncTowns() {
     while (builtLvl[s.key] < target) buildTownLevel(s.key, ++builtLvl[s.key]);
     if (!T) { L.name = 'Siedlungsplatz'; L.sub = 'Freier Bauplatz – gründe hier deine Stadt'; }
     else if (isMine(T)) { L.name = T.name; L.sub = TOWN_LEVELS[T.lvl].name + ' – deine Stadt'; }
+    else if (isMember(T)) { L.name = T.name; L.sub = 'Verbündete Stadt – du bist Bürger'; }
     else { L.name = T.name; L.sub = (T.owner === 'npc' ? 'Polis der ' : 'Stadt von ') + T.ownerName + ' – eroberbar'; }
     syncGarrison(s.key, T);
   }
 }
 function garrison(site) { return enemies.filter(e => e.site === site); }
 function syncGarrison(site, T) {
-  const want = T && !isMine(T) && T.lvl > 0 ? Math.min(18, 2 + T.lvl * 2 + (T.def || 0)) : 0;
+  const want = T && !isMine(T) && !isMember(T) && T.lvl > 0 ? Math.min(18, 2 + T.lvl * 2 + (T.def || 0)) : 0;
   const cur = garrison(site);
   const owner = T ? T.ownerName : '';
   if (cur.length && (cur.length !== want || cur[0].owner !== owner) && !(cur.some(e => e.dead) && cur.length === want)) { for (const e of cur) removeEnemy(e); }
@@ -695,8 +697,11 @@ function townAction(site, action, extra = {}) {
   if (action === 'found') S.towns[site] = { owner: 'me', ownerName: heroName(), name: extra.name, lvl: 1, collected: now };
   if (action === 'upgrade') T.lvl++;
   if (action === 'collect') T.collected = now;
-  if (action === 'conquer') { T.owner = 'me'; T.ownerName = heroName(); T.collected = now; T.def = 0; }
+  if (action === 'conquer') { T.owner = 'me'; T.ownerName = heroName(); T.collected = now; T.def = 0; T.members = []; }
   if (action === 'train') T.def = Math.min(10, (T.def || 0) + 2);
+  if (action === 'join') T.members = (T.members || []).concat([{ cid: 'me', name: heroName() }]);
+  if (action === 'leave') T.members = (T.members || []).filter(m => m.cid !== 'me');
+  if (action === 'kick') T.members = (T.members || []).filter(m => m.cid !== extra.member);
   syncTowns(); save();
 }
 function talkTown(site) {
@@ -706,13 +711,24 @@ function talkTown(site) {
       { label: 'Stadt gründen (50 Drachmen)', fn: () => foundTown(site) }, { label: 'Später', fn: () => { } }] }]);
     return;
   }
+  const ownerTxt = (T.owner === 'npc' ? 'den ' : '') + T.ownerName;
+  if (isMember(T)) {
+    const next = L[T.lvl + 1], opts = [];
+    if (next) opts.push({ label: 'Beim Ausbau helfen: ' + next.name + ' (' + next.cost + ' Drachmen)', fn: () => upgradeTown(site) });
+    opts.push({ label: 'Als Soldat ausbilden lassen (60 Drachmen) – Gefolge ' + allies.length + '/' + MAX_ALLIES, fn: () => { if (allies.length >= MAX_ALLIES) { toast('Dein Gefolge ist voll.'); return; } if (spend(60)) { spawnAlly('buerger'); toast('Ein Bürgersoldat aus ' + T.name + ' folgt dir!', 'gold'); save(); } } });
+    if ((T.def || 0) < 10) opts.push({ label: 'Stadtwache mitfinanzieren (100 Drachmen) – Verteidiger ' + (T.def || 0) + '/10', fn: () => { if (spend(100)) { townAction(site, 'train'); toast('Die Stadtwache von ' + T.name + ' wird stärker!', 'gold'); } } });
+    opts.push({ label: 'Die Stadt verlassen', fn: () => { townAction(site, 'leave'); toast('Du bist kein Bürger von ' + T.name + ' mehr.'); } }, { label: 'Zurück', fn: () => { } });
+    talk([{ who: T.name, text: 'Willkommen zurück, Bürger! ' + T.name + ' gehört ' + ownerTxt + ' (' + L[T.lvl].name + '). Bürger: ' + (T.members || []).map(m => m.name).join(', ') + '. Die Soldaten der Stadt sind deine Verbündeten.', opts }]);
+    return;
+  }
   if (!isMine(T)) {
     const alive = garrison(site).filter(e => !e.dead).length;
     const loot = townTreasury(T) + (T.owner === 'npc' ? T.lvl * 60 : 0);
-    if (alive) { talk([{ who: 'Grenzstein von ' + T.name, text: T.name + ' gehört ' + (T.owner === 'npc' ? 'den ' : '') + T.ownerName + ' (' + L[T.lvl].name + '). Noch verteidigen ' + alive + ' Soldaten die Stadt. Besiege die Garnison, dann kannst du ' + T.name + ' erobern!' }]); return; }
+    const join = { label: '🤝 ' + T.name + ' beitreten – Bürger werden (50 Drachmen Tribut)', fn: () => { if (spend(50)) { townAction(site, 'join'); banner('Bürger von ' + T.name, 'Die Soldaten der Stadt sind jetzt deine Verbündeten.'); sfx('quest'); } } };
+    if (alive) { talk([{ who: 'Grenzstein von ' + T.name, text: T.name + ' gehört ' + ownerTxt + ' (' + L[T.lvl].name + ', ' + (T.members || []).length + ' Bürger). ' + alive + ' Soldaten verteidigen die Stadt. Schließ dich ihr an – oder besiege die Garnison und erobere sie!', opts: [join, { label: 'Später', fn: () => { } }] }]); return; }
     talk([{ who: 'Grenzstein von ' + T.name, text: 'Die Garnison ist geschlagen! ' + T.name + ' liegt dir zu Füßen. In der Schatzkammer liegen ' + loot + ' Drachmen.', opts: [
       { label: '⚔ ' + T.name + ' erobern!', fn: () => { if (loot) addMoney(loot); townAction(site, 'conquer'); addCrime(2); banner(T.name + ' erobert!', 'Die Stadt gehört jetzt dir – baue sie aus und sammle Steuern ein.'); sfx('quest'); } },
-      { label: 'Noch nicht', fn: () => { } }] }]);
+      join, { label: 'Noch nicht', fn: () => { } }] }]);
     return;
   }
   const next = L[T.lvl + 1], opts = [], tr = townTreasury(T);
@@ -720,6 +736,7 @@ function talkTown(site) {
   if (next) opts.push({ label: 'Ausbauen zur ' + next.name + ' (' + next.cost + ' Drachmen)', fn: () => upgradeTown(site) });
   opts.push({ label: 'Bürger zu Soldaten ausbilden (60 Drachmen) – Gefolge ' + allies.length + '/' + MAX_ALLIES, fn: () => { if (allies.length >= MAX_ALLIES) { toast('Dein Gefolge ist voll (' + MAX_ALLIES + ').'); return; } if (spend(60)) { spawnAlly('buerger'); toast('Ein Bürgersoldat aus ' + T.name + ' folgt dir!', 'gold'); save(); } } });
   if ((T.def || 0) < 10) opts.push({ label: 'Stadtwache trainieren (100 Drachmen) – Verteidiger ' + (T.def || 0) + '/10', fn: () => { if (spend(100)) { townAction(site, 'train'); toast('Die Stadtwache von ' + T.name + ' wird stärker!', 'gold'); } } });
+  if ((T.members || []).length) opts.push({ label: 'Bürger verwalten (' + T.members.length + ')', fn: () => talk([{ who: T.name, text: 'Bürger von ' + T.name + ': ' + T.members.map(m => m.name).join(', ') + '. Wen willst du verbannen?', opts: T.members.slice(0, 8).map(m => ({ label: 'Verbannen: ' + m.name, fn: () => townAction(site, 'kick', { member: m.cid }) })).concat([{ label: 'Zurück', fn: () => talkTown(site) }]) }]) });
   opts.push({ label: 'Zurück', fn: () => { } });
   const all = Object.values(townsState()).filter(isMine);
   talk([{ who: T.name, text: T.name + ' – ' + L[T.lvl].name + ' (Stufe ' + T.lvl + '/4). Einnahmen: ' + L[T.lvl].income + ' Drachmen pro Minute. Schatzkammer: ' + tr + ' / ' + townCap(T) + '.' + (next ? ' Ausbau bringt: ' + next.desc + '.' : ' Deine Polis ist vollendet!') + (all.length > 1 ? ' Du herrschst über ' + all.length + ' Städte.' : '') + ' Vorsicht: Andere Helden können deine Stadt erobern!', opts }]);
@@ -1528,7 +1545,7 @@ function damageEnemy(e, dmg, crit = false) {
 }
 function killEnemy(e) {
   e.dead = true; e.deadT = 0; e.respawn = 100;
-  if (e.site && !isMine(townsState()[e.site])) { player.crimeKills = (player.crimeKills || 0) + 1; if (player.crimeKills % 2 === 0) addCrime(1); }
+  if (e.site && !isMine(townsState()[e.site]) && !isMember(townsState()[e.site])) { player.crimeKills = (player.crimeKills || 0) + 1; if (player.crimeKills % 2 === 0) addCrime(1); }
   if (e.def.hunter) { player.hunterKills = (player.hunterKills || 0) + 1; if (player.hunterKills % 3 === 0) addCrime(1); setTimeout(() => removeEnemy(e), 6000); }
   if (e.isBountyBoss && S.bounty) { const rw = S.bounty.reward; banner('Kopfgeld kassiert!', e.def.name + ' ist erledigt – ' + rw + ' Drachmen'); addMoney(rw); S.bounty = null; updateQuestText(); save(); }
   const [a, b] = e.def.money; const m = Math.round(rr(a, b));
@@ -1807,7 +1824,7 @@ function drawBigMap() {
   for (const q2 of QUIZZERS) { const x = w2m(q2.x) * k, y = w2m(q2.z) * k; ctx.fillStyle = S.quiz.includes(q2.id) ? '#4a5a6a' : '#1a3a5a'; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.fillStyle = S.quiz.includes(q2.id) ? '#9aa' : '#8fe0ff'; ctx.fillText(S.quiz.includes(q2.id) ? '✓' : '?', x, y + 5); }
   for (const tv of TAVERNS) { const x = w2m(tv.x) * k, y = w2m(tv.z) * k; ctx.fillText('🍺', x + 12, y + 14); }
   if (S.bounty) { const x = w2m(S.bounty.x) * k, y = w2m(S.bounty.z) * k; ctx.fillStyle = '#e0402a'; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText('☠', x, y + 5); }
-  for (const st of TOWN_SITES) { const L = LOCS[st.key], T = townsState()[st.key], x = w2m(L.x) * k, y = w2m(L.z) * k; ctx.strokeStyle = !T ? '#ffffff' : isMine(T) ? '#ffd24a' : '#ff4a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.stroke(); }
+  for (const st of TOWN_SITES) { const L = LOCS[st.key], T = townsState()[st.key], x = w2m(L.x) * k, y = w2m(L.z) * k; ctx.strokeStyle = !T ? '#ffffff' : isMine(T) ? '#ffd24a' : isMember(T) ? '#4ab0ff' : '#ff4a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.stroke(); }
   DUNGEONS.forEach(d => { if (!d.reward && !S.foundD.includes(d.idx)) return; const x = w2m(d.at[0]) * k, y = w2m(d.at[1]) * k; ctx.fillStyle = S.bossDead.includes(d.key) || (d.chest && d.chest.opened) ? '#6a5a70' : '#b05aff'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(d.name, x, y - 10); ctx.fillStyle = '#e8d0ff'; ctx.fillText(d.name, x, y - 10); });
   S.found.forEach(i => { const r = RUINS[i]; if (!r) return; const x = w2m(r.x) * k, y = w2m(r.z) * k; ctx.fillStyle = r.chest.opened ? '#8a8070' : '#ffd24a'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(r.name, x, y + 20); ctx.fillStyle = '#fff3d0'; ctx.fillText(r.name, x, y + 20); });
   ctx.textAlign = 'center'; ctx.font = '700 18px Cinzel, serif'; ctx.fillText('N', W / 2, 24);
@@ -2284,7 +2301,7 @@ function makeSkylla() {
 // ============================================================
 // Mehrspieler & Cloud-Speicher (Cloudflare Worker, siehe /server)
 // ============================================================
-const NET = { ws: null, id: null, others: new Map(), sendT: 0, retry: 2, lastCloud: 0, chatOpen: false, online: false, room: 'lobby-1', max: 10, towns: null, lobbies: [] };
+const NET = { ws: null, id: null, others: new Map(), sendT: 0, retry: 2, lastCloud: 0, chatOpen: false, online: false, room: 'lobby-1', max: 30, towns: null, lobbies: [] };
 const CAPE_COLORS = [0x1c3a7a, 0x7a1c1c, 0x1c6a3a, 0x6a1c6a, 0x8a6a1c, 0x1c6a7a, 0x3a3a3a, 0xb04a1a];
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
@@ -2374,10 +2391,14 @@ function updateRemotes(dt) {
 }
 function netSend(dt) {
   if (!NET.ws || NET.ws.readyState !== 1 || !NET.id) return;
-  NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = 0.1;
+  NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = 0.12;
   const P = player.pos;
   const m = player.sailing ? 's' : player.flying ? 'p' : player.mounted ? 'h' : (player.swimming && player.gear.includes('poseidon')) ? 'k' : '';
-  NET.ws.send(JSON.stringify({ t: 'st', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +player.yaw.toFixed(3), sp: +Math.min(60, player.speedNow).toFixed(1), m, atk: player.atkAnim > 0.5, d: curD ? curD.idx : -1 }));
+  const st = { t: 'st', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +player.yaw.toFixed(2), sp: +Math.min(60, player.speedNow).toFixed(1), m, atk: player.atkAnim > 0.5, d: curD ? curD.idx : -1 };
+  const key = JSON.stringify(st), now = performance.now();
+  if (key === NET.lastSt && now - (NET.lastStT || 0) < 1000) return;
+  NET.lastSt = key; NET.lastStT = now;
+  NET.ws.send(key);
 }
 function netSendLook() { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({ t: 'look', look: lookForNet() })); }
 function lobbyLabel(r) { return 'Lobby ' + String(r || '').split('-')[1]; }
