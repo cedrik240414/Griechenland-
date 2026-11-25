@@ -65,8 +65,9 @@
   .tbtn.gold { color:var(--gold); font-family:'Cinzel',serif; font-weight:700; }
   #tb_blk { right:150px; bottom:34px; } #tb_jmp { right:140px; bottom:118px; } #tb_use { right:56px; bottom:150px; } #tb_dn { right:214px; bottom:110px; }
   .tbtn.small { width:46px; height:46px; font-size:20px; right:calc(18px + env(safe-area-inset-right)); }
-  #tb_sR { top:250px; } #tb_sF { top:302px; } #tb_sM { top:354px; } #tb_sQ { top:406px; } #tb_sT { top:250px; right:72px !important; } #tb_sB { top:302px; right:72px !important; }
-  #tb_sG { top:354px; right:72px !important; } #tb_sC { top:406px; right:72px !important; } #tb_sP { top:458px; }
+  #tb_sR { top:250px; }
+  #tRow { position:absolute; top:calc(24px + env(safe-area-inset-top)); right:calc(236px + env(safe-area-inset-right)); display:flex; flex-direction:row-reverse; gap:8px; pointer-events:none; }
+  #tRow .tbtn.small { position:static; }
   body.touch #crosshair, body.touch #pause { display:none !important; }
   body.touch #toasts { bottom:auto; top:250px; right:130px; }
   body.touch #bars { bottom:20px; }
@@ -74,7 +75,8 @@
   body.touch #chatInput { bottom:auto; top:120px; }
   body.touch #prompt { bottom:42%; }
   @media (max-height:500px) { #joyBase { bottom:90px; width:120px; height:120px; } .tbtn.big { width:80px; height:80px; bottom:20px; }
-    #tb_sR { top:110px; } #tb_sF { top:158px; } #tb_sM { top:206px; } #tb_sQ { top:254px; } #tb_sT { top:110px; } #tb_sB { top:158px; } #tb_sG { top:206px; } #tb_sC { top:254px; } #tb_sP { top:302px; } #minimapWrap { width:100px; height:100px; } }
+    #tb_sR { top:130px; } #tRow { top:12px; right:136px; } #minimapWrap { width:100px; height:100px; } }
+  @media (max-width:760px) { #tRow { top:auto; bottom:250px; right:12px; flex-direction:column-reverse; } }
   #toasts { position:absolute; right:20px; bottom:20px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
   .toast { padding:8px 14px; font-size:15px; animation:tin .3s ease-out; }
   .toast.gold { border-color:var(--gold); color:var(--gold); }

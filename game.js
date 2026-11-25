@@ -3077,8 +3077,9 @@ function setupTouch() {
   const joyEnd = (e) => { if (e.pointerId !== joyId) return; joyId = null; TOUCH.jx = TOUCH.jy = 0; TOUCH.sprint = false; knob.style.transform = ''; };
   base.addEventListener('pointerup', joyEnd); base.addEventListener('pointercancel', joyEnd);
   // Knöpfe: [id, Symbol, Klasse, gedrückt-Funktion, losgelassen-Funktion]
-  const mk = (id, label, cls, down, up) => {
-    const b = document.createElement('button'); b.id = 'tb_' + id; b.className = 'tbtn ' + cls; b.innerHTML = label; ui.appendChild(b); TOUCH.btns[id] = b;
+  const row = document.createElement('div'); row.id = 'tRow'; ui.appendChild(row);
+  const mk = (id, label, cls, down, up, parent = ui) => {
+    const b = document.createElement('button'); b.id = 'tb_' + id; b.className = 'tbtn ' + cls; b.innerHTML = label; parent.appendChild(b); TOUCH.btns[id] = b;
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.classList.add('down'); b.setPointerCapture(e.pointerId); down && down(); });
     const rel = (e) => { b.classList.remove('down'); up && up(); };
     b.addEventListener('pointerup', rel); b.addEventListener('pointercancel', rel);
@@ -3090,7 +3091,7 @@ function setupTouch() {
   mk('use', 'E', 'mid gold', () => pressKey('KeyE', true), () => pressKey('KeyE', false));
   mk('dn', '⤓', 'mid', () => pressKey('KeyC', true), () => pressKey('KeyC', false));
   const side = [['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
-  for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); });
+  for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, id === 'R' ? ui : row);
   // Kamera: mit dem Finger über das Bild wischen, zwei Finger = Zoom
   const pts = new Map(); let pinch = 0;
   canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
