@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS saves (
+  id TEXT PRIMARY KEY,
+  secret_hash TEXT NOT NULL,
+  name TEXT NOT NULL,
+  data TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  updated INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS saves_score ON saves (score DESC);

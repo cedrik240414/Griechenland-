@@ -1,0 +1,21 @@
+name = "hellas-server"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[[durable_objects.bindings]]
+name = "WORLD"
+class_name = "World"
+
+[[durable_objects.bindings]]
+name = "DIR"
+class_name = "Directory"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["World", "Directory"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hellas"
+# Wird nach "wrangler d1 create hellas" eingetragen:
+database_id = "00000000-0000-0000-0000-000000000000"

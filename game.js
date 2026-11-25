@@ -73,6 +73,12 @@ const LOCS = {
   medusaTor: { name: 'Hort der Medusa', x: 650, z: -395, r: 8, h: null, hidden: true },
   polyphemTor: { name: 'Höhle des Polyphem', x: -905, z: 310, r: 8, h: null, hidden: true },
   heimat:    { name: 'Siedlungsplatz', sub: 'Gründe hier deine eigene Stadt', x: -120, z: 120, r: 45, h: null },
+  eleusis:   { name: 'Siedlungsplatz', x: 20, z: -240, r: 45, h: null },
+  lebadeia:  { name: 'Siedlungsplatz', x: -260, z: -400, r: 45, h: null },
+  chalkis:   { name: 'Siedlungsplatz', x: 0, z: -460, r: 45, h: null },
+  megara:    { name: 'Megara', x: -200, z: -100, r: 45, h: null },
+  argos:     { name: 'Argos', x: -380, z: 340, r: 45, h: null },
+  korinth:   { name: 'Korinth', x: -300, z: 100, r: 45, h: null },
 };
 const LOC_LIST = Object.values(LOCS);
 const ROADS = [
@@ -577,101 +583,160 @@ const TOWN_LEVELS = [
   { name: 'Kleinstadt', cost: 300, income: 18, desc: 'einen eigenen Tempel mit Wachen und eine Palisade' },
   { name: 'Polis', cost: 600, income: 30, desc: 'Wachtürme, eine Säulenhalle und deine goldene Heldenstatue' },
 ];
-const TOWN_LINES = ['Danke, dass du uns ein Zuhause gegeben hast!', 'Die Felder hier sind fruchtbar. Bald wird die Stadt wachsen.', 'Wenn wir mehr Drachmen hätten, könnten wir einen Tempel bauen …', 'Ich habe gehört, du hast mit Wölfen gekämpft. Unglaublich!', 'Die Steuern liegen in der Schatzkammer beim Grenzstein bereit.', 'Unsere Stadt wird eines Tages größer als Athen!'];
-const townCap = () => TOWN_LEVELS[S.town.lvl].income * 25;
-function townNPC(name, dx, dz, look, wander = 10) {
-  const L = LOCS.heimat;
-  return addNPC(name, L.x + dx, L.z + dz, look, function () { talk([{ who: this.name, text: pick(TOWN_LINES).replace('Stadt', S.town.name || 'Stadt') }]); }, wander);
+const TOWN_LINES = ['Willkommen in {S}!', 'Die Felder hier sind fruchtbar. Bald wird {S} wachsen.', 'Wenn wir mehr Drachmen hätten, könnten wir einen Tempel bauen …', 'Die Steuern liegen in der Schatzkammer beim Grenzstein bereit.', '{S} wird eines Tages größer als Athen!', 'Ich hoffe, niemand erobert uns …'];
+// Stadtplätze: freie Bauplätze und feindliche Poleis (Schlüssel müssen mit server/src/index.js übereinstimmen)
+const TOWN_SITES = [
+  { key: 'heimat' }, { key: 'eleusis' }, { key: 'lebadeia' }, { key: 'chalkis' },
+  { key: 'megara', def: { owner: 'npc', ownerName: 'Megarer', name: 'Megara', lvl: 2 }, col: 0x2a5a9a },
+  { key: 'argos', def: { owner: 'npc', ownerName: 'Argiver', name: 'Argos', lvl: 3 }, col: 0x2a7a3a },
+  { key: 'korinth', def: { owner: 'npc', ownerName: 'Korinther', name: 'Korinth', lvl: 4 }, col: 0x7a2a7a },
+];
+const SITE = Object.fromEntries(TOWN_SITES.map(s => [s.key, s]));
+const builtLvl = {};
+function defaultTowns() { const o = {}; for (const s of TOWN_SITES) o[s.key] = s.def ? Object.assign({ collected: Date.now() }, s.def) : null; return o; }
+function myCid() { return cloudCreds().id; }
+function townsState() { return NET.towns || S.towns; }
+function isMine(T) { return !!T && (T.owner === 'me' || T.owner === myCid()); }
+const townCap = (T) => TOWN_LEVELS[T.lvl].income * 25;
+const townTreasury = (T) => Math.floor(Math.min(townCap(T), TOWN_LEVELS[T.lvl].income * Math.max(0, Date.now() - (T.collected || Date.now())) / 60000));
+function townNPC(site, name, dx, dz, look, wander = 10) {
+  const L = LOCS[site];
+  return addNPC(name, L.x + dx, L.z + dz, look, function () { const T = townsState()[site]; talk([{ who: this.name, text: pick(TOWN_LINES).replace('{S}', T ? T.name : 'unsere Stadt') }]); }, wander);
 }
-function buildTownBase() {
-  const L = LOCS.heimat;
-  reserve(L.x, L.z, 52);
-  const f = new Frame(L.x, L.z, 0);
-  f.box(M.stone2, 0, -0.5, 0, 1.2, 2.6, 0.7, true);
-  f.box(M.gold, 0, 2.05, 0, 1.25, 0.15, 0.75);
-  interactables.push({ pos: () => new V3(L.x, heightAt(L.x, L.z), L.z), label: 'Deine Stadt verwalten', r: 3.6, fn: talkTown });
+function buildTownBases() {
+  for (const s of TOWN_SITES) {
+    const L = LOCS[s.key];
+    reserve(L.x, L.z, 52);
+    const f = new Frame(L.x, L.z, 0);
+    f.box(M.stone2, 0, -0.5, 0, 1.2, 2.6, 0.7, true);
+    f.box(M.gold, 0, 2.05, 0, 1.25, 0.15, 0.75);
+    interactables.push({ pos: () => new V3(L.x, heightAt(L.x, L.z), L.z), label: () => { const T = townsState()[s.key]; return !T ? 'Stadt gründen' : isMine(T) ? 'Deine Stadt verwalten' : 'Grenzstein von ' + T.name; }, r: 3.6, fn: () => talkTown(s.key) });
+    builtLvl[s.key] = 0;
+  }
 }
-function buildTownLevel(l) {
-  const L = LOCS.heimat, X = L.x, Z = L.z;
+function buildTownLevel(site, l) {
+  const L = LOCS[site], X = L.x, Z = L.z;
   const vil = { tunic: 0x6a7a4a, pants: 0x3a3024, beard: true };
   FORCE_BUILD = true;
   if (l === 1) {
     house(X - 14, Z + 6, Math.PI / 2, 6, 6, 3.8); house(X + 14, Z + 8, -Math.PI / 2, 6, 6, 3.8); house(X - 4, Z - 14, 0, 7, 6, 4);
     campfire(X + 7, Z - 5);
-    townNPC('Siedler Kostas', 4, 6, vil); townNPC('Siedlerin Melina', -6, -4, { tunic: 0x9b3b2b, pants: 0x4a2a2a, veil: 0xe8dcc0 });
+    townNPC(site, 'Siedler Kostas', 4, 6, vil); townNPC(site, 'Siedlerin Melina', -6, -4, { tunic: 0x9b3b2b, pants: 0x4a2a2a, veil: 0xe8dcc0 });
   }
   if (l === 2) {
     house(X - 24, Z - 8, Math.PI / 2, 6, 6, 4); house(X + 24, Z - 6, -Math.PI / 2, 6, 6, 4); house(X - 16, Z + 22, 0, 7, 6, 4); house(X + 16, Z + 22, 0, 6, 6, 4);
     fountain(X, Z + 14);
-    SPOTS.townFountain = [X, Z + 14];
-    interactables.push({ pos: () => new V3(X, heightAt(X, Z + 14), Z + 14), label: 'Aus dem Brunnen trinken', r: 4.2, fn: () => { player.hp = player.maxHp; player.stamina = 100; toast('Das Wasser deiner Stadt erfrischt dich.'); sfx('drink'); } });
+    interactables.push({ pos: () => new V3(X, heightAt(X, Z + 14), Z + 14), label: 'Aus dem Brunnen trinken', r: 4.2, fn: () => { player.hp = player.maxHp; player.stamina = 100; toast('Das Wasser erfrischt dich.'); sfx('drink'); } });
     const m = new Frame(X + 12, Z - 20, 0); m.box(M.wood, 0, 0, 0, 4, 1, 1.6, true); for (const [x, z] of [[-1.9, -0.7], [1.9, -0.7], [-1.9, 0.7], [1.9, 0.7]]) m.box(M.wood, x, 0, z, 0.15, 2.8, 0.15); m.put(G.box, M.blue, 0, 2.9, 0, 0.18, 0, 0, 4.6, 0.1, 2.6);
-    townNPC('Händlerin Eirene', 12, -17.5, { tunic: 0x2f6a5a, pants: 0x2a3a30, veil: 0x3a5a8a }, 0).talkFn = function () { talkMerchant(); };
-    townNPC('Bauer Stavros', -10, 18, vil); townNPC('Fischer Alexios', 18, 10, { tunic: 0x3a5a8a, pants: 0x2a2a3a });
+    townNPC(site, 'Händlerin Eirene', 12, -17.5, { tunic: 0x2f6a5a, pants: 0x2a3a30, veil: 0x3a5a8a }, 0).talkFn = function () { talkMerchant(); };
+    townNPC(site, 'Bauer Stavros', -10, 18, vil); townNPC(site, 'Fischer Alexios', 18, 10, { tunic: 0x3a5a8a, pants: 0x2a2a3a });
   }
   if (l === 3) {
     const tf = new Frame(X, Z - 32, 0);
-    const before = TEMPLE_GUARDS.length;
-    temple(tf, 8, 12, 4, 6, 4.6);
-    for (const [gx, gz, gr] of TEMPLE_GUARDS.splice(before)) addGuardNPC(gx, gz, gr);
+    temple(tf, 8, 12, 4, 6, 4.6, { guards: false });
     house(X - 30, Z + 10, Math.PI / 2, 6, 6, 4); house(X + 30, Z + 16, -Math.PI / 2, 6, 6, 4); house(X - 28, Z - 20, Math.PI / 2, 6, 6, 4);
     for (let i = 0; i < 140; i++) {
       const a = i / 140 * Math.PI * 2;
-      if (Math.abs(((a + Math.PI) % (Math.PI * 2)) - Math.PI) < 0.13) continue; // Tor im Osten
+      if (Math.abs(((a + Math.PI) % (Math.PI * 2)) - Math.PI) < 0.13 || Math.abs(a - Math.PI) < 0.13) continue; // Tore im Osten und Westen
       const f = new Frame(X + Math.cos(a) * 48, Z + Math.sin(a) * 48, 0);
       f.put(G.cone, M.darkwood, 0, 1.6, 0, 0, 0, 0, 0.6, 3.2, 0.6); circleCol(f.x, f.z, 0.4);
     }
-    townNPC('Priesterin Phoibe', 3, -20, { tunic: 0xf4f0e6, pants: 0xd8d0c0, veil: 0xf4f0e6, wreath: true }, 4);
+    townNPC(site, 'Priesterin Phoibe', 3, -20, { tunic: 0xf4f0e6, pants: 0xd8d0c0, veil: 0xf4f0e6, wreath: true }, 4);
   }
   if (l === 4) {
     statue(X, Z - 17, 0, 1.4, M.gold);
     stoa(new Frame(X, Z + 34, Math.PI), 24, 6, 9, 4.2);
-    for (const [dx, dz] of [[48, 8], [48, -8], [-48, 0], [0, -48], [0, 48]]) {
+    for (const [dx, dz] of [[48, 8], [48, -8], [-48, 8], [-48, -8], [0, -48], [0, 48]]) {
       const f = new Frame(X + dx, Z + dz, 0);
       f.box(M.stone, 0, -1, 0, 3.4, 8, 3.4, true); f.box(M.stone2, 0, 7, 0, 4, 0.6, 4);
       for (const [cx, cz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) f.box(M.stone2, cx, 7.6, cz, 0.7, 0.9, 0.7);
       f.put(G.cone4, M.roof2, 0, 9.2, 0, 0, Math.PI / 4, 0, 4.6, 2.4, 4.6);
     }
     house(X + 30, Z - 24, -Math.PI / 2, 7, 7, 4.5); house(X - 32, Z + 26, Math.PI / 2, 7, 7, 4.5);
-    townNPC('Schatzmeister Theodoros', -4, 4, { tunic: 0x6b2f7a, pants: 0x3a1a4a, beard: true, hair: 0x9a9080 }, 3);
-    townNPC('Bürger Nikolaos', 10, 26, vil); townNPC('Bürgerin Thalia', -12, 28, { tunic: 0xb08a5a, pants: 0x5a4a3a, veil: 0x7a3a5a });
+    townNPC(site, 'Schatzmeister Theodoros', -4, 4, { tunic: 0x6b2f7a, pants: 0x3a1a4a, beard: true, hair: 0x9a9080 }, 3);
+    townNPC(site, 'Bürger Nikolaos', 10, 26, vil); townNPC(site, 'Bürgerin Thalia', -12, 28, { tunic: 0xb08a5a, pants: 0x5a4a3a, veil: 0x7a3a5a });
   }
   FORCE_BUILD = false;
   finalizeStatic();
 }
-function talkTown() {
-  const T = S.town, L = TOWN_LEVELS;
-  if (T.lvl === 0) {
-    talk([{ who: 'Grenzstein', text: 'Fruchtbares Land mit einer Quelle und Blick auf die Berge. Hier könntest du deine eigene Stadt gründen! Kosten: 50 Drachmen.', opts: [
-      { label: 'Stadt gründen (50 Drachmen)', fn: foundTown }, { label: 'Später', fn: () => { } }] }]);
+// Gebäude, Namen und Garnisonen an den aktuellen Zustand anpassen
+function syncTowns() {
+  const TS = townsState();
+  for (const s of TOWN_SITES) {
+    const T = TS[s.key], L = LOCS[s.key];
+    const target = T ? T.lvl : 0;
+    while (builtLvl[s.key] < target) buildTownLevel(s.key, ++builtLvl[s.key]);
+    if (!T) { L.name = 'Siedlungsplatz'; L.sub = 'Freier Bauplatz – gründe hier deine Stadt'; }
+    else if (isMine(T)) { L.name = T.name; L.sub = TOWN_LEVELS[T.lvl].name + ' – deine Stadt'; }
+    else { L.name = T.name; L.sub = (T.owner === 'npc' ? 'Polis der ' : 'Stadt von ') + T.ownerName + ' – eroberbar'; }
+    syncGarrison(s.key, T);
+  }
+}
+function garrison(site) { return enemies.filter(e => e.site === site); }
+function syncGarrison(site, T) {
+  const want = T && !isMine(T) && T.lvl > 0 ? Math.min(10, 2 + T.lvl * 2) : 0;
+  const cur = garrison(site);
+  const owner = T ? T.ownerName : '';
+  if (cur.length && (cur.length !== want || cur[0].owner !== owner)) { for (const e of cur) removeEnemy(e); }
+  if (want && garrison(site).length === 0) {
+    const L = LOCS[site], col = SITE[site].col || 0x8a1a1a;
+    for (let i = 0; i < want; i++) {
+      const a = i / want * Math.PI * 2, r = 8 + (i % 3) * 6;
+      const e = spawnEnemy('soldat', L.x + Math.cos(a) * r, L.z + Math.sin(a) * r, { name: 'Soldat von ' + T.name, col });
+      e.site = site; e.owner = owner;
+    }
+  }
+}
+function removeEnemy(e) { scene.remove(e.m.root); const i = enemies.indexOf(e); if (i >= 0) enemies.splice(i, 1); }
+function townAction(site, action, extra = {}) {
+  if (NET.towns) { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify(Object.assign({ t: 'town', site, action }, extra))); else toast('Keine Verbindung zum Server – Aktion nicht möglich.'); return; }
+  const T = S.towns[site], now = Date.now();
+  if (action === 'found') S.towns[site] = { owner: 'me', ownerName: heroName(), name: extra.name, lvl: 1, collected: now };
+  if (action === 'upgrade') T.lvl++;
+  if (action === 'collect') T.collected = now;
+  if (action === 'conquer') { T.owner = 'me'; T.ownerName = heroName(); T.collected = now; }
+  syncTowns(); save();
+}
+function talkTown(site) {
+  const T = townsState()[site], L = TOWN_LEVELS;
+  if (!T) {
+    talk([{ who: 'Grenzstein', text: 'Fruchtbares Land mit einer Quelle. Hier könntest du eine eigene Stadt gründen! Kosten: 50 Drachmen.', opts: [
+      { label: 'Stadt gründen (50 Drachmen)', fn: () => foundTown(site) }, { label: 'Später', fn: () => { } }] }]);
     return;
   }
-  const next = L[T.lvl + 1], opts = [];
-  if (T.treasury >= 1) opts.push({ label: 'Steuern einsammeln (' + Math.floor(T.treasury) + ' Drachmen)', fn: () => { const n = Math.floor(T.treasury); T.treasury -= n; addMoney(n); save(); talkTown(); } });
-  if (next) opts.push({ label: 'Ausbauen zur ' + next.name + ' (' + next.cost + ' Drachmen)', fn: upgradeTown });
+  if (!isMine(T)) {
+    const alive = garrison(site).filter(e => !e.dead).length;
+    const loot = townTreasury(T) + (T.owner === 'npc' ? T.lvl * 60 : 0);
+    if (alive) { talk([{ who: 'Grenzstein von ' + T.name, text: T.name + ' gehört ' + (T.owner === 'npc' ? 'den ' : '') + T.ownerName + ' (' + L[T.lvl].name + '). Noch verteidigen ' + alive + ' Soldaten die Stadt. Besiege die Garnison, dann kannst du ' + T.name + ' erobern!' }]); return; }
+    talk([{ who: 'Grenzstein von ' + T.name, text: 'Die Garnison ist geschlagen! ' + T.name + ' liegt dir zu Füßen. In der Schatzkammer liegen ' + loot + ' Drachmen.', opts: [
+      { label: '⚔ ' + T.name + ' erobern!', fn: () => { if (loot) addMoney(loot); townAction(site, 'conquer'); banner(T.name + ' erobert!', 'Die Stadt gehört jetzt dir – baue sie aus und sammle Steuern ein.'); sfx('quest'); } },
+      { label: 'Noch nicht', fn: () => { } }] }]);
+    return;
+  }
+  const next = L[T.lvl + 1], opts = [], tr = townTreasury(T);
+  if (tr >= 1) opts.push({ label: 'Steuern einsammeln (' + tr + ' Drachmen)', fn: () => { addMoney(tr); townAction(site, 'collect'); } });
+  if (next) opts.push({ label: 'Ausbauen zur ' + next.name + ' (' + next.cost + ' Drachmen)', fn: () => upgradeTown(site) });
   opts.push({ label: 'Zurück', fn: () => { } });
-  talk([{ who: T.name, text: T.name + ' – ' + L[T.lvl].name + ' (Stufe ' + T.lvl + '/4). Einnahmen: ' + L[T.lvl].income + ' Drachmen pro Minute. Schatzkammer: ' + Math.floor(T.treasury) + ' / ' + townCap() + '.' + (next ? ' Ausbau bringt: ' + next.desc + ' (+' + (next.income - L[T.lvl].income) + ' Drachmen/Min).' : ' Deine Polis ist vollendet – ganz Hellas spricht von ihr!'), opts }]);
+  const all = Object.values(townsState()).filter(isMine);
+  talk([{ who: T.name, text: T.name + ' – ' + L[T.lvl].name + ' (Stufe ' + T.lvl + '/4). Einnahmen: ' + L[T.lvl].income + ' Drachmen pro Minute. Schatzkammer: ' + tr + ' / ' + townCap(T) + '.' + (next ? ' Ausbau bringt: ' + next.desc + '.' : ' Deine Polis ist vollendet!') + (all.length > 1 ? ' Du herrschst über ' + all.length + ' Städte.' : '') + ' Vorsicht: Andere Helden können deine Stadt erobern!', opts }]);
 }
-function foundTown() {
+function foundTown(site) {
   if (!spend(TOWN_LEVELS[1].cost)) return;
   let nm = null;
   try { if (document.pointerLockElement) document.exitPointerLock(); nm = window.prompt('Wie soll deine Stadt heißen?', 'Neu-Hellas'); } catch (e) { }
   for (const k in keys) keys[k] = false;
-  S.town.name = (nm && nm.trim().slice(0, 24)) || 'Neu-Hellas';
-  S.town.lvl = 1; applyTownName(); showLoc(LOCS.heimat);
-  buildTownLevel(1);
-  banner(S.town.name + ' gegründet!', 'Baue deine Stadt am Grenzstein aus und sammle Steuern ein.');
-  sfx('quest'); save();
+  const name = (nm && nm.trim().slice(0, 24)) || 'Neu-Hellas';
+  townAction(site, 'found', { name });
+  banner(name + ' gegründet!', 'Baue deine Stadt am Grenzstein aus und sammle Steuern ein.');
+  sfx('quest');
 }
-function upgradeTown() {
-  const next = TOWN_LEVELS[S.town.lvl + 1];
+function upgradeTown(site) {
+  const T = townsState()[site], next = TOWN_LEVELS[T.lvl + 1];
   if (!next || !spend(next.cost)) return;
-  S.town.lvl++; applyTownName();
-  fadeTo(() => buildTownLevel(S.town.lvl));
-  banner(S.town.name + ' ist jetzt eine ' + next.name + '!', 'Neu: ' + next.desc);
-  sfx('quest'); save();
+  fadeTo(() => townAction(site, 'upgrade'));
+  banner(T.name + ' wird zur ' + next.name + '!', 'Neu: ' + next.desc);
+  sfx('quest');
 }
-function applyTownName() { if (S.town.lvl > 0) { LOCS.heimat.name = S.town.name; LOCS.heimat.sub = TOWN_LEVELS[S.town.lvl].name + ' – deine Stadt'; } }
 const GUARD_LINES = ['Halt! Dies ist heiliger Boden. Benimm dich, Fremder.', 'Die Opfertruhe gehört den Göttern – doch sie belohnen die Mutigen.', 'Man sagt, in vergessenen Tempeln in der Wildnis liegen Relikte der Helden. Aber sie werden bewacht …', 'Ich halte hier Wache, Tag und Nacht.', 'Ruhig bleiben. Keine Waffen im Tempel ziehen.'];
 function addGuardNPC(x, z, rot) {
   const n = addNPC('Tempelwache', x, z, { tunic: 0x8e1717, armor: 0xb98d3a, helmet: true, crest: 0x1a1a1a, shield: true, shieldEmblem: 0x1a1a1a, weapon: 'spear', greaves: true, pants: 0x3a1a14 }, function () { talk([{ who: 'Tempelwache', text: pick(GUARD_LINES) }]); }, 0);
@@ -1093,7 +1158,7 @@ const player = {
   money: 20, potions: 1, dmg: 14, blessed: false, mounted: false, blocking: false, atkCd: 0, atkAnim: 0,
   lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [], gear: [], hasShip: false, chiron: false, flying: false, sailing: false, stoned: 0, medCd: 0,
 };
-const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], town: { lvl: 0, name: '', treasury: 0 }, bossDead: [], foundD: [] };
+const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], towns: defaultTowns(), bossDead: [], foundD: [] };
 let hero, horse;
 const npcs = [], enemies = [], pickups = [], floaters = [], bolts = [];
 let race = null, dialog = null, started = false, paused = false, mapOpen = false;
@@ -1199,11 +1264,13 @@ function questTarget() {
 }
 
 // ---------- Speichern ----------
-function save() {
-  try {
+function saveData() {
     const sp = curD ? { x: curD.out[0], z: curD.out[1] } : player.pos;
-    localStorage.setItem('hellas-save', JSON.stringify({ S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron } }));
-  } catch (e) { /* ignorieren */ }
+  return ({ S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron } });
+}
+function save() {
+  try { localStorage.setItem('hellas-save', JSON.stringify(saveData())); } catch (e) { /* ignorieren */ }
+  cloudSave(false);
 }
 function loadSave() { try { const s = localStorage.getItem('hellas-save'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 
@@ -1352,6 +1419,7 @@ const EDEF = {
   bandit: { hp: 65, dmg: 11, speed: 6.5, range: 2.1, aggro: 24, cd: 1.4, name: 'Bandit', money: [6, 16], r: 0.5 },
   guard: { hp: 110, dmg: 14, speed: 6.2, range: 2.6, aggro: 22, cd: 1.5, name: 'Tempelwächter', money: [12, 25], r: 0.5 },
   minotaur: { hp: 650, dmg: 26, speed: 6.5, range: 3.6, aggro: 21, cd: 1.8, name: 'Minotauros', money: [150, 150], r: 1.0, hitR: 1.4, top: 4.4, charge: true, bossLike: true },
+  soldat: { hp: 90, dmg: 13, speed: 6.5, range: 2.6, aggro: 26, cd: 1.4, name: 'Soldat', money: [8, 18], r: 0.5 },
   skelett: { hp: 55, dmg: 10, speed: 6.5, range: 2.1, aggro: 22, cd: 1.3, name: 'Skelettkrieger', money: [3, 10], r: 0.45 },
   schatten: { hp: 50, dmg: 13, speed: 8.5, range: 2.0, aggro: 24, cd: 1.1, name: 'Schatten', money: [4, 12], r: 0.45 },
   feuergeist: { hp: 70, dmg: 14, speed: 7, range: 2.1, aggro: 24, cd: 1.3, name: 'Feuergeist', money: [5, 14], r: 0.45 },
@@ -1370,6 +1438,7 @@ function spawnEnemy(type, x, z, over) {
   if (type === 'wolf') model = makeWolf(pick([0x6e6a64, 0x5a5550, 0x7d7468]));
   else if (type === 'bandit') model = makeHumanoid({ tunic: pick([0x3a2a1a, 0x4a3a2a, 0x2a2a2a]), hair: 0x1a1008, beard: true, weapon: 'sword', armor: 0x5a4a3a, veil: 0x3a2a1a });
   else if (type === 'guard') model = makeHumanoid({ tunic: 0x2a2a3a, armor: 0x8a7a5a, helmet: true, crest: 0x2a2a2a, shield: true, shieldCol: 0x6a5a3a, shieldEmblem: 0x2a2a2a, weapon: 'spear', greaves: true, pants: 0x1e1e26, scale: 1.12 });
+  else if (type === 'soldat') model = makeHumanoid({ tunic: (over && over.col) || 0x8a1a1a, armor: 0x9a8a5a, helmet: true, crest: (over && over.col) || 0x8a1a1a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: (over && over.col) || 0x8a1a1a, cape: (over && over.col) || 0x8a1a1a, weapon: 'spear', greaves: true, pants: 0x2a2a2a });
   else if (type === 'skelett') model = makeHumanoid({ skin: 0xe6dfc8, tunic: 0xd8d0b8, pants: 0xcfc6ac, hair: 0xe6dfc8, belt: 0x6a5a4a, weapon: 'sword', eyes: 0x101010, shield: rand() < 0.5, shieldCol: 0x6a5a4a });
   else if (type === 'schatten') model = makeHumanoid({ skin: 0x1a1a26, tunic: 0x14141c, pants: 0x101018, hair: 0x0a0a10, veil: 0x14141c, weapon: 'sword', eyes: 0x60ffd0 });
   else if (type === 'feuergeist') model = makeHumanoid({ skin: 0xff6a20, glow: 0xb02a00, tunic: 0x3a1a10, pants: 0x2a1008, hair: 0xffb040, weapon: 'fireSword', eyes: 0xffff80 });
@@ -1397,7 +1466,7 @@ function buildEnemies() {
   }
   const B = LOCS.banditen;
   for (let i = 0; i < 5; i++) { const a = i / 5 * 6.28; spawnEnemy('bandit', B.x + Math.cos(a) * 6, B.z + Math.sin(a) * 6); }
-  for (const [x, z] of [[-320, 75], [-300, 90], [-100, 255], [-85, 262], [-480, 270]]) spawnEnemy('bandit', x, z);
+  for (const [x, z] of [[-430, 190], [-440, 205], [-100, 255], [-85, 262], [-480, 270]]) spawnEnemy('bandit', x, z);
   spawnEnemy('minotaur', SPOTS.mazeCenter[0], SPOTS.mazeCenter[1]);
   RUINS.forEach((r, i) => { for (const [gx, gz] of r.guards) { const e = spawnEnemy(r.kind === 'old' ? 'skelett' : 'guard', gx, gz); e.ruin = i; } });
 }
@@ -1519,7 +1588,7 @@ function updateEnemy(e, dt) {
   else if (m.legs) { animateQuad(m, e.speedNow, dt); for (const h of (m.heads || [m.head])) h.rotation.x = e.atkAnim > 0 ? -Math.sin(e.atkAnim * Math.PI) * 0.6 : 0; }
   else animateHumanoid(m, e.speedNow, dt, { attack: e.atkAnim });
 }
-function canRevive(e) { return e.type !== 'minotaur' && !e.def.boss && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
+function canRevive(e) { return e.type !== 'minotaur' && !e.def.boss && !(e.site && isMine(townsState()[e.site])) && !(e.ruin !== undefined && RUINS[e.ruin].chest.opened); }
 function revive(e) { e.dead = false; e.hp = e.maxHp; e.x = e.home[0]; e.z = e.home[1]; e.state = 'idle'; e.m.root.rotation.z = 0; e.m.root.visible = true; }
 
 // ---------- Spieler-Angriffe ----------
@@ -1582,8 +1651,9 @@ function refreshHeroLook() {
   scene.remove(hero.root);
   hero = makeHumanoid(heroLook());
   hero.root.position.copy(p); hero.root.rotation.y = r; scene.add(hero.root);
+  netSendLook();
 }
-function heroLook() { const gr = player.gear || []; return { tunic: 0x9b1c1c, armor: player.hasArmor ? 0xb98d3a : 0x7a5a3a, helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : 'sword', cape: 0x1c3a7a, pants: 0x3a2a1e, greaves: player.hasArmor, hair: 0x2a1a0e }; }
+function heroLook() { const gr = player.gear || []; return { tunic: 0x9b1c1c, armor: player.hasArmor ? 0xb98d3a : 0x7a5a3a, helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : 'sword', cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x3a2a1e, greaves: player.hasArmor, hair: 0x2a1a0e }; }
 
 // ---------- Sammelobjekte ----------
 const ampGeo = (() => { const pts = []; const prof = [[0, 0], [0.18, 0.02], [0.3, 0.25], [0.36, 0.55], [0.3, 0.85], [0.14, 1.0], [0.1, 1.15], [0.16, 1.22], [0.0, 1.22]]; for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y)); return new THREE.LatheGeometry(pts, 12); })();
@@ -1678,6 +1748,7 @@ function drawMinimap() {
   }
   for (const ch of CHESTS) { if (ch.opened) continue; const [mx, my] = toMini(ch.x, ch.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = ch.tier === 2 ? '#ffd24a' : '#d8b860'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 1; ctx.fillRect(mx - 3, my - 2.5, 6, 5); ctx.strokeRect(mx - 3, my - 2.5, 6, 5); }
   for (const e of enemies) { if (e.dead) continue; const [mx, my] = toMini(e.x, e.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 4) continue; ctx.fillStyle = e.type === 'minotaur' ? '#ff3a1a' : '#c0392b'; ctx.beginPath(); ctx.arc(mx, my, e.type === 'minotaur' ? 4 : 2.2, 0, 7); ctx.fill(); }
+  for (const r of NET.others.values()) { if (!r.st) continue; const [mx, my] = toMini(r.pos.x, r.pos.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 5) continue; ctx.fillStyle = '#4ab0ff'; ctx.strokeStyle = '#002'; ctx.beginPath(); ctx.arc(mx, my, 4, 0, 7); ctx.fill(); ctx.stroke(); }
   ctx.save(); ctx.translate(S2 / 2, S2 / 2); ctx.rotate(-player.yaw + Math.PI);
   ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(5.5, 6); ctx.lineTo(0, 3); ctx.lineTo(-5.5, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -1702,6 +1773,7 @@ function drawBigMap() {
   ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('HELLAS', 20, 36);
   ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen', 20, 58);
   ctx.textAlign = 'center';
+  for (const st of TOWN_SITES) { const L = LOCS[st.key], T = townsState()[st.key], x = w2m(L.x) * k, y = w2m(L.z) * k; ctx.strokeStyle = !T ? '#ffffff' : isMine(T) ? '#ffd24a' : '#ff4a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.stroke(); }
   DUNGEONS.forEach(d => { if (!d.reward && !S.foundD.includes(d.idx)) return; const x = w2m(d.at[0]) * k, y = w2m(d.at[1]) * k; ctx.fillStyle = S.bossDead.includes(d.key) || (d.chest && d.chest.opened) ? '#6a5a70' : '#b05aff'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(d.name, x, y - 10); ctx.fillStyle = '#e8d0ff'; ctx.fillText(d.name, x, y - 10); });
   S.found.forEach(i => { const r = RUINS[i]; if (!r) return; const x = w2m(r.x) * k, y = w2m(r.z) * k; ctx.fillStyle = r.chest.opened ? '#8a8070' : '#ffd24a'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(r.name, x, y + 20); ctx.fillStyle = '#fff3d0'; ctx.fillText(r.name, x, y + 20); });
   ctx.textAlign = 'center'; ctx.font = '700 18px Cinzel, serif'; ctx.fillText('N', W / 2, 24);
@@ -1736,6 +1808,15 @@ function drawOverlay(dt) {
     octx.font = '600 13px Alegreya Sans, sans-serif'; octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.6)';
     const nm = n.name.split(',')[0];
     octx.strokeText(nm, s.x, s.y); octx.fillStyle = n.wander ? '#efe2c2' : '#ffd24a'; octx.fillText(nm, s.x, s.y);
+  }
+  for (const r of NET.others.values()) {
+    if (!r.h.root.visible) continue;
+    const p = r.h.root.position, d = Math.hypot(p.x - player.pos.x, p.z - player.pos.z);
+    if (d > 120) continue;
+    const s = project(p.x, p.y + 2.6, p.z); if (s.behind) continue;
+    octx.font = '700 14px Alegreya Sans, sans-serif'; octx.lineWidth = 3; octx.strokeStyle = 'rgba(0,0,0,.7)';
+    octx.strokeText(r.name, s.x, s.y); octx.fillStyle = '#8fd0ff'; octx.fillText(r.name, s.x, s.y);
+    if (r.bubble) { octx.font = '600 14px Alegreya Sans, sans-serif'; const w = Math.min(260, octx.measureText(r.bubble.text).width + 16); octx.fillStyle = 'rgba(28,20,12,.85)'; octx.fillRect(s.x - w / 2, s.y - 38, w, 22); octx.fillStyle = '#f3e9d2'; octx.fillText(r.bubble.text.slice(0, 40), s.x, s.y - 22); }
   }
   for (let i = floaters.length - 1; i >= 0; i--) {
     const f = floaters[i]; f.t -= dt; f.p.y += dt * 1.4;
@@ -2155,9 +2236,208 @@ function makeSkylla() {
   return { root: g, necks, phase: 0 };
 }
 
+// ============================================================
+// Mehrspieler & Cloud-Speicher (Cloudflare Worker, siehe /server)
+// ============================================================
+const NET = { ws: null, id: null, others: new Map(), sendT: 0, retry: 2, lastCloud: 0, chatOpen: false, online: false, room: 'lobby-1', max: 10, towns: null, lobbies: [] };
+const CAPE_COLORS = [0x1c3a7a, 0x7a1c1c, 0x1c6a3a, 0x6a1c6a, 0x8a6a1c, 0x1c6a7a, 0x3a3a3a, 0xb04a1a];
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+function serverBase() { return (lsGet('hellas-server') || window.HELLAS_SERVER || '').trim().replace(/\/$/, ''); }
+function mpEnabled() { return !!serverBase() && lsGet('hellas-mp') !== 'off'; }
+function heroName() { return (lsGet('hellas-name') || 'Held').slice(0, 20); }
+function nameHash(n) { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); }
+function cloudCreds() {
+  let c = null; try { c = JSON.parse(lsGet('hellas-cloud') || 'null'); } catch (e) { }
+  if (!c || !c.id || !c.secret) {
+    const hex = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, '0')).join('');
+    c = { id: hex(8), secret: hex(16) }; lsSet('hellas-cloud', JSON.stringify(c));
+  }
+  return c;
+}
+function lookForNet() { const l = heroLook(); return { tunic: l.tunic, cape: l.cape, crest: l.crest, armor: l.armor, helmetCol: l.helmetCol || undefined, shieldEmblem: l.shieldEmblem, weapon: l.weapon }; }
+function netConnect() {
+  if (!mpEnabled() || NET.ws) return;
+  let ws;
+  try { ws = new WebSocket(serverBase().replace(/^http/, 'ws') + '/ws?room=' + encodeURIComponent(NET.room)); } catch (e) { return; }
+  NET.ws = ws;
+  ws.onopen = () => { NET.online = true; NET.retry = 2; ws.send(JSON.stringify({ t: 'hello', name: heroName(), cid: myCid(), look: lookForNet() })); updateOnlineBadge(); };
+  ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } netHandle(m); };
+  ws.onclose = () => {
+    const was = NET.online; NET.ws = null; NET.online = false; NET.id = null;
+    for (const id of [...NET.others.keys()]) removeRemote(id);
+    updateOnlineBadge();
+    if (was) toast('Verbindung zum Server verloren – versuche erneut …');
+    if (NET.fullHop) { NET.fullHop = false; NET.retry = 0.5; } else NET.retry = Math.min(60, NET.retry * 2);
+    setTimeout(netConnect, NET.retry * 1000);
+  };
+  ws.onerror = () => { };
+}
+function netHandle(m) {
+  if (m.t === 'welcome') {
+    NET.id = m.id; NET.room = m.room; NET.max = m.max || 10;
+    for (const p of m.players) addRemote(p);
+    NET.towns = m.towns; syncTowns();
+    toast(lobbyLabel(NET.room) + ': ' + (m.players.length ? m.players.length + ' weitere Helden' : 'du bist der erste Held hier'), 'gold');
+  }
+  else if (m.t === 'full') { toast(lobbyLabel(NET.room) + ' ist voll (' + m.max + '/' + m.max + ') – wechsle in die nächste Lobby …'); NET.room = 'lobby-' + (+NET.room.split('-')[1] + 1); NET.fullHop = true; }
+  else if (m.t === 'towns') {
+    const before = NET.towns || {};
+    NET.towns = m.towns;
+    for (const [k, T] of Object.entries(m.towns)) { const B = before[k]; if (B && isMine(B) && T && !isMine(T)) banner('Deine Stadt ' + T.name + ' wurde erobert!', 'Von ' + T.ownerName + ' – hol sie dir zurück!'); }
+    syncTowns();
+    if (m.event) { chatLine('Herold', m.event, false); if (m.by !== NET.id) toast(m.event); }
+  }
+  else if (m.t === 'join') { addRemote(m); toast(m.name + ' hat Hellas betreten.'); }
+  else if (m.t === 'leave') { removeRemote(m.id); toast(m.name + ' hat Hellas verlassen.'); }
+  else if (m.t === 'st') { const r = NET.others.get(m.id); if (r) { r.st = m; if (!r.seen) { r.seen = true; r.pos.set(m.x, m.y, m.z); r.yaw = m.yaw; } } }
+  else if (m.t === 'look') { const r = NET.others.get(m.id); if (r) { r.look = m.look; rebuildRemote(r); } }
+  else if (m.t === 'chat') { chatLine(m.name, m.text, m.id === NET.id); const r = NET.others.get(m.id); if (r) r.bubble = { text: m.text, t: 6 }; }
+  updateOnlineBadge();
+}
+function remoteLook(look) { return Object.assign({ tunic: 0x9b1c1c, armor: 0x7a5a3a, helmet: true, crest: 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: 'sword', cape: 0x1c3a7a, pants: 0x3a2a1e, hair: 0x2a1a0e }, look || {}); }
+function addRemote(p) {
+  if (!p || p.id === NET.id || NET.others.has(p.id)) return;
+  const r = { id: p.id, name: p.name, look: p.look, h: null, pos: new V3(0, -500, 0), yaw: 0, st: p.st || null, seen: false, mounts: {}, atkT: 0, lastAtk: false, bubble: null };
+  if (p.st) { r.pos.set(p.st.x, p.st.y, p.st.z); r.seen = true; }
+  rebuildRemote(r);
+  NET.others.set(p.id, r);
+}
+function rebuildRemote(r) { if (r.h) scene.remove(r.h.root); r.h = makeHumanoid(remoteLook(r.look)); scene.add(r.h.root); }
+function removeRemote(id) { const r = NET.others.get(id); if (!r) return; scene.remove(r.h.root); for (const m of Object.values(r.mounts)) scene.remove(m.root); NET.others.delete(id); }
+function remoteMount(r, kind) {
+  if (!r.mounts[kind]) { r.mounts[kind] = kind === 'h' ? makeHorse() : kind === 'p' ? makePegasus() : kind === 'k' ? makeHippo() : makeShip(); scene.add(r.mounts[kind].root); }
+  return r.mounts[kind];
+}
+function updateRemotes(dt) {
+  const t = clock.elapsedTime;
+  for (const r of NET.others.values()) {
+    const s = r.st;
+    if (!s) { r.h.root.visible = false; continue; }
+    const k = Math.min(1, dt * 10);
+    const jump = Math.hypot(s.x - r.pos.x, s.z - r.pos.z) > 60;
+    if (jump) r.pos.set(s.x, s.y, s.z); else { r.pos.x = lerp(r.pos.x, s.x, k); r.pos.y = lerp(r.pos.y, s.y, k); r.pos.z = lerp(r.pos.z, s.z, k); }
+    r.yaw = angLerp(r.yaw, s.yaw, k);
+    const vis = Math.hypot(r.pos.x - player.pos.x, r.pos.z - player.pos.z) < 450;
+    r.h.root.visible = vis;
+    for (const [kind, m] of Object.entries(r.mounts)) m.root.visible = vis && s.m === kind;
+    if (!vis) continue;
+    if (s.atk && !r.lastAtk) r.atkT = 1; r.lastAtk = s.atk; r.atkT = Math.max(0, r.atkT - dt * 2.6);
+    const P = r.pos; let hy = 0, sitting = false;
+    if (s.m === 'h' || s.m === 'p') { hy = 1.3; sitting = true; const m = remoteMount(r, s.m); m.root.position.copy(P); m.root.rotation.y = r.yaw; animateQuad(m, s.m === 'h' ? s.sp * 0.6 : 0, dt); if (m.wings) { const f = Math.sin(t * 8) * 0.7; m.wings[0].rotation.z = 0.3 + f; m.wings[1].rotation.z = -0.3 - f; } }
+    if (s.m === 'k') { hy = 1.0; sitting = true; const m = remoteMount(r, 'k'); m.root.position.set(P.x, P.y - 0.4, P.z); m.root.rotation.y = r.yaw; }
+    if (s.m === 's') { const m = remoteMount(r, 's'); m.root.position.set(P.x, -0.2, P.z); m.root.rotation.y = r.yaw; r.h.root.position.set(P.x - Math.sin(r.yaw) * 5.5, P.y + 0.3, P.z - Math.cos(r.yaw) * 5.5); }
+    else r.h.root.position.set(P.x, P.y + hy, P.z);
+    r.h.root.rotation.y = r.yaw;
+    animateHumanoid(r.h, sitting ? 0 : s.sp, dt, { attack: r.atkT, sitting });
+    if (r.bubble) { r.bubble.t -= dt; if (r.bubble.t <= 0) r.bubble = null; }
+  }
+}
+function netSend(dt) {
+  if (!NET.ws || NET.ws.readyState !== 1 || !NET.id) return;
+  NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = 0.1;
+  const P = player.pos;
+  const m = player.sailing ? 's' : player.flying ? 'p' : player.mounted ? 'h' : (player.swimming && player.gear.includes('poseidon')) ? 'k' : '';
+  NET.ws.send(JSON.stringify({ t: 'st', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +player.yaw.toFixed(3), sp: +Math.min(60, player.speedNow).toFixed(1), m, atk: player.atkAnim > 0.5, d: curD ? curD.idx : -1 }));
+}
+function netSendLook() { if (NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({ t: 'look', look: lookForNet() })); }
+function lobbyLabel(r) { return 'Lobby ' + String(r || '').split('-')[1]; }
+function updateOnlineBadge() {
+  const b = $('online'); if (!b) return;
+  if (!serverBase()) { b.textContent = ''; return; }
+  b.textContent = NET.online ? '🌐 ' + lobbyLabel(NET.room) + ' · ' + (NET.others.size + 1) + '/' + NET.max + ' Helden' : (mpEnabled() ? '🌐 Verbinde …' : '');
+}
+// ---------- Chat ----------
+function chatLine(name, text, mine) {
+  const box = $('chatLog'); if (!box) return;
+  const d = document.createElement('div'); d.className = 'chatline';
+  const b = document.createElement('b'); b.textContent = name + ': '; if (mine) b.style.color = '#ffd24a';
+  d.appendChild(b); d.appendChild(document.createTextNode(text));
+  box.appendChild(d); while (box.children.length > 8) box.firstChild.remove();
+  setTimeout(() => d.classList.add('old'), 15000);
+}
+function openChat() {
+  if (!NET.online) { toast('Der Chat ist nur online verfügbar.'); return; }
+  NET.chatOpen = true; for (const k in keys) keys[k] = false;
+  const inp = $('chatInput'); inp.classList.remove('hidden'); inp.value = ''; inp.focus();
+}
+function closeChat(send) {
+  const inp = $('chatInput'); const text = inp.value.trim();
+  if (send && text && NET.ws && NET.ws.readyState === 1) NET.ws.send(JSON.stringify({ t: 'chat', text: text.slice(0, 160) }));
+  inp.blur(); inp.classList.add('hidden'); NET.chatOpen = false;
+}
+// ---------- Cloud-Spielstand & Rangliste ----------
+function cloudSave(force) {
+  if (!serverBase() || lsGet('hellas-mp') === 'off') return;
+  const now = Date.now(); if (!force && now - NET.lastCloud < 30000) return; NET.lastCloud = now;
+  const c = cloudCreds();
+  fetch(serverBase() + '/api/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id, secret: c.secret, name: heroName(), data: saveData() }) }).catch(() => { });
+}
+async function cloudLoad(code) {
+  const [id, secret] = (code || '').trim().split('.');
+  const r = await fetch(serverBase() + '/api/save?id=' + encodeURIComponent(id || '') + '&secret=' + encodeURIComponent(secret || ''));
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'Fehler');
+  lsSet('hellas-cloud', JSON.stringify({ id, secret }));
+  lsSet('hellas-save', JSON.stringify(j.data));
+  if (j.name) lsSet('hellas-name', j.name);
+  return j;
+}
+async function showLeaderboard() {
+  const el = $('leader'); if (!el) return;
+  if (!serverBase()) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden'); el.innerHTML = '<h3>Heldenrangliste</h3><div>Lade …</div>';
+  try {
+    const j = await (await fetch(serverBase() + '/api/leaderboard')).json();
+    el.innerHTML = '<h3>Heldenrangliste</h3>';
+    const ol = document.createElement('ol');
+    for (const row of j.top || []) { const li = document.createElement('li'); li.textContent = row.name + ' – ' + row.score; ol.appendChild(li); }
+    if (!(j.top || []).length) ol.textContent = 'Noch keine Helden eingetragen.';
+    el.appendChild(ol);
+    const c = cloudCreds(); const code = document.createElement('div'); code.className = 'code'; code.textContent = 'Dein Spielstand-Code: ' + c.id + '.' + c.secret; el.appendChild(code);
+  } catch (e) { el.innerHTML = '<h3>Heldenrangliste</h3><div>Server nicht erreichbar.</div>'; }
+}
+async function loadLobbies() {
+  const sel = $('lobbySel'); sel.classList.remove('hidden');
+  try { const j = await (await fetch(serverBase() + '/api/lobbies')).json(); NET.lobbies = j.lobbies || []; NET.max = j.max || 10; } catch (e) { NET.lobbies = []; }
+  sel.innerHTML = '';
+  const add = (v, t, dis) => { const o = document.createElement('option'); o.value = v; o.textContent = t; o.disabled = !!dis; sel.appendChild(o); };
+  add('auto', 'Automatisch – freie Lobby beitreten');
+  for (const l of NET.lobbies) add(l.room, lobbyLabel(l.room) + '  (' + l.count + '/' + l.max + ' Helden)' + (l.count >= l.max ? ' – voll' : ''), l.count >= l.max);
+  add('new', 'Neue Lobby eröffnen');
+}
+function chooseRoom() {
+  const v = $('lobbySel').value || 'auto';
+  const nums = NET.lobbies.map(l => +l.room.split('-')[1]);
+  const fresh = () => { let n = 1; while (nums.includes(n)) n++; return 'lobby-' + n; };
+  if (v === 'new') return fresh();
+  if (v === 'auto') { const free = NET.lobbies.find(l => l.count < l.max); return free ? free.room : fresh(); }
+  return v;
+}
+function setupMenuNet() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('server') !== null) lsSet('hellas-server', q.get('server'));
+  $('heroName').value = heroName() === 'Held' && !lsGet('hellas-name') ? '' : heroName();
+  $('heroName').oninput = () => lsSet('hellas-name', $('heroName').value.trim().slice(0, 20) || 'Held');
+  const has = !!serverBase();
+  $('mpRow').classList.toggle('hidden', !has);
+  $('btnCloud').classList.toggle('hidden', !has);
+  $('mpOn').checked = lsGet('hellas-mp') !== 'off';
+  $('mpOn').onchange = () => lsSet('hellas-mp', $('mpOn').checked ? 'on' : 'off');
+  $('mpStatus').textContent = has ? '' : 'Einzelspieler (kein Server eingerichtet)';
+  if (has) fetch(serverBase() + '/').then(r => r.json()).then(() => { $('mpStatus').textContent = '🌐 Server erreichbar – Mehrspieler & Cloud-Speicher aktiv'; loadLobbies(); }).catch(() => { $('mpStatus').textContent = '⚠ Server nicht erreichbar – Einzelspieler'; });
+  $('btnCloud').onclick = async () => {
+    const c = cloudCreds();
+    const code = window.prompt('Spielstand-Code eingeben (z. B. von einem anderen Gerät):', c.id + '.' + c.secret);
+    if (!code) return;
+    try { await cloudLoad(code); $('btnLoad').classList.remove('hidden'); $('mpStatus').textContent = '☁ Cloud-Spielstand geladen – klicke „Fortsetzen“.'; }
+    catch (e) { $('mpStatus').textContent = '⚠ ' + e.message; }
+  };
+}
+
 function spawnMythCreatures() {
   const put = (type, x, z) => { if (heightAt(x, z) > 1.2) spawnEnemy(type, x, z); };
-  for (const [x, z] of [[150, -460], [175, -480], [140, -490], [-520, -160], [-555, -185], [-430, 330]]) put('zentaur', x, z);
+  for (const [x, z] of [[150, -460], [175, -480], [140, -490], [-520, -160], [-555, -185], [-480, 430]]) put('zentaur', x, z);
   for (const [x, z] of [[-850, 365], [210, -575], [-660, -420]]) put('zyklop', x, z);
   const Si = LOCS.sirenen;
   for (let i = 0; i < 4; i++) put('harpyie', Si.x + rr(-35, 35), Si.z + rr(-35, 35));
@@ -2171,6 +2451,8 @@ function spawnMythCreatures() {
 addEventListener('keydown', (e) => {
   if (!started) return;
   const k = e.code;
+  if (NET.chatOpen) { if (k === 'Enter') closeChat(true); if (k === 'Escape') closeChat(false); return; }
+  if (k === 'Enter' && !dialog) { e.preventDefault(); openChat(); return; }
   keys[k] = true;
   if (k === 'KeyE') { if (dialog) advanceDialog(); else interact(); }
   if (dialog && /^Digit[1-9]$/.test(k)) chooseOpt(+k.slice(5) - 1);
@@ -2181,7 +2463,7 @@ addEventListener('keydown', (e) => {
   if (k === 'KeyT') toggleFly();
   if (k === 'KeyB') toggleShip();
   if (k === 'KeyG') medusaHead();
-  if (k === 'KeyM') { mapOpen = !mapOpen; $('bigmap').classList.toggle('hidden', !mapOpen); }
+  if (k === 'KeyM') { mapOpen = !mapOpen; $('bigmap').classList.toggle('hidden', !mapOpen); if (mapOpen) showLeaderboard(); }
   if (k === 'Space') e.preventDefault();
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -2438,7 +2720,7 @@ function updateHUD() {
   if (player.blessed) ab.push(player.zapCd > 0 ? 'Blitz: ' + Math.ceil(player.zapCd) + ' s' : '[Q] Blitz des Zeus bereit');
   $('abilities').textContent = ab.join('  ·  ');
   nearInter = dialog ? null : findInteractable();
-  $('prompt').innerHTML = nearInter ? '<b>E</b>' + nearInter.label : '';
+  $('prompt').innerHTML = nearInter ? '<b>E</b>' + (typeof nearInter.label === 'function' ? nearInter.label() : nearInter.label) : '';
   // Ortsnamen
   let cur = null;
   for (const L of LOC_LIST) if (!L.hidden && Math.hypot(player.pos.x - L.x, player.pos.z - L.z) < L.r + 10) cur = L;
@@ -2463,11 +2745,11 @@ function loop() {
     updatePlayer(dt);
     for (const e of enemies) updateEnemy(e, dt);
     updateNPCs(dt);
+    updateRemotes(dt); netSend(dt);
     updatePickups(dt, t);
     updateSky(dt);
     animateWorld(dt, t);
     S.played += dt;
-    if (S.town.lvl > 0) S.town.treasury = Math.min(townCap(), S.town.treasury + TOWN_LEVELS[S.town.lvl].income / 60 * dt);
     saveT += dt; if (saveT > 15) { saveT = 0; save(); }
     if (locTimer > 0) { locTimer -= dt; if (locTimer <= 0) $('locName').style.opacity = 0; }
     if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) $('banner').style.opacity = 0; }
@@ -2498,9 +2780,10 @@ function startGame(fromSave) {
     if (S.minoDead) { const m = enemies.find(e => e.type === 'minotaur'); if (m) { m.dead = true; m.respawn = 1e9; m.m.root.visible = false; m.deadT = 99; } }
     if (player.hasArmor) refreshHeroLook();
     if (!player.relics) player.relics = [];
-    S.chests = S.chests || []; S.found = S.found || []; S.town = S.town || { lvl: 0, name: '', treasury: 0 };
-    applyTownName();
-    for (let l = 1; l <= S.town.lvl; l++) buildTownLevel(l);
+    S.chests = S.chests || []; S.found = S.found || [];
+    S.towns = Object.assign(defaultTowns(), S.towns || {});
+    if (S.town && S.town.lvl > 0 && !S.towns.heimat) S.towns.heimat = { owner: 'me', ownerName: heroName(), name: S.town.name, lvl: S.town.lvl, collected: Date.now() };
+    delete S.town;
     for (const ch of CHESTS) if (S.chests.includes(ch.id)) markChestOpened(ch);
     for (const e of enemies) if ((e.ruin !== undefined && RUINS[e.ruin].chest.opened) || (e.key && (S.bossDead || []).includes(e.key))) { e.dead = true; e.respawn = 1e9; e.deadT = 99; e.m.root.visible = false; }
     S.bossDead = S.bossDead || []; S.foundD = S.foundD || []; player.gear = player.gear || [];
@@ -2509,6 +2792,8 @@ function startGame(fromSave) {
     try { localStorage.removeItem('hellas-save'); } catch (e) { }
     player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]), SPOTS.respawn[1]);
   }
+  if (!sv) S.towns = defaultTowns();
+  if (mpEnabled()) setTimeout(() => { if (!NET.towns) syncTowns(); }, 6000); else syncTowns();
   started = true;
   $('menu').classList.add('hidden'); $('hud').classList.remove('hidden');
   updateQuestText();
@@ -2516,6 +2801,9 @@ function startGame(fromSave) {
   if (sv) for (const d of DUNGEONS) if (Math.hypot(player.pos.x - d.at[0], player.pos.z - d.at[1]) < 12) { const r = downhillRot(d.at[0], d.at[1]); camYaw = r + Math.PI; player.yaw = r; }
   canvas.requestPointerLock && canvas.requestPointerLock();
   showLoc(LOCS.athen);
+  refreshHeroLook();
+  if (mpEnabled()) NET.room = chooseRoom();
+  netConnect(); updateOnlineBadge(); cloudSave(true);
   if (!sv) setTimeout(() => toast('Folge dem goldenen Zeichen zu deiner ersten Aufgabe.'), 1500);
   clock.getDelta();
 }
@@ -2525,7 +2813,7 @@ function init() {
   buildTerrain();
   buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
   buildIslands();
-  buildTownBase(); buildRuins(); buildOldRuins(); buildDungeons();
+  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons();
   buildVegetation();
   finalizeStatic();
   buildClouds();
@@ -2543,9 +2831,10 @@ function init() {
   $('loading').textContent = '';
   $('btnNew').disabled = false;
   if (loadSave()) $('btnLoad').classList.remove('hidden');
+  setupMenuNet();
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);

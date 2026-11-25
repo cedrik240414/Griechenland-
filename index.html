@@ -75,6 +75,21 @@
   #banner { position:fixed; left:0; right:0; top:30%; text-align:center; pointer-events:none; opacity:0; transition:opacity 1.2s; }
   #banner h2 { font-size:52px; margin:0; color:var(--gold); text-shadow:0 3px 16px #000; }
   #banner div { font-size:20px; text-shadow:0 2px 6px #000; }
+  #online { position:absolute; right:20px; top:248px; width:200px; text-align:center; font-size:13px; color:#8fd0ff; text-shadow:0 1px 3px #000; }
+  #chatLog { position:absolute; left:20px; bottom:150px; width:340px; font-size:14px; text-shadow:0 1px 3px #000; }
+  .chatline { background:rgba(20,14,8,.55); padding:2px 8px; margin-top:2px; border-radius:4px; transition:opacity 1s; }
+  .chatline.old { opacity:0; }
+  .chatline b { color:#8fd0ff; }
+  #chatInput { position:absolute; left:20px; bottom:122px; width:340px; font:inherit; font-size:15px; padding:6px 10px; color:#f3e9d2;
+    background:rgba(20,14,8,.85); border:1px solid var(--gold); border-radius:5px; pointer-events:auto; outline:none; }
+  #mpBox { margin:14px auto 0; max-width:420px; display:flex; flex-direction:column; gap:8px; align-items:center; }
+  #mpBox input[type=text] { width:100%; font:inherit; font-size:16px; padding:8px 12px; color:#f3e9d2; background:rgba(0,0,0,.35); border:1px solid rgba(232,196,106,.5); border-radius:6px; text-align:center; }
+  #lobbySel { width:100%; font:inherit; font-size:15px; padding:7px 10px; color:#f3e9d2; background:#2a2016; border:1px solid rgba(232,196,106,.5); border-radius:6px; }
+  #mpStatus { font-size:13px; color:#bfb293; min-height:16px; }
+  #leader { position:absolute; right:20px; top:20px; width:250px; padding:12px 16px; font-size:14px; }
+  #leader h3 { margin:0 0 6px; font-family:'Cinzel',serif; color:var(--gold); font-size:16px; }
+  #leader ol { margin:0; padding-left:20px; line-height:1.5; }
+  #leader .code { margin-top:10px; font-size:11px; color:#bfb293; word-break:break-all; user-select:text; }
   @media (max-width:640px) {
     #minimapWrap { width:130px; height:130px; } #minimapN { right:77px; } #clock { width:130px; top:156px; }
     #bars { width:200px; } #questBox { max-width:calc(100% - 180px); }
@@ -91,6 +106,9 @@
   <div id="minimapWrap"><canvas id="minimap" width="200" height="200"></canvas></div>
   <div id="minimapN">N</div>
   <div id="clock"></div>
+  <div id="online"></div>
+  <div id="chatLog"></div>
+  <input id="chatInput" class="hidden" maxlength="160" placeholder="Nachricht … (Enter senden, Esc abbrechen)">
   <div id="bars">
     <div id="stats">⚱ <span id="money">0</span> Drachmen &nbsp; ✚ <span id="potions">0</span> Ambrosia</div>
     <div class="bar"><div id="hpFill" style="width:100%"></div><span id="hpText"></span></div>
@@ -105,7 +123,7 @@
 </div>
 <div id="damageFlash"></div>
 <div id="banner"><h2></h2><div></div></div>
-<div id="bigmap" class="hidden"><canvas id="bigmapCanvas" width="900" height="900"></canvas></div>
+<div id="bigmap" class="hidden"><canvas id="bigmapCanvas" width="900" height="900"></canvas><div id="leader" class="panel hidden"></div></div>
 <div id="pause" class="hidden">Klicke, um weiterzuspielen</div>
 <div id="fade"></div>
 
@@ -117,6 +135,13 @@
     <div>
       <button class="btn" id="btnNew" disabled>Neues Spiel</button>
       <button class="btn alt hidden" id="btnLoad">Fortsetzen</button>
+    </div>
+    <div id="mpBox">
+      <input type="text" id="heroName" maxlength="20" placeholder="Dein Heldenname">
+      <select id="lobbySel" class="hidden"></select>
+      <label id="mpRow" class="hidden"><input type="checkbox" id="mpOn" checked> Online spielen (Mehrspieler &amp; Cloud-Speicher)</label>
+      <div id="mpStatus"></div>
+      <button class="btn alt hidden" id="btnCloud">Cloud-Spielstand laden</button>
     </div>
     <div id="loading">Die Welt wird erschaffen …</div>
     <div id="controls">
@@ -133,13 +158,15 @@
       <b>B</b><span>Eigenes Schiff rufen / anlegen</span>
       <b>T</b><span>Pegasus (fliegen: Leertaste hoch, C runter)</span>
       <b>G</b><span>Haupt der Medusa (Feinde versteinern)</span>
-      <b>M</b><span>Karte</span>
+      <b>M</b><span>Karte &amp; Heldenrangliste</span>
+      <b>Enter</b><span>Chat (online)</span>
       <b>1 – 9</b><span>Antwort im Gespräch wählen</span>
     </div>
   </div>
 </div>
 
 <script src="lib/three.min.js"></script>
+<script src="config.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

@@ -32,6 +32,15 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
   bringt neue Bewohner und mehr Steuereinnahmen, die du am Grenzstein einsammelst
 - Händler, Wettlauf in Olympia, 40 Amphoren zum Sammeln, Minikarte & Weltkarte, automatisches Speichern
 
+## Mehrspieler & Städte
+
+- **Lobbys mit bis zu 10 Helden**: Im Menü eine Lobby wählen (automatisch, bestehende oder neue). Andere Spieler, ihre Reittiere und Schiffe sind in der Welt sichtbar, mit **Enter** wird gechattet.
+- **7 Stadtplätze**: 4 freie Bauplätze (Heimat, Eleusis, Lebadeia, Chalkis) und 3 feindliche Poleis (Megara, Argos, Korinth).
+- **Städte erobern**: Besiege die Garnison einer fremden Stadt und erobere sie am Grenzstein. Du erhältst ihre Schatzkammer, ihre Steuern und kannst sie weiter ausbauen. Im Mehrspieler können andere Helden auch deine Städte erobern!
+- **Cloud-Speicher & Rangliste** über die D1-Datenbank. Mit dem Spielstand-Code (Weltkarte **M**) lädst du deinen Helden auf einem anderen Gerät.
+
+Der Server liegt im Ordner [`server/`](server/README.md) (Cloudflare Worker). Ohne Server läuft das Spiel als Einzelspieler.
+
 ## Steuerung
 
 | Taste | Aktion |
@@ -49,5 +58,6 @@ Alternativ über einen lokalen Server: `python3 -m http.server` und dann `http:/
 | B | Eigenes Schiff rufen / anlegen |
 | T | Pegasus (Leertaste: steigen, C: sinken) |
 | G | Haupt der Medusa |
-| M | Weltkarte |
+| M | Weltkarte & Rangliste |
+| Enter | Chat (online) |
 | 1–9 | Antwort wählen |
