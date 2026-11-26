@@ -60,11 +60,13 @@ Admins haben Keraunos und Blitzadler von Anfang an.
 
 - **14 begehbare Tavernen** (🍺 auf der Karte): antikes griechisches Essen (Gerstenbrot, Linsensuppe, Ziegenkäse mit Honig, Thunfisch, Kykeon, Krasis, in Sparta die Schwarze Suppe), Bett zum Heilen, **Söldner anheuern** (Speerträger, Hoplit, Spartanischer Veteran – bis zu 4 folgen dir und kämpfen mit), **Kopfgeldbrett** mit Gesetzlosen zum Jagen, Gerüchte und das eigene Kopfgeld begleichen
 - **Fahndung**: Wer Stadtsoldaten erschlägt oder Städte erobert, wird gesucht (★–★★★★★) und von Stadtwachen gejagt. Abhauen, warten oder in der Taverne bezahlen.
-- **Pferdeställe**: Thessalischer Rappe, Arabischer Schimmel und der **Streitwagen**
-- **Schmiede**: Waffen (bis Xiphos des Champions) und Rüstungen (bis Hoplitenrüstung)
+- **Pferdeställe**: Thessalischer Rappe und Arabischer Schimmel
+- **Wagenbauer Pelops** (Athen, Theben, Sparta, Ephesos, Troja): Bauernkarren, Reisewagen mit Dach, Streitwagen und der Goldene Prunkwagen
+- **Schmiede**: Waffen (vom Bronzeschwert bis zum Xiphos des Champions), Holz- und Bronzeschild, Rüstungen (bis Hoplitenrüstung)
+- **Start**: Man beginnt ohne Rüstung und ohne Schild, nur mit einem kleinen Dolch
 - **Schiffsbauer** in Piräus, Kreta und Ithaka: Fischerboot, Handelsschiff, Trireme
 - **3 Mythenwälder**: Hain der Dryaden, Wald von Nemea (Nemeischer Löwe), Kalydonischer Wald (Kalydonischer Eber) – mit Satyrn, Dryaden und einem Schatz
-- **64 Gelehrte** (❓ auf der Karte) – darunter Sokrates, Platon, Pythagoras, Thales, Hippokrates, Homer, Sappho und Alexander an ihren echten Orten – stellen je **5 leichte Fragen über Griechenland**. Wer alle überzeugt, bekommt von **Athene die Aigis** und die **Gestalt der Sirene** (**J**: rasend schnell schwimmen, Angriff = betörender Gesang).
+- **64 Gelehrte** (❓ auf der Karte) – darunter Sokrates, Platon, Pythagoras, Thales, Hippokrates, Homer, Sappho und Alexander an ihren echten Orten – stellen je **5 leichte Fragen über Griechenland** – wer mindestens 3 richtig hat, bekommt ein Geschenk (Schwert, Schild, Rüstung, Skins, Amulette, Schriftrollen, Ambrosia). Wer alle überzeugt, bekommt von **Athene die Aigis** und die **Gestalt der Sirene** (**J**: rasend schnell schwimmen, Angriff = betörender Gesang).
 - **Eigene Stadt**: Bürger zu Soldaten ausbilden (Gefolge) und die Stadtwache trainieren (mehr Verteidiger gegen Eroberer)
 
 ## Mehrspieler & Städte

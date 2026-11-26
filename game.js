@@ -1154,6 +1154,7 @@ function makeHumanoid(o = {}) {
   const armL = limb(0.15, 0.64, 0.15, skin, -0.37, 1.66), armR = limb(0.15, 0.64, 0.15, skin, 0.37, 1.66);
   let weapon = null, shield = null;
   if (o.shield && o.weapon !== 'bow') { shield = mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.07, 18), lam(o.shieldCol ?? 0xb98d3a), -0.05, -0.42, 0.16, armL); shield.rotation.z = Math.PI / 2; shield.rotation.y = Math.PI / 2; mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 10), lam(o.shieldEmblem ?? 0x8a1a1a), 0, 0.04, 0, shield); }
+  if (o.weapon === 'dagger') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); mesh(new THREE.BoxGeometry(0.05, 0.03, 0.38), lam(0xd8d8d0), 0, 0, 0.28, weapon); mesh(new THREE.BoxGeometry(0.16, 0.04, 0.05), M.bronze, 0, 0, 0.07, weapon); }
   if (o.weapon === 'sword') { weapon = new THREE.Group(); weapon.position.set(0, -0.62, 0.05); armR.add(weapon); mesh(new THREE.BoxGeometry(0.07, 0.04, 0.85), lam(0xd8d8d0), 0, 0, 0.5, weapon); mesh(new THREE.BoxGeometry(0.28, 0.05, 0.06), M.bronze, 0, 0, 0.08, weapon); }
   if (o.weapon === 'spear') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.6, 6), M.wood, 0, 0, 0.6, weapon).rotation.x = Math.PI / 2; mesh(new THREE.ConeGeometry(0.07, 0.3, 6), lam(0xd8d8d0), 0, 0, 2.0, weapon).rotation.x = Math.PI / 2; }
   if (o.weapon === 'axe') { weapon = new THREE.Group(); weapon.position.set(0, -0.6, 0); armR.add(weapon); mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), M.wood, 0, 0, 0.5, weapon).rotation.x = Math.PI / 2; for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.04, 0.42, 0.3), lam(0x9a9a9a), 0, s * 0.2, 1.05, weapon); }
@@ -1226,7 +1227,7 @@ function animateQuad(q, speed, dt, k = 2.2) {
 const player = {
   pos: new V3(0, 10, 26), vy: 0, yaw: Math.PI, onGround: false, hp: 100, maxHp: 100, stamina: 100,
   money: 20, potions: 1, dmg: 14, blessed: false, mounted: false, blocking: false, atkCd: 0, atkAnim: 0,
-  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, relics: [], gear: [], hasShip: false, chiron: false, wTier: 0, aTier: 0, horse: 'gaul', horses: ['gaul'], shipTier: 0, wanted: 0, adminFly: false, up: {}, skins: ['standard'], skin: 'standard', bowMode: false, flying: false, sailing: false, stoned: 0, medCd: 0,
+  lastHurt: -99, swimming: false, dead: false, zapCd: 0, speedNow: 0, hasArmor: false, hasBlade: false, shieldTier: 0, relics: [], gear: [], hasShip: false, chiron: false, wTier: 0, aTier: 0, horse: 'gaul', horses: ['gaul'], shipTier: 0, wanted: 0, adminFly: false, up: {}, skins: ['standard'], skin: 'standard', bowMode: false, flying: false, sailing: false, stoned: 0, medCd: 0,
 };
 const S = { stage: 0, olives: 0, wolves: 0, bandits: 0, amph: [], raceBest: null, time: 0.32, played: 0, chests: [], found: [], towns: defaultTowns(), bossDead: [], foundD: [], quiz: [], bounty: null, olympia: {}, zeus: 0, zeusKills: 0, altars: [] };
 let hero, horse;
@@ -1336,7 +1337,7 @@ function questTarget() {
 // ---------- Speichern ----------
 function saveData() {
     const sp = curD ? { x: curD.out[0], z: curD.out[1] } : player.pos;
-  return ({ v: 2, S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })), up: player.up, skins: player.skins, skin: player.skin } });
+  return ({ v: 3, S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, shieldTier: player.shieldTier, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })), up: player.up, skins: player.skins, skin: player.skin } });
 }
 function save() {
   try { localStorage.setItem(saveKey(), JSON.stringify(saveData())); } catch (e) { /* ignorieren */ }
@@ -1400,7 +1401,7 @@ function talkPerikles() {
   else if (S.stage === 2) talk([
     { who: W, text: 'Wunderbar! Athene wird zufrieden sein. Hier, nimm diese Drachmen für deine Mühe.', fn: () => { addMoney(30); player.potions += 1; toast('+1 Ambrosia', 'gold'); } },
     { who: W, text: 'Nun reise nach Delphi im Nordwesten, hinter Theben. Die Pythia wird dir sagen, was die Götter verlangen.' },
-    { who: W, text: 'Tipp: Drücke R, um dein Pferd zu rufen. Und Kleon dort am Markt verkauft nützliche Dinge.' },
+    { who: W, text: 'Tipp: Drücke R, um dein Pferd zu rufen. Mit deinem kleinen Dolch kommst du nicht weit – der Schmied verkauft Schwerter, Schilde und Rüstungen. Und die Gelehrten belohnen kluge Köpfe mit Geschenken!' },
     { who: W, text: 'Noch etwas: Überall in Hellas gibt es freie Siedlungsplätze – zum Beispiel bei Pylos, Larissa, Pella und auf Lesbos. Dort kannst du am Grenzstein deine eigene Stadt gründen. Und in den Tempeln von Hellas warten Opfergaben auf Helden!', fn: () => setStage(3) },
   ]);
   else if (S.stage === 11) talk([
@@ -1559,7 +1560,7 @@ function hurtPlayer(dmg, from) {
         return;
       }
       if (player.stamina < 5) { dmg *= 0.6; floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, 'Schild durchbrochen!', '#ff9a7a'); }
-      else { dmg *= Math.max(0.02, (player.relics.includes('athene') ? 0.05 : 0.2) - 0.03 * upLvl('shield')); sfx('block'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, 'Geblockt', '#e8c46a'); player.stamina = Math.max(0, player.stamina - 10 * (1 - 0.12 * upLvl('shield'))); }
+      else { dmg *= Math.max(0.02, (player.relics.includes('athene') ? 0.05 : player.shieldTier >= 2 ? 0.2 : 0.35) - 0.03 * upLvl('shield')); sfx('block'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, 'Geblockt', '#e8c46a'); player.stamina = Math.max(0, player.stamina - 10 * (1 - 0.12 * upLvl('shield'))); }
     }
   }
   if (player.hasArmor) dmg *= 0.85;
@@ -1708,7 +1709,7 @@ function playerAttack() {
   if (player.atkCd > 0) return;
   player.atkCd = 0.55; player.atkAnim = 1;
   let fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
-  const reach = (player.form === 'centaur' ? 4.2 : player.mounted ? (HORSES[player.horse].chariot ? 4.6 : 3.8) : 3.0) + (player.gear.includes('poseidon') ? 1.2 : 0);
+  const reach = (player.form === 'centaur' ? 4.2 : player.mounted ? (HORSES[player.horse].war ? 4.6 : 3.8) : 3.0) + (player.gear.includes('poseidon') ? 1.2 : 0);
   // Sanftes Auto-Zielen: nächsten Gegner im weiten Kegel vor der Kamera anvisieren
   let tgt = null, best = 1e9;
   for (const e of enemies) {
@@ -1766,7 +1767,7 @@ function refreshHeroLook() {
   hero.root.position.copy(p); hero.root.rotation.y = r; scene.add(hero.root);
   netSendLook();
 }
-function heroLook() { const gr = player.gear || []; const sk = (SKINS.find(k => k.id === player.skin) || SKINS[0]).look; return Object.assign({ tunic: 0x9b1c1c, armor: (player.aTier ? ARMORS[player.aTier].col : null) || (player.hasArmor ? 0xb98d3a : 0x7a5a3a), helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: true, shieldCol: 0xb98d3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : 'sword', cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x3a2a1e, greaves: player.hasArmor || player.aTier >= 2, hair: 0x2a1a0e }, sk, player.bowMode ? { weapon: 'bow' } : player.blitzMode ? { weapon: 'keraunos' } : {}); }
+function heroLook() { const gr = player.gear || []; const sk = (SKINS.find(k => k.id === player.skin) || SKINS[0]).look; return Object.assign({ tunic: 0x9b1c1c, armor: (player.aTier ? ARMORS[player.aTier].col : null) || (player.hasArmor ? 0xb98d3a : null), helmet: player.aTier >= 2 || player.hasArmor || gr.includes('hadeshelm'), helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: player.shieldTier > 0 || gr.includes('aigis'), shieldCol: player.shieldTier >= 2 ? 0xb98d3a : 0x8a6a3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : (WEAPONS[player.wTier || 0].model || 'sword'), cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x3a2a1e, greaves: player.hasArmor || player.aTier >= 2, hair: 0x2a1a0e }, sk, player.bowMode ? { weapon: 'bow' } : player.blitzMode ? { weapon: 'keraunos' } : {}); }
 
 // ---------- Sammelobjekte ----------
 const ampGeo = (() => { const pts = []; const prof = [[0, 0], [0.18, 0.02], [0.3, 0.25], [0.36, 0.55], [0.3, 0.85], [0.14, 1.0], [0.1, 1.15], [0.16, 1.22], [0.0, 1.22]]; for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y)); return new THREE.LatheGeometry(pts, 12); })();
@@ -2767,14 +2768,17 @@ const HORSES = {
   gaul: { name: 'Brauner Ackergaul', cost: 0, speed: [19, 30], col: 0x6b4325 },
   rappe: { name: 'Thessalischer Rappe', cost: 150, speed: [24, 37], col: 0x1e1a18 },
   schimmel: { name: 'Arabischer Schimmel', cost: 300, speed: [28, 43], col: 0xece6dc },
-  wagen: { name: 'Streitwagen', cost: 450, speed: [30, 46], col: 0xece6dc, chariot: true },
+  karren: { name: 'Bauernkarren', cost: 90, speed: [22, 32], col: 0x6b4325, chariot: true, style: 'karren' },
+  reisewagen: { name: 'Reisewagen mit Dach', cost: 220, speed: [27, 40], col: 0x8a6a4a, chariot: true, style: 'reise' },
+  wagen: { name: 'Streitwagen', cost: 450, speed: [30, 46], col: 0xece6dc, chariot: true, war: true, style: 'streit' },
+  prunkwagen: { name: 'Goldener Prunkwagen', cost: 900, speed: [34, 52], col: 0xf4f0ea, chariot: true, war: true, style: 'prunk' },
 };
 const WEAPONS = [
-  { name: 'Bronzeschwert', cost: 0, dmg: 0 }, { name: 'Eisenschwert', cost: 80, dmg: 6 },
+  { name: 'Kleiner Dolch', cost: 0, dmg: -6, model: 'dagger' }, { name: 'Bronzeschwert', cost: 40, dmg: 0 }, { name: 'Eisenschwert', cost: 80, dmg: 6 },
   { name: 'Kopis (Hiebschwert)', cost: 180, dmg: 12 }, { name: 'Xiphos des Champions', cost: 350, dmg: 20 },
 ];
 const ARMORS = [
-  { name: 'Tunika', cost: 0, red: 0, hp: 0 }, { name: 'Leinenpanzer', cost: 70, red: 0.1, hp: 20, col: 0xe8e0cc },
+  { name: 'Keine Rüstung (Tunika)', cost: 0, red: 0, hp: 0 }, { name: 'Leinenpanzer', cost: 70, red: 0.1, hp: 20, col: 0xe8e0cc },
   { name: 'Schuppenpanzer', cost: 160, red: 0.2, hp: 40, col: 0x8a7a5a }, { name: 'Hoplitenrüstung', cost: 320, red: 0.3, hp: 70, col: 0xd8b050 },
 ];
 const SHIPS = [
@@ -2790,7 +2794,7 @@ const MERCS = {
 };
 const MAX_ALLIES = 4;
 const allies = [];
-const playerDamage = () => (player.dmg + WEAPONS[player.wTier || 0].dmg + upLvl('dmg') * 3) * (player.mounted && HORSES[player.horse || 'gaul'].chariot ? 1.3 : 1) * (clock.elapsedTime < (player.powerUntil || 0) ? 1.2 : 1);
+const playerDamage = () => (player.dmg + WEAPONS[player.wTier || 0].dmg + upLvl('dmg') * 3) * (player.mounted && HORSES[player.horse || 'gaul'].war ? 1.3 : 1) * (clock.elapsedTime < (player.powerUntil || 0) ? 1.2 : 1);
 
 function findSpotNear(L, rMin, rMax, rad) {
   for (let i = 0; i < 400; i++) {
@@ -2807,7 +2811,7 @@ const RUMORS = [
   'Ein riesiger Eber verwüstet die Felder bei Kalydon im Westen.',
   'Die Gelehrten im ganzen Land stellen Fragen. Wer klug antwortet, wird belohnt!',
   'Wenn du zu viele Soldaten erschlägst, schicken die Städte Wachen hinter dir her.',
-  'Im Stall in Athen gibt es einen Streitwagen – schnell wie der Wind!',
+  'Der Wagenbauer Pelops baut Karren, Reisewagen, Streitwagen und sogar einen goldenen Prunkwagen!',
   'Der Schiffsbauer in Piräus baut die besten Triremen der Ägäis.',
   'In deiner eigenen Stadt kannst du Bürger zu Soldaten ausbilden lassen.',
 ];
@@ -2818,6 +2822,18 @@ function buildServices() {
     const tv = { name: 'Taverne „' + TAVERN_NAMES[i % TAVERN_NAMES.length] + '“', keeper: KEEPERS[i % KEEPERS.length], loc: k };
     if (buildTavernHall(LOCS[k], i, tv)) TAVERNS.push(tv);
   });
+  for (const k of ['athen', 'theben', 'sparta', 'ephesos', 'troja']) {
+    const L = LOCS[k]; const sp = findSpotNear(L, 15, L.r * 1.3, 8); if (!sp) continue;
+    reserve(sp[0], sp[1], 8);
+    const f = new Frame(sp[0], sp[1], Math.round(Math.atan2(L.x - sp[0], L.z - sp[1]) / (Math.PI / 2)) * Math.PI / 2);
+    for (const [px, pz] of [[-3.5, -2.5], [3.5, -2.5], [-3.5, 2.5], [3.5, 2.5]]) f.box(M.wood, px, 0, pz, 0.3, 3.4, 0.3, true);
+    f.put(G.prism, M.terracotta, 0, 3.4, 0, 0, Math.PI / 2, 0, 6, 1.3, 8);
+    for (let i = 0; i < 3; i++) f.put(G.cyl, M.darkwood, -2.6 + i * 1.3, 0.75, -2.2, 0.25, 0, Math.PI / 2, 1.5, 0.14, 1.5);
+    f.box(M.wood, 1.6, 0, -1.6, 2.4, 0.9, 1.2, true);
+    const show = makeChariot(['karren', 'reise', 'streit', 'prunk'][Math.floor(rand() * 4)]); const [sx2, sz2] = f.w(0.5, 0.8); show.root.position.set(sx2, heightAt(sx2, sz2), sz2); show.root.rotation.y = f.rot + Math.PI / 2; scene.add(show.root);
+    const [nx, nz] = f.w(-2, 3.6);
+    addNPC('Wagenbauer Pelops', nx, nz, { tunic: 0x7a5a2a, pants: 0x3a2a1a, beard: true, hair: 0x5a4a3a, belt: 0x2a1a0e }, () => talkStable(true)).yaw = f.rot;
+  }
   for (const k of ['athen', 'sparta', 'olympia', 'theben', 'delphi']) {
     const L = LOCS[k]; const sp = findSpotNear(L, 15, L.r * 1.3, 9); if (!sp) continue;
     reserve(sp[0], sp[1], 9);
@@ -2827,7 +2843,7 @@ function buildServices() {
     for (let i = 0; i < 6; i++) { const a = i / 6 * 6.28; f.box(M.wood, Math.cos(a) * 7, 0.6, Math.sin(a) * 7 + 0.5, 3.4, 0.15, 0.12); }
     ['rappe', 'schimmel', 'gaul'].forEach((h, i) => { const hm = makeHorse(HORSES[h].col); const [hx, hz] = f.w(-3 + i * 3, 0); hm.root.position.set(hx, heightAt(hx, hz), hz); hm.root.rotation.y = f.rot + Math.PI / 2; scene.add(hm.root); });
     const [nx, nz] = f.w(0, 4.5);
-    addNPC('Stallmeister', nx, nz, { tunic: 0x6a4a2a, pants: 0x3a2a1a, beard: true, hair: 0x4a3a2a }, talkStable).yaw = f.rot;
+    addNPC('Stallmeister', nx, nz, { tunic: 0x6a4a2a, pants: 0x3a2a1a, beard: true, hair: 0x4a3a2a }, () => talkStable(false)).yaw = f.rot;
   }
   for (const k of ['athen', 'sparta', 'theben', 'thera', 'olympia']) {
     const L = LOCS[k]; const sp = findSpotNear(L, 12, L.r * 1.2, 6); if (!sp) continue;
@@ -2973,26 +2989,31 @@ function spawnBounty() {
 function cancelBounty() { S.bounty = null; for (const e of enemies.filter(e => e.bountyOf)) removeEnemy(e); updateQuestText(); save(); }
 
 // ---------- Stall, Schmied, Schiffsbauer ----------
-function talkStable() {
-  const opts = Object.entries(HORSES).map(([k, h]) => {
+function talkStable(wagons) {
+  const opts = Object.entries(HORSES).filter(([, h]) => !!h.chariot === !!wagons).map(([k, h]) => {
     const own = player.horses.includes(k);
     return { label: (own ? (player.horse === k ? '✔ ' : 'Reiten: ') : 'Kaufen: ') + h.name + ' – Tempo ' + h.speed[1] + (own ? '' : ' (' + h.cost + ' Drachmen)'), fn: () => {
       if (!own) { if (!spend(h.cost)) return; player.horses.push(k); toast(h.name + ' gehört jetzt dir!', 'gold'); }
-      player.horse = k; setHorseModel(); save(); talkStable();
+      player.horse = k; setHorseModel(); save(); talkStable(wagons);
     } };
   });
   opts.push({ label: 'Auf Wiedersehen', fn: () => { } });
-  talk([{ who: 'Stallmeister', text: 'Die besten Pferde von Hellas! Dein aktuelles Reittier: ' + HORSES[player.horse].name + '. (R zum Rufen)', opts }]);
+  talk([{ who: wagons ? 'Wagenbauer Pelops' : 'Stallmeister', text: (wagons ? 'Räder, Achsen, Pferde – ich baue die schnellsten Wagen von Hellas! Streit- und Prunkwagen geben dir im Kampf +30 % Schaden.' : 'Die besten Pferde von Hellas!') + ' Dein aktuelles Gefährt: ' + HORSES[player.horse].name + '. (R zum Rufen)', opts }]);
 }
-function makeChariot() {
+function makeChariot(style = 'streit') {
   const g = new THREE.Group(), horsesM = [];
-  for (const s of [-0.5, 0.5]) { const h = makeHorse(0xece6dc, false); h.root.position.set(s, 0, 1.6); g.add(h.root); horsesM.push(h); }
+  const one = style === 'karren', hc = style === 'prunk' ? 0xf4f0ea : style === 'streit' ? 0xece6dc : style === 'reise' ? 0x3a2a1a : 0x6b4325;
+  for (const s of (one ? [0] : [-0.5, 0.5])) { const h = makeHorse(hc, false); h.root.position.set(s, 0, 1.6); g.add(h.root); horsesM.push(h); }
   const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; g.add(m); return m; };
-  add(new THREE.BoxGeometry(1.6, 0.15, 1.3), M.wood, 0, 0.95, -1.3);
-  add(new THREE.BoxGeometry(1.6, 0.8, 0.12), M.gold, 0, 1.4, -0.7);
-  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.1, 0.6, 1.3), M.gold, s * 0.8, 1.25, -1.3);
+  const trim = style === 'prunk' ? lam(0xffd24a, 0x5a3a00) : style === 'streit' ? M.gold : M.wood;
+  add(new THREE.BoxGeometry(1.6, 0.15, 1.4), style === 'prunk' ? M.gold : M.wood, 0, 0.95, -1.3);
+  add(new THREE.BoxGeometry(1.6, 0.8, 0.12), trim, 0, 1.4, -0.65);
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.1, 0.6, 1.4), trim, s * 0.8, 1.25, -1.3);
+  if (style === 'reise') { for (const [x, z] of [[-0.75, -0.65], [0.75, -0.65], [-0.75, -1.95], [0.75, -1.95]]) add(new THREE.BoxGeometry(0.08, 1.8, 0.08), M.wood, x, 1.9, z); add(new THREE.BoxGeometry(1.8, 0.1, 1.6), M.red, 0, 2.85, -1.3); }
+  if (style === 'karren') { for (let k = 0; k < 3; k++) add(new THREE.SphereGeometry(0.22, 8, 6), M.terracotta, -0.4 + k * 0.4, 1.25, -1.6); }
+  if (style === 'prunk') { add(new THREE.ConeGeometry(0.25, 0.6, 8), trim, -0.8, 1.9, -0.65); add(new THREE.ConeGeometry(0.25, 0.6, 8), trim, 0.8, 1.9, -0.65); }
   const wheels = [];
-  for (const s of [-1, 1]) wheels.push(add(new THREE.CylinderGeometry(0.65, 0.65, 0.12, 14), M.darkwood, s * 0.95, 0.65, -1.3, 0, 0, Math.PI / 2));
+  for (const s of [-1, 1]) wheels.push(add(new THREE.CylinderGeometry(0.65, 0.65, 0.12, 14), style === 'prunk' ? trim : M.darkwood, s * 0.95, 0.65, -1.3, 0, 0, Math.PI / 2));
   add(new THREE.BoxGeometry(0.1, 0.1, 2.6), M.wood, 0, 1.0, 0.4);
   return { root: g, legs: horsesM[0].legs, horses: horsesM, wheels, tail: horsesM[0].tail, phase: 0, chariot: true };
 }
@@ -3000,15 +3021,17 @@ function setHorseModel() {
   const vis = horse ? horse.root.visible : false;
   if (horse) scene.remove(horse.root);
   const H = HORSES[player.horse || 'gaul'];
-  horse = H.chariot ? makeChariot() : makeHorse(H.col);
+  horse = H.chariot ? makeChariot(H.style) : makeHorse(H.col);
   horse.root.visible = vis; scene.add(horse.root);
 }
 function talkSmith() {
   const opts = [];
-  WEAPONS.forEach((w, i) => { if (i > (player.wTier || 0)) opts.push({ label: 'Waffe: ' + w.name + ' (+' + w.dmg + ' Schaden) – ' + w.cost + ' Drachmen', fn: () => { if (spend(w.cost)) { player.wTier = i; toast('Neue Waffe: ' + w.name, 'gold'); save(); } talkSmith(); } }); });
+  WEAPONS.forEach((w, i) => { if (i > (player.wTier || 0)) opts.push({ label: 'Waffe: ' + w.name + ' (' + (player.dmg + w.dmg) + ' Schaden statt ' + (player.dmg + WEAPONS[player.wTier || 0].dmg) + ') – ' + w.cost + ' Drachmen', fn: () => { if (spend(w.cost)) { player.wTier = i; toast('Neue Waffe: ' + w.name, 'gold'); save(); } talkSmith(); } }); });
+  if ((player.shieldTier || 0) < 1) opts.push({ label: 'Schild: Holzschild (Blocken möglich) – 40 Drachmen', fn: () => { if (spend(40)) { player.shieldTier = 1; toast('Holzschild! Rechte Maustaste / 🛡 zum Blocken', 'gold'); refreshHeroLook(); save(); } talkSmith(); } });
+  if ((player.shieldTier || 0) < 2) opts.push({ label: 'Schild: Bronzeschild (blockt deutlich mehr) – 150 Drachmen', fn: () => { if (spend(150)) { player.shieldTier = 2; toast('Bronzeschild angelegt!', 'gold'); refreshHeroLook(); save(); } talkSmith(); } });
   ARMORS.forEach((a, i) => { if (i > (player.aTier || 0)) opts.push({ label: 'Rüstung: ' + a.name + ' (−' + Math.round(a.red * 100) + ' % Schaden, +' + a.hp + ' Leben) – ' + a.cost + ' Drachmen', fn: () => { if (spend(a.cost)) { player.maxHp += a.hp - ARMORS[player.aTier || 0].hp; player.aTier = i; player.hp = player.maxHp; toast('Neue Rüstung: ' + a.name, 'gold'); refreshHeroLook(); save(); } talkSmith(); } }); });
   opts.push({ label: 'Auf Wiedersehen', fn: () => { } });
-  talk([{ who: 'Schmied Hephaistion', text: 'Klirr, klirr! Deine Waffe: ' + WEAPONS[player.wTier || 0].name + ', deine Rüstung: ' + ARMORS[player.aTier || 0].name + '.' + (opts.length === 1 ? ' Du trägst schon das Beste, was ich schmieden kann!' : ' Was soll ich dir schmieden?'), opts }]);
+  talk([{ who: 'Schmied Hephaistion', text: 'Klirr, klirr! Deine Waffe: ' + WEAPONS[player.wTier || 0].name + ', deine Rüstung: ' + ARMORS[player.aTier || 0].name + ', dein Schild: ' + ['keiner', 'Holzschild', 'Bronzeschild'][player.shieldTier || 0] + '.' + (opts.length === 1 ? ' Du trägst schon das Beste, was ich schmieden kann!' : ' Was soll ich dir schmieden?'), opts }]);
 }
 function talkShipwright() {
   const opts = [];
@@ -3229,10 +3252,32 @@ function athenaReward() {
     { who: 'Athene, Göttin der Weisheit', text: 'Nimm meine Aigis, den Schild der Götter. Kein Schwert, kein Pfeil, kein Ungeheuer wird dich mehr leicht verletzen.', fn: () => { player.maxHp += 100; player.hp = player.maxHp; gainGear('aigis'); } },
     { who: 'Athene, Göttin der Weisheit', text: 'Und weil Wissen wie das Meer ist – tief und weit –, schenke ich dir die Gestalt der Sirene. Drücke J, und das Meer gehört dir!', fn: () => { gainGear('sirene'); banner('Gestalt der Sirene', 'J: Verwandle dich und schwimme schneller als jedes Schiff!'); } }]);
 }
+function quizItemReward(correct) {
+  const n = S.quiz.length + 1, r = [];
+  const give = (txt) => { r.push(txt); };
+  if ((player.wTier || 0) < 2 && n % 3 === 1) { player.wTier = (player.wTier || 0) + 1; give('Waffe: ' + WEAPONS[player.wTier].name); }
+  else if ((player.shieldTier || 0) < 1 && n % 3 === 2) { player.shieldTier = 1; give('Holzschild'); }
+  else if ((player.aTier || 0) < 1 && n % 3 === 0) { player.maxHp += ARMORS[1].hp; player.hp = player.maxHp; player.aTier = 1; give('Rüstung: Leinenpanzer'); }
+  else {
+    const pool = [
+      () => { player.potions += 2; give('2 × Ambrosia'); },
+      () => { const ks = Object.keys(UPGRADES).filter(k => upLvl(k) < 5); if (!ks.length) return false; const k = pick(ks); player.up[k] = upLvl(k) + 1; if (k === 'hp') { player.maxHp += 15; player.hp += 15; } give('Schriftrolle: ' + UPGRADES[k].name + ' Stufe ' + player.up[k]); },
+      () => { const sk = SKINS.filter(x => x.cost && !player.skins.includes(x.id)); if (!sk.length || n % 5) return false; const x = pick(sk); player.skins.push(x.id); give('Skin: ' + x.name); },
+      () => { const ws = player.wTier || 0; if (ws >= WEAPONS.length - 1 || n % 6) return false; player.wTier = ws + 1; give('Waffe: ' + WEAPONS[player.wTier].name); },
+      () => { player.dmg += 1; give('Amulett der Stärke (+1 Schaden)'); },
+      () => { player.maxHp += 8; player.hp += 8; give('Lorbeerkranz (+8 Leben)'); },
+    ];
+    for (let t = 0; t < 10 && !r.length; t++) pick(pool)();
+    if (!r.length) { player.potions += 2; give('2 × Ambrosia'); }
+  }
+  if (correct === 5) { player.potions += 1; }
+  refreshHeroLook();
+  setTimeout(() => toast('🎁 Belohnung: ' + r.join(', '), 'gold'), 600);
+}
 function talkQuiz(q) {
   const W = q.name;
   if (S.quiz.includes(q.id)) { talk([{ who: W, text: 'Du hast meine Fragen schon gelöst. ' + (QUIZZERS.length - S.quiz.length > 0 ? 'Es gibt noch ' + (QUIZZERS.length - S.quiz.length) + ' andere Gelehrte in Hellas!' : 'Du hast ALLE Gelehrten überzeugt!') }]); return; }
-  talk([{ who: W, text: (q.intro ? q.intro + ' ' : '') + 'Chaire! Ich bin ' + W + '. Beantworte mir 5 Fragen über Griechenland – für jede richtige Antwort gibt es Drachmen!', opts: [
+  talk([{ who: W, text: (q.intro ? q.intro + ' ' : '') + 'Chaire! Ich bin ' + W + '. Beantworte mir 5 Fragen über Griechenland – für jede richtige Antwort gibt es Drachmen, und wer mindestens 3 schafft, bekommt ein Geschenk!', opts: [
     { label: 'Ich bin bereit!', fn: () => askQuiz(q, 0, 0) }, { label: 'Später', fn: () => { } }] }]);
 }
 function askQuiz(q, i, correct) {
@@ -3242,6 +3287,7 @@ function askQuiz(q, i, correct) {
     const pages = [{ who: W, text: correct + ' von 5 richtig! ' + (correct === 5 ? 'Perfekt – du bist ein wahrer Weiser!' : correct >= 3 ? 'Gut gemacht!' : 'Komm wieder, wenn du mehr weißt.'), fn: () => {
       if (reward) addMoney(reward);
       if (correct === 5) { player.potions++; toast('+1 Ambrosia', 'gold'); }
+      if (correct >= 3) quizItemReward(correct);
       if (correct >= 3) { S.quiz.push(q.id); toast('Rätsel gelöst: ' + S.quiz.length + '/' + QUIZZERS.length + ' Gelehrte', 'gold'); if (S.quiz.length >= QUIZZERS.length) setTimeout(athenaReward, 1500); }
       save();
     } }];
@@ -4182,7 +4228,8 @@ function updatePlayer(dt) {
     if (TOUCH.jx || TOUCH.jy) { _mv.addScaledVector(_right, TOUCH.jx); _mv.addScaledVector(_fwd, -TOUCH.jy); }
   }
   const wasBlocking = player.blocking;
-  player.blocking = canMove && mouse.right && !player.mounted && !player.swimming;
+  if (canMove && mouse.right && !(player.shieldTier > 0 || player.gear.includes('aigis')) && !player._noShieldT) { player._noShieldT = 1; toast('Du hast noch keinen Schild – der Schmied verkauft einen.'); setTimeout(() => player._noShieldT = 0, 4000); }
+  player.blocking = canMove && mouse.right && !player.mounted && !player.swimming && (player.shieldTier > 0 || player.gear.includes('aigis'));
   if (player.blocking && !wasBlocking) player.blockStart = clock.elapsedTime;
   const moving = _mv.lengthSq() > 0;
   if (moving) _mv.normalize();
@@ -4467,7 +4514,8 @@ function startGame(fromSave) {
     Object.assign(S, sv.S);
     Object.assign(player, sv.p);
     player.pos.set(sv.p.x, groundAt(sv.p.x, sv.p.z) + 0.5, sv.p.z);
-    if (sv.v !== 2 || groundAt(sv.p.x, sv.p.z) < -0.5) player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]) + 0.5, SPOTS.respawn[1]);
+    if ((sv.v || 0) < 3) { player.wTier = (player.wTier || 0) + 1; if (player.shieldTier === undefined || player.shieldTier === 0) player.shieldTier = 2; }
+    if ((sv.v || 0) < 2 || groundAt(sv.p.x, sv.p.z) < -0.5) player.pos.set(SPOTS.respawn[0], groundAt(SPOTS.respawn[0], SPOTS.respawn[1]) + 0.5, SPOTS.respawn[1]);
     for (const p of pickups) if (p.kind === 'amph' && S.amph.includes(p.id)) { p.taken = true; p.mesh.visible = false; p.ring.visible = false; }
     if (S.stage === 1) { S.olives = 0; spawnOlives(); }
     if (S.minoDead) { const m = enemies.find(e => e.type === 'minotaur'); if (m) { m.dead = true; m.respawn = 1e9; m.m.root.visible = false; m.deadT = 99; } }
@@ -4542,7 +4590,7 @@ function init() {
   $('heroClose').onclick = (e) => { e.stopPropagation(); if (heroOpen) toggleHero(); };
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);
