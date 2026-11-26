@@ -330,6 +330,7 @@ function updateGrass() {
       const ix = Math.round((x + HALF) / CELL), iz = Math.round((z + HALF) / CELL); if (ix < 0 || iz < 0 || ix > SEG || iz > SEG) continue;
       const ci = (iz * (SEG + 1) + ix) * 3, r = terrainColorsSRGB[ci] / 255, gg = terrainColorsSRGB[ci + 1] / 255, b = terrainColorsSRGB[ci + 2] / 255;
       if (gg < r * 0.9 || gg < 0.3 || (r > 0.6 && b > 0.5)) continue; // kein Gras auf Fels, Sand, Wegen, Schnee
+      if (onTrack(x, z)) continue;
       dummy.position.set(x, h - 0.03, z); dummy.rotation.set(0, rot, 0); dummy.scale.set(sc, sc * (0.8 + rnd() * 0.6), sc); dummy.updateMatrix();
       im.setMatrixAt(k, dummy.matrix);
       const v = 0.85 + rnd() * 0.3; c.setRGB(r * v * 1.05, gg * v * 1.12, b * v * 0.9, THREE.SRGBColorSpace); im.setColorAt(k, c);
@@ -1065,6 +1066,7 @@ function buildOlympia() {
   sf.box(M.white, 68, 0.05, 0, 0.6, 0.08, 21);
   for (const z of [-10.5, 10.5]) { sf.box(M.marble, -68, 0, z, 0.5, 1.6, 0.5); sf.box(M.marble, 68, 0, z, 0.5, 1.6, 0.5); }
   SPOTS.raceStart = [L.x - 68, L.z + 26]; SPOTS.raceEnd = [L.x + 68, L.z + 26];
+  for (let x = -84; x <= 84; x += 6) reserve(L.x + x, L.z + 26, 15); // Rennbahn freihalten (Tavernen, Händler usw.)
   SPOTS.judge = [L.x - 72, L.z + 20];
   stoa(new Frame(L.x - 30, L.z - 4, Math.PI / 2, L.h), 24, 7, 9, 4.5);
   for (let i = 0; i < 6; i++) house(L.x + rr(20, 55), L.z + rr(-50, 0), Math.floor(rand() * 4) * Math.PI / 2, 6, 6, 4);
@@ -1667,7 +1669,7 @@ function buildNPCs() {
   for (const [key, n] of [['athen', 9], ['sparta', 4], ['delphi', 3], ['piraeus', 4], ['olympia', 4], ['theben', 4], ['kreta', 3]]) {
     const L = LOCS[key];
     for (let i = 0; i < n; i++) {
-      let x, z, t = 0; do { x = L.x + rr(-L.r * 0.6, L.r * 0.6); z = L.z + rr(-L.r * 0.6, L.r * 0.6); t++; } while (t < 20 && (heightAt(x, z) < 1 || (key === 'athen' && Math.hypot(x, z + 35) < 30)));
+      let x, z, t = 0; do { x = L.x + rr(-L.r * 0.6, L.r * 0.6); z = L.z + rr(-L.r * 0.6, L.r * 0.6); t++; } while (t < 40 && (heightAt(x, z) < 1 || onTrack(x, z, 16) || (key === 'athen' && Math.hypot(x, z + 35) < 30)));
       const female = rand() < 0.45;
       const line = pick(VILLAGER_LINES);
       addNPC(female ? pick(['Ariadne', 'Phoibe', 'Kalliope', 'Thalia', 'Eirene', 'Melina']) : pick(['Demetrios', 'Nikolaos', 'Alexios', 'Kostas', 'Theodoros', 'Stavros']),
@@ -3089,6 +3091,7 @@ const MAX_ALLIES = 4;
 const allies = [];
 const playerDamage = () => (player.dmg + WEAPONS[player.wTier || 0].dmg + upLvl('dmg') * 3) * (player.mounted && HORSES[player.horse || 'gaul'].war ? 1.3 : 1) * (clock.elapsedTime < (player.powerUntil || 0) ? 1.2 : 1);
 
+function onTrack(x, z, pad = 0) { if (!SPOTS.raceStart) return false; const [sx, sz] = SPOTS.raceStart, [ex] = SPOTS.raceEnd; return x > sx - 14 - pad && x < ex + 14 + pad && Math.abs(z - sz) < 13 + pad; }
 function findSpotNear(L, rMin, rMax, rad) {
   for (let i = 0; i < 400; i++) {
     const a = rand() * 6.283, r = rr(rMin, rMax), x = L.x + Math.cos(a) * r, z = L.z + Math.sin(a) * r;
@@ -4865,7 +4868,7 @@ function buildRoads() {
       const [x0, z0] = r[i], [x1, z1] = r[i + 1], len = Math.hypot(x1 - x0, z1 - z0), dx = (x1 - x0) / len, dz = (z1 - z0) / len;
       for (let t = 0; t <= len; t += STEP) {
         const x = x0 + dx * t, z = z0 + dz * t;
-        if (heightAt(x, z) < 0.35 || nearCity(x, z)) { flush(); continue; }
+        if (heightAt(x, z) < 0.35 || nearCity(x, z) || onTrack(x, z, 4)) { flush(); continue; }
         push(x, z, dx, dz);
         acc += STEP; if (acc > 160) { acc = 0; stones.push([x - dz * (W + 1), z + dx * (W + 1)]); }
       }
@@ -4921,7 +4924,8 @@ function updateTraffic(dt) {
     const [x, z, ddx, ddz] = roadPoint(w.r, w.s);
     const ox = -ddz * w.dir * 1.4, oz = ddx * w.dir * 1.4; // rechts fahren
     const wx = x - ox, wz = z - oz, h = heightAt(wx, wz);
-    w.m.root.visible = h > 0.3 && !curD;
+    w.m.root.visible = h > 0.3 && !curD && !onTrack(wx, wz, 3);
+    if (!w.m.root.visible) continue;
     w.yaw = angLerp(w.yaw, Math.atan2(ddx * w.dir, ddz * w.dir), Math.min(1, dt * 3));
     w.m.root.position.set(wx, Math.max(h, 0), wz); w.m.root.rotation.y = w.yaw;
     if (w.m.horses) for (const hh of w.m.horses) animateQuad(hh, w.v, dt);
@@ -5003,7 +5007,7 @@ function updateNPCs(dt) {
     if (d < 5 || n.talking > 0) n.yaw = angLerp(n.yaw, Math.atan2(player.pos.x - p.x, player.pos.z - p.z), Math.min(1, dt * 4));
     else if (n.wander) {
       n.wt -= dt;
-      if (n.wt <= 0) { n.wt = rr(4, 10); const a = rand() * 6.28, r = rand() * n.wander; n.tx = n.home[0] + Math.cos(a) * r; n.tz = n.home[1] + Math.sin(a) * r; if (heightAt(n.tx, n.tz) < 1) { n.tx = n.home[0]; n.tz = n.home[1]; } }
+      if (n.wt <= 0) { n.wt = rr(4, 10); const a = rand() * 6.28, r = rand() * n.wander; n.tx = n.home[0] + Math.cos(a) * r; n.tz = n.home[1] + Math.sin(a) * r; if (heightAt(n.tx, n.tz) < 1 || onTrack(n.tx, n.tz, 2)) { n.tx = n.home[0]; n.tz = n.home[1]; } }
       const dx = n.tx - p.x, dz = n.tz - p.z, dd = Math.hypot(dx, dz);
       if (dd > 0.6) {
         spd = 1.8; const q = { x: p.x + dx / dd * spd * dt, z: p.z + dz / dd * spd * dt };
