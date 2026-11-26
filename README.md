@@ -87,6 +87,15 @@ Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code lie
 - **Physik:** Trägheit beim Loslaufen und Anhalten (zu Pferd stärker), bergauf langsamer und bergab schneller, kaum Steuerung in der Luft, realistischere Schwerkraft und Sprunghöhe, harte Landungen bremsen und verletzen ab etwa 11 m Fallhöhe, Treffer stoßen Spieler und Gegner zurück, weich nachgeführte Kamera.
 - **Grafikstufe** im Startmenü: *Hoch* oder *Mittel (schneller)*. Auf Tablets ist *Mittel* voreingestellt. Die Stufe wird gespeichert und wirkt vollständig nach dem nächsten Laden.
 
+## Kriegsgeräte, Straßen & Leben in der Welt
+
+- **Kriegsmeister Demetrios** (Athen, Sparta, Korinth, Rhodos, Troja) verkauft echte Kriegsgeräte: **Skorpion** (Pfeilgeschütz, weite und genaue Bolzen), **Katapult** (Felsbrocken im Bogen, trifft ganze Gruppen) und **Rammbock** (überdachter Widder mit Bronzekopf). Mit R rufen, mit der Kamera zielen, mit Angriff feuern.
+- **Gepflasterte Straßen** mit Steinplatten und Meilensteinen verbinden die Städte.
+- **Fuhrwerke** fahren über die Straßen, halten vor dir an und schimpfen, wenn du im Weg stehst.
+- **Streitende Leute** in den Städten: Du kannst den Streit schlichten (Belohnung) oder anfeuern.
+- Der Held trägt immer einen Helm, hat einen neuen Look und hält die Waffe in der rechten und den Schild in der linken Hand. Im Inventar stehen die Waffen rechts.
+- Auf dem Touchscreen liegen Bogen und Blitz rechts bei Pferd, Karte und Adler.
+
 ## Steuerung
 
 | Taste | Aktion |

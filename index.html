@@ -67,10 +67,8 @@
   .tbtn.gold { color:var(--gold); font-family:'Cinzel',serif; font-weight:700; }
   #tb_blk { right:150px; bottom:34px; } #tb_jmp { right:140px; bottom:118px; } #tb_use { right:56px; bottom:150px; } #tb_dn { right:214px; bottom:110px; }
   .tbtn.small { width:46px; height:46px; font-size:20px; right:calc(18px + env(safe-area-inset-right)); }
-  #tb_sR { top:250px; } #tb_sM { top:304px; right:calc(18px + env(safe-area-inset-right)); }
-  #tb_wpn { right:236px; bottom:34px; }
-  #tb_sU, #tb_sJ, #tb_sK { right:calc(18px + env(safe-area-inset-right)); }
-  #tb_sU { top:358px; } #tb_sJ { top:412px; } #tb_sK { top:466px; }
+  #tCol { position:absolute; top:250px; right:calc(18px + env(safe-area-inset-right)); display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+  #tCol .tbtn.small { position:static; pointer-events:auto; }
   #tRow { position:absolute; top:calc(24px + env(safe-area-inset-top)); right:calc(236px + env(safe-area-inset-right)); display:flex; flex-direction:row-reverse; gap:8px; pointer-events:none; }
   #tRow .tbtn.small { position:static; }
   body.touch #crosshair, body.touch #pause { display:none !important; }
@@ -80,7 +78,7 @@
   body.touch #chatInput { bottom:auto; top:120px; }
   body.touch #prompt { bottom:42%; }
   @media (max-height:500px) { #joyBase { bottom:90px; width:120px; height:120px; } .tbtn.big { width:80px; height:80px; bottom:20px; }
-    #tb_sR { top:130px; } #tb_sM { top:182px; } #tb_sU { top:130px; right:72px; } #tb_sJ { top:182px; right:72px; } #tb_sK { top:234px; right:72px; } #tb_wpn { right:196px; bottom:20px; } #tRow { top:12px; right:136px; } #minimapWrap { width:100px; height:100px; } }
+    #tCol { top:120px; gap:6px; } #tRow { top:12px; right:136px; } #minimapWrap { width:100px; height:100px; } }
   @media (max-width:760px) { #tRow { top:auto; bottom:250px; right:12px; flex-direction:column-reverse; } }
   #toasts { position:absolute; right:20px; bottom:20px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
   .toast { padding:8px 14px; font-size:15px; animation:tin .3s ease-out; }
@@ -132,6 +130,14 @@
   #zeusText { font-size:14px; color:#d8b8ff; margin-top:4px; }
   #bountyText { font-size:14px; color:#ffb0a0; margin-top:4px; } #allyText { font-size:13px; color:#a8e0a0; margin-top:3px; }
   #heroPanel { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); width:min(560px, calc(100% - 24px)); max-height:86vh; overflow:auto; padding:16px 20px; z-index:6; pointer-events:auto; }
+  #heroPanel .invgrid { display:grid; grid-template-columns: 1fr minmax(170px, 40%); gap:14px; align-items:start; }
+  #heroPanel .invweapons { display:flex; flex-direction:column; gap:8px; }
+  #heroPanel .invhead { font-family:'Cinzel',serif; color:var(--gold); font-size:14px; letter-spacing:1px; }
+  #heroPanel .invw { display:grid; grid-template-columns:36px 1fr; grid-template-rows:auto auto; text-align:left; font:inherit; color:#f3e9d2; background:rgba(232,196,106,.1); border:1px solid rgba(232,196,106,.4); border-radius:10px; padding:8px 10px; cursor:pointer; }
+  #heroPanel .invw.on { background:rgba(232,196,106,.32); border-color:var(--gold); }
+  #heroPanel .invw.pass { cursor:default; opacity:.85; }
+  #heroPanel .invw .ic { grid-row:1 / span 2; font-size:24px; align-self:center; }
+  #heroPanel .invw .nm { font-size:15px; } #heroPanel .invw .sb { font-size:12px; opacity:.75; }
   #heroPanel h3 { margin:0 0 4px; font-family:'Cinzel',serif; color:var(--gold); }
   #heroClose { position:absolute; top:10px; right:12px; font-size:20px; background:none; border:none; color:#bfb293; cursor:pointer; }
   .htabs { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; } .htabs .abtn { font-size:15px; padding:7px 12px; }

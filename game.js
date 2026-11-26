@@ -313,8 +313,9 @@ function buildGrass() {
 }
 function updateGrass() {
   const im = GRASS.mesh; if (!im) return;
-  im.visible = !curD && !player.sailing && player.pos.y < 200;
-  const P = player.pos; if (Math.hypot(P.x - GRASS.cx, P.z - GRASS.cz) < 14) return;
+  const P = player.pos;
+  im.visible = !curD && !player.sailing && !player.bird && !player.flying && !player.adminFly && P.y - heightAt(P.x, P.z) < 25;
+  if (!im.visible || Math.hypot(P.x - GRASS.cx, P.z - GRASS.cz) < 14) return;
   GRASS.cx = P.x; GRASS.cz = P.z;
   const R = QUALITY === 'hoch' ? 40 : 28, dummy = updateGrass.d || (updateGrass.d = new THREE.Object3D()), c = new THREE.Color();
   let k = 0, seed = 1;
@@ -329,7 +330,6 @@ function updateGrass() {
       const ix = Math.round((x + HALF) / CELL), iz = Math.round((z + HALF) / CELL); if (ix < 0 || iz < 0 || ix > SEG || iz > SEG) continue;
       const ci = (iz * (SEG + 1) + ix) * 3, r = terrainColorsSRGB[ci] / 255, gg = terrainColorsSRGB[ci + 1] / 255, b = terrainColorsSRGB[ci + 2] / 255;
       if (gg < r * 0.9 || gg < 0.3 || (r > 0.6 && b > 0.5)) continue; // kein Gras auf Fels, Sand, Wegen, Schnee
-      if (roadDist(x, z) < 3) continue;
       dummy.position.set(x, h - 0.03, z); dummy.rotation.set(0, rot, 0); dummy.scale.set(sc, sc * (0.8 + rnd() * 0.6), sc); dummy.updateMatrix();
       im.setMatrixAt(k, dummy.matrix);
       const v = 0.85 + rnd() * 0.3; c.setRGB(r * v * 1.05, gg * v * 1.12, b * v * 0.9, THREE.SRGBColorSpace); im.setColorAt(k, c);
@@ -1345,7 +1345,9 @@ function makeHumanoid(o = {}) {
   if (o.helmet) {
     const hc = o.helmetCol ?? 0xb98d3a;
     hp.push([CAPG(), hc, 0, 0.085, 0, 0, 0, 0, 0.128, 0.14, 0.135], [BOXG(), hc, -0.085, 0.02, 0.07, 0, 0.35, 0, 0.03, 0.12, 0.08], [BOXG(), hc, 0.085, 0.02, 0.07, 0, -0.35, 0, 0.03, 0.12, 0.08],
-      [BOXG(), hc, 0, 0.085, 0.118, 0, 0, 0, 0.02, 0.08, 0.02], [BOXG(), o.crest ?? 0xa01818, 0, 0.27, -0.02, 0, 0, 0, 0.045, 0.14, 0.34, 0.3], [BOXG(), o.crest ?? 0xa01818, 0, 0.17, -0.2, 0.5, 0, 0, 0.04, 0.16, 0.08]);
+      [BOXG(), hc, 0, 0.07, 0.122, 0, 0, 0, 0.022, 0.1, 0.02], [BOXG(), darker(hc, 0.8), 0, 0.125, 0.112, 0, 0, 0, 0.2, 0.025, 0.03],
+      [BOXG(), hc, 0, 0.0, -0.1, 0.35, 0, 0, 0.2, 0.13, 0.03], [BOXG(), darker(hc, 0.7), 0, 0.235, 0, 0, 0, 0, 0.03, 0.04, 0.26],
+      [BOXG(), o.crest ?? 0xa01818, 0, 0.3, -0.02, 0, 0, 0, 0.05, 0.13, 0.32, 0.35], [BOXG(), o.crest ?? 0xa01818, 0, 0.2, -0.21, 0.55, 0, 0, 0.045, 0.2, 0.08, 0.35]);
   }
   if (o.veil) hp.push([CAPG(), o.veil, 0, 0.09, -0.02, -0.25, 0, 0, 0.13, 0.15, 0.145]);
   if (o.wreath) hp.push([cgeo('wreath', () => new THREE.TorusGeometry(1, 0.15, 5, 14)), 0x5a7a2a, 0, 0.15, 0, Math.PI / 2, 0, 0, 0.115, 0.115, 0.115]);
@@ -1361,10 +1363,12 @@ function makeHumanoid(o = {}) {
     const p = new THREE.Group(); p.position.set(sx * 0.255, 1.56, 0); g.add(p);
     charMesh([[SPH(), top, 0, -0.01, 0, 0, 0, 0, 0.075, 0.075, 0.075], [CYL(0.068, 0.062, 0.13, 8), tun, 0, -0.07, 0], [CYL(0.054, 0.046, 0.3, 8), skinC, 0, -0.16, 0]], glow, p);
     const f = new THREE.Group(); f.position.set(0, -0.31, 0); p.add(f);
-    charMesh([[SPH(), skinC, 0, 0, 0, 0, 0, 0, 0.048, 0.048, 0.048], [CYL(0.046, 0.036, 0.26, 8), skinC, 0, -0.13, 0], [SPH(), skinC, 0, -0.3, 0.01, 0, 0, 0, 0.038, 0.055, 0.028]], glow, f);
+    const fp = [[SPH(), skinC, 0, 0, 0, 0, 0, 0, 0.048, 0.048, 0.048], [CYL(0.046, 0.036, 0.26, 8), skinC, 0, -0.13, 0], [SPH(), skinC, 0, -0.3, 0.01, 0, 0, 0, 0.038, 0.055, 0.028]];
+    if (o.bracers) fp.push([CYL(0.05, 0.043, 0.14, 8), o.bracers, 0, -0.19, 0]);
+    charMesh(fp, glow, f);
     return [p, f];
   };
-  const [armL, foreL] = arm(-1), [armR, foreR] = arm(1);
+  const [armL, foreL] = arm(1), [armR, foreR] = arm(-1);
   // Beine mit Knien
   const leg = (sx) => {
     const p = new THREE.Group(); p.position.set(sx * 0.1, 0.95, 0); g.add(p);
@@ -1377,7 +1381,13 @@ function makeHumanoid(o = {}) {
   };
   const [legL, kneeL] = leg(-1), [legR, kneeR] = leg(1);
   let weapon = null, shield = null;
-  if (o.shield && o.weapon !== 'bow') { shield = mesh(cgeo('shieldg', () => new THREE.CylinderGeometry(0.46, 0.46, 0.06, 20)), lam(o.shieldCol ?? 0xb98d3a), -0.05, -0.12, 0.14, foreL); shield.rotation.z = Math.PI / 2; shield.rotation.y = Math.PI / 2; mesh(cgeo('shieldb', () => new THREE.CylinderGeometry(0.15, 0.15, 0.07, 12)), lam(o.shieldEmblem ?? 0x8a1a1a), 0, 0.035, 0, shield); mesh(cgeo('shieldr', () => new THREE.TorusGeometry(0.45, 0.025, 6, 24)), M.bronze, 0, 0.03, 0, shield).rotation.x = Math.PI / 2; }
+  if (o.shield && o.weapon !== 'bow') {
+    shield = new THREE.Group(); g.add(shield);
+    const disc = mesh(cgeo('shieldg', () => new THREE.CylinderGeometry(0.42, 0.42, 0.05, 22)), lam(o.shieldCol ?? 0xb98d3a), 0, 0, 0, shield);
+    mesh(cgeo('shieldb', () => new THREE.CylinderGeometry(0.14, 0.14, 0.06, 14)), lam(o.shieldEmblem ?? 0x8a1a1a), 0, 0.03, 0, shield);
+    mesh(cgeo('shieldr', () => new THREE.TorusGeometry(0.41, 0.025, 6, 26)), M.bronze, 0, 0.028, 0, shield).rotation.x = Math.PI / 2;
+    disc.receiveShadow = true;
+  }
   const W = (x, y, z, parent = foreR) => { weapon = new THREE.Group(); weapon.position.set(x, y, z); parent.add(weapon); return weapon; };
   const steel = lam(0xd8d8d0);
   if (o.weapon === 'dagger') { W(0, -0.3, 0.03); mesh(new THREE.BoxGeometry(0.045, 0.02, 0.32), steel, 0, 0, 0.24, weapon); mesh(new THREE.BoxGeometry(0.14, 0.035, 0.04), M.bronze, 0, 0, 0.07, weapon); }
@@ -1391,8 +1401,10 @@ function makeHumanoid(o = {}) {
   if (o.weapon === 'club') { W(0, -0.3, 0); mesh(new THREE.CylinderGeometry(0.15, 0.06, 1.3, 7), M.darkwood, 0, 0, 0.55, weapon).rotation.x = Math.PI / 2; }
   if (o.weapon === 'staff') { W(0, -0.3, 0); mesh(new THREE.CylinderGeometry(0.025, 0.03, 1.9, 6), M.darkwood, 0, 0.3, 0.05, weapon); }
   if (o.scale) g.scale.setScalar(o.scale);
-  return { root: g, legL, legR, kneeL, kneeR, armL, armR, foreL, foreR, head, weapon, shield, phase: rand() * 6 };
+  if (shield) { shield.position.set(0.4, 1.22, 0.06); shield.rotation.set(0, 0.35, Math.PI / 2); }
+  return { root: g, legL, legR, kneeL, kneeR, armL, armR, foreL, foreR, head, weapon, shield, shieldK: 0, phase: rand() * 6 };
 }
+const _shQ0 = new THREE.Quaternion(), _shQ1 = new THREE.Quaternion(), _shE0 = new THREE.Euler(), _shE1 = new THREE.Euler();
 function animateHumanoid(h, speed, dt, opt = {}) {
   h.phase += dt * (speed > 0.1 ? 2.4 + speed * 0.62 : 0);
   const run = speed > 9, amp = Math.min(1, speed / 6) * (run ? 0.85 : 0.6);
@@ -1401,16 +1413,23 @@ function animateHumanoid(h, speed, dt, opt = {}) {
   if (!opt.sitting) { h.legL.rotation.x = s; h.legR.rotation.x = -s; h.legL.rotation.z = 0; h.legR.rotation.z = 0; if (h.kneeL) { h.kneeL.rotation.x = kneeA; h.kneeR.rotation.x = kneeB; } }
   else { h.legL.rotation.x = -1.45; h.legR.rotation.x = -1.45; h.legL.rotation.z = -0.3; h.legR.rotation.z = 0.3; if (h.kneeL) { h.kneeL.rotation.x = 1.35; h.kneeR.rotation.x = 1.35; } }
   h.armL.rotation.x = opt.block ? -1.35 : (opt.sitting ? -0.5 : -s * 0.75);
-  h.armL.rotation.z = opt.block ? 0.5 : 0.06;
+  h.armL.rotation.z = opt.block ? -0.5 : -0.06;
   if (h.foreL) h.foreL.rotation.x = opt.block ? -0.5 : opt.sitting ? -0.6 : -0.2 - Math.abs(s) * (run ? 0.9 : 0.35);
   if (opt.attack !== undefined && opt.attack > 0) {
     const t = 1 - opt.attack;
     h.armR.rotation.x = t < 0.35 ? lerp(-0.3, -2.7, t / 0.35) : lerp(-2.7, -0.4, (t - 0.35) / 0.65);
     if (h.foreR) h.foreR.rotation.x = t < 0.35 ? lerp(-0.2, -1.2, t / 0.35) : lerp(-1.2, 0, (t - 0.35) / 0.65);
   } else { h.armR.rotation.x = opt.sitting ? -0.6 : s * 0.75 - (h.weapon ? 0.25 : 0); if (h.foreR) h.foreR.rotation.x = opt.sitting ? -0.6 : -0.25 - Math.abs(s) * (run ? 0.9 : 0.35) - (h.weapon ? 0.2 : 0); }
-  h.armR.rotation.z = -0.06;
+  h.armR.rotation.z = 0.06;
   if (opt.idleTalk) { h.armR.rotation.x = -0.6 + Math.sin(performance.now() / 300) * 0.25; if (h.foreR) h.foreR.rotation.x = -0.9; }
-  if (opt.bow) { h.armL.rotation.x = -1.5; h.armL.rotation.z = 0; if (h.foreL) h.foreL.rotation.x = 0; h.armR.rotation.x = -1.35; h.armR.rotation.z = -0.55 + (opt.attack > 0 ? opt.attack * 0.4 : 0); if (h.foreR) h.foreR.rotation.x = -1.5; }
+  if (opt.bow) { h.armL.rotation.x = -1.5; h.armL.rotation.z = 0; if (h.foreL) h.foreL.rotation.x = 0; h.armR.rotation.x = -1.35; h.armR.rotation.z = 0.55 - (opt.attack > 0 ? opt.attack * 0.4 : 0); if (h.foreR) h.foreR.rotation.x = -1.5; }
+  if (h.shield && h.shield.parent === h.root) {
+    h.shieldK = lerp(h.shieldK || 0, opt.block ? 1 : 0, Math.min(1, dt * 14));
+    const k = h.shieldK, bob = Math.sin(h.phase) * 0.03 * (1 - k);
+    h.shield.position.set(lerp(0.4, 0.08, k), lerp(1.22, 1.32, k) + bob, lerp(0.06, 0.48, k));
+    _shE0.set(0, 0.35, Math.PI / 2); _shQ0.setFromEuler(_shE0); _shE1.set(Math.PI / 2, 0, 0); _shQ1.setFromEuler(_shE1);
+    h.shield.quaternion.copy(_shQ0).slerp(_shQ1, k);
+  }
   if (h.head) { h.head.rotation.x = speed > 0.1 ? Math.sin(h.phase * 2) * 0.03 : Math.sin(performance.now() / 1400 + h.phase) * 0.04; }
 }
 function makeWolf(col = 0x6e6a64, heads = 1) {
@@ -1971,6 +1990,7 @@ function playerAttack() {
   if (sirenTap()) return;
   if (dialog || heroOpen || player.dead || (player.swimming && !player.gear.includes('poseidon') && !player.bird && player.form !== 'siren') || player.stoned > 0 || player.sailing) return;
   if (OLY && OLY.ev === 'speer') { throwJavelin(); return; }
+  if (player.mounted && HORSES[player.horse].siege) { siegeFire(); return; }
   if (player.blocking) { shieldBash(); return; }
   if (player.bird) { throwBlitz(true); return; }
   if (player.form === 'siren') { sirenSong(); return; }
@@ -2037,7 +2057,7 @@ function refreshHeroLook() {
   hero.root.position.copy(p); hero.root.rotation.y = r; scene.add(hero.root);
   netSendLook();
 }
-function heroLook() { const gr = player.gear || []; const sk = (SKINS.find(k => k.id === player.skin) || SKINS[0]).look; return Object.assign({ tunic: 0x9b1c1c, armor: (player.aTier ? ARMORS[player.aTier].col : null) || (player.hasArmor ? 0xb98d3a : null), helmet: player.aTier >= 2 || player.hasArmor || gr.includes('hadeshelm'), helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : null, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xe8c46a, shield: player.shieldTier > 0 || gr.includes('aigis'), shieldCol: player.shieldTier >= 2 ? 0xb98d3a : 0x8a6a3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : (WEAPONS[player.wTier || 0].model || 'sword'), cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x3a2a1e, greaves: player.hasArmor || player.aTier >= 2, hair: 0x2a1a0e }, sk, player.bowMode ? { weapon: 'bow' } : player.blitzMode ? { weapon: 'keraunos' } : {}); }
+function heroLook() { const gr = player.gear || []; const sk = (SKINS.find(k => k.id === player.skin) || SKINS[0]).look; return Object.assign({ tunic: 0x24456e, armor: (player.aTier ? ARMORS[player.aTier].col : null) || (player.hasArmor ? 0xb98d3a : null), helmet: true, helmetCol: gr.includes('hadeshelm') ? 0x2a2a34 : (player.aTier >= 2 || player.hasArmor) ? 0xc9a24a : 0x8f6f45, crest: gr.includes('hadeshelm') ? 0x3a80ff : 0xa01818, bracers: 0x5a3a1e, beard: true, beardCol: 0x3a2414, skin: 0xc8946a, shield: player.shieldTier > 0 || gr.includes('aigis'), shieldCol: player.shieldTier >= 2 ? 0xb98d3a : 0x8a6a3a, shieldEmblem: 0x1c3a7a, weapon: gr.includes('hephklinge') ? 'fireSword' : gr.includes('poseidon') ? 'trident' : (WEAPONS[player.wTier || 0].model || 'sword'), cape: CAPE_COLORS[nameHash(heroName()) % CAPE_COLORS.length], pants: 0x2e2a26, belt: 0x6a4424, greaves: player.hasArmor || player.aTier >= 2, hair: 0x2a1a0e }, sk, player.bowMode ? { weapon: 'bow' } : player.blitzMode ? { weapon: 'keraunos' } : {}, { helmet: true }); }
 
 // ---------- Sammelobjekte ----------
 const ampGeo = (() => { const pts = []; const prof = [[0, 0], [0.18, 0.02], [0.3, 0.25], [0.36, 0.55], [0.3, 0.85], [0.14, 1.0], [0.1, 1.15], [0.16, 1.22], [0.0, 1.22]]; for (const [r, y] of prof) pts.push(new THREE.Vector2(r, y)); return new THREE.LatheGeometry(pts, 12); })();
@@ -3042,6 +3062,9 @@ const HORSES = {
   reisewagen: { name: 'Reisewagen mit Dach', cost: 220, speed: [27, 40], col: 0x8a6a4a, chariot: true, style: 'reise' },
   wagen: { name: 'Streitwagen', cost: 450, speed: [30, 46], col: 0xece6dc, chariot: true, war: true, style: 'streit' },
   prunkwagen: { name: 'Goldener Prunkwagen', cost: 900, speed: [34, 52], col: 0xf4f0ea, chariot: true, war: true, style: 'prunk' },
+  skorpion: { name: 'Skorpion (Pfeilgeschütz)', cost: 700, speed: [13, 20], col: 0x5a3a22, chariot: true, siege: 'skorpion', style: 'skorpion' },
+  rammbock: { name: 'Rammbock', cost: 550, speed: [11, 18], col: 0x5a3a22, chariot: true, siege: 'rammbock', style: 'rammbock' },
+  katapult: { name: 'Katapult (Steinschleuder)', cost: 1200, speed: [10, 15], col: 0x3a2a1e, chariot: true, siege: 'katapult', style: 'katapult' },
 };
 const WEAPONS = [
   { name: 'Kleiner Dolch', cost: 0, dmg: -6, model: 'dagger' }, { name: 'Bronzeschwert', cost: 40, dmg: 0 }, { name: 'Eisenschwert', cost: 80, dmg: 6 },
@@ -3083,6 +3106,7 @@ const RUMORS = [
   'Wenn du zu viele Soldaten erschlägst, schicken die Städte Wachen hinter dir her.',
   'Der Wagenbauer Pelops baut Karren, Reisewagen, Streitwagen und sogar einen goldenen Prunkwagen!',
   'Der Schiffsbauer in Piräus baut die besten Triremen der Ägäis.',
+  'Kriegsmeister Demetrios verkauft Skorpione, Katapulte und Rammböcke – in Athen, Sparta, Korinth, Rhodos und Troja.',
   'In deiner eigenen Stadt kannst du Bürger zu Soldaten ausbilden lassen.',
 ];
 const TAVERNS = [];
@@ -3103,6 +3127,17 @@ function buildServices() {
     const show = makeChariot(['karren', 'reise', 'streit', 'prunk'][Math.floor(rand() * 4)]); const [sx2, sz2] = f.w(0.5, 0.8); show.root.position.set(sx2, heightAt(sx2, sz2), sz2); show.root.rotation.y = f.rot + Math.PI / 2; scene.add(show.root);
     const [nx, nz] = f.w(-2, 3.6);
     addNPC('Wagenbauer Pelops', nx, nz, { tunic: 0x7a5a2a, pants: 0x3a2a1a, beard: true, hair: 0x5a4a3a, belt: 0x2a1a0e }, () => talkStable(true)).yaw = f.rot;
+  }
+  for (const k of ['athen', 'sparta', 'korinth', 'rhodos', 'troja']) {
+    const L = LOCS[k]; if (!L) continue; const sp = findSpotNear(L, 18, L.r * 1.4, 9); if (!sp) continue;
+    reserve(sp[0], sp[1], 9);
+    const f = new Frame(sp[0], sp[1], Math.round(Math.atan2(L.x - sp[0], L.z - sp[1]) / (Math.PI / 2)) * Math.PI / 2);
+    for (const [px, pz] of [[-4, -3], [4, -3], [-4, 3], [4, 3]]) f.box(M.darkwood, px, 0, pz, 0.35, 3.8, 0.35, true);
+    f.put(G.prism, M.roof2, 0, 3.8, 0, 0, Math.PI / 2, 0, 6.6, 1.3, 9);
+    for (let i = 0; i < 4; i++) f.put(G.cyl, M.darkwood, -3 + i * 0.5, 0.2, -2.4, 0, 0, Math.PI / 2, 0.15, 3, 0.15);
+    const show = makeSiege(['skorpion', 'katapult', 'rammbock'][Math.floor(rand() * 3)]); const [sx2, sz2] = f.w(0.5, 0.3); show.root.position.set(sx2, heightAt(sx2, sz2), sz2); show.root.rotation.y = f.rot + Math.PI / 2; show.root.scale.setScalar(0.8); scene.add(show.root);
+    const [nx, nz] = f.w(-2.5, 4.2);
+    addNPC('Kriegsmeister Demetrios', nx, nz, { tunic: 0x5a2a1a, armor: 0x8a7a5a, helmet: true, helmetCol: 0x8a6a3a, crest: 0x2a2a2a, beard: true, hair: 0x3a3a3a, greaves: true }, talkWarMaster).yaw = f.rot;
   }
   for (const k of ['athen', 'sparta', 'olympia', 'theben', 'delphi']) {
     const L = LOCS[k]; const sp = findSpotNear(L, 15, L.r * 1.3, 9); if (!sp) continue;
@@ -3260,7 +3295,7 @@ function cancelBounty() { S.bounty = null; for (const e of enemies.filter(e => e
 
 // ---------- Stall, Schmied, Schiffsbauer ----------
 function talkStable(wagons) {
-  const opts = Object.entries(HORSES).filter(([, h]) => !!h.chariot === !!wagons).map(([k, h]) => {
+  const opts = Object.entries(HORSES).filter(([, h]) => !!h.chariot === !!wagons && !h.siege).map(([k, h]) => {
     const own = player.horses.includes(k);
     return { label: (own ? (player.horse === k ? '✔ ' : 'Reiten: ') : 'Kaufen: ') + h.name + ' – Tempo ' + h.speed[1] + (own ? '' : ' (' + h.cost + ' Drachmen)'), fn: () => {
       if (!own) { if (!spend(h.cost)) return; player.horses.push(k); toast(h.name + ' gehört jetzt dir!', 'gold'); }
@@ -3270,7 +3305,135 @@ function talkStable(wagons) {
   opts.push({ label: 'Auf Wiedersehen', fn: () => { } });
   talk([{ who: wagons ? 'Wagenbauer Pelops' : 'Stallmeister', text: (wagons ? 'Räder, Achsen, Pferde – ich baue die schnellsten Wagen von Hellas! Streit- und Prunkwagen geben dir im Kampf +30 % Schaden.' : 'Die besten Pferde von Hellas!') + ' Dein aktuelles Gefährt: ' + HORSES[player.horse].name + '. (R zum Rufen)', opts }]);
 }
+// ---------- Kriegsgeräte: Skorpion, Katapult, Rammbock ----------
+const SIEGE_INFO = {
+  skorpion: 'Pfeilgeschütz mit Torsionsfedern. Schießt schwere Bolzen sehr weit und sehr genau.',
+  katapult: 'Wirft Felsbrocken im hohen Bogen. Trifft ganze Gruppen auf einmal – langsam nachzuladen.',
+  rammbock: 'Ein überdachter Widder mit Bronzekopf. Rammt alles vor dir mit gewaltiger Wucht zur Seite.',
+};
+function makeSiege(style) {
+  const g = new THREE.Group(), horsesM = [], wheels = [];
+  const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, p = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = true; p.add(m); return m; };
+  const wood = addDetail(new THREE.MeshLambertMaterial({ color: 0x7a5a38 }), 0.3, 2.5), dark = addDetail(new THREE.MeshLambertMaterial({ color: 0x4a3420 }), 0.3, 2.5), rope = lam(0xc8b080), bronze = M.bronze;
+  const out = { root: g, horses: horsesM, wheels, legs: null, tail: null, phase: 0, chariot: true, siege: style, riderZ: -1.2, riderY: 1.0 };
+  const wheel = (x, z, r = 0.6) => { const w = add(new THREE.CylinderGeometry(r, r, 0.16, 14), dark, x, r, z, 0, 0, Math.PI / 2); add(new THREE.TorusGeometry(r, 0.04, 5, 16), lam(0x5a5a5a), 0, 0.085, 0, Math.PI / 2, 0, 0, w); for (let k = 0; k < 3; k++) add(new THREE.BoxGeometry(r * 1.9, 0.18, 0.06), wood, 0, 0, 0, 0, k * Math.PI / 3, 0, w); wheels.push(w); };
+  if (style !== 'rammbock') {
+    for (const s of [-0.55, 0.55]) { const h = makeHorse(style === 'katapult' ? 0x3a2a1e : 0x5a3a22, false); h.root.position.set(s, 0, 2.0); g.add(h.root); horsesM.push(h); }
+    out.legs = horsesM[0].legs; out.tail = horsesM[0].tail;
+    add(new THREE.BoxGeometry(0.12, 0.12, 2.6), wood, 0, 1.0, 0.6);
+    add(new THREE.BoxGeometry(1.9, 0.18, 3.4), wood, 0, 0.95, -1.9);
+    for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.12, 0.35, 3.4), dark, s * 0.95, 1.15, -1.9);
+    wheel(-1.08, -0.9); wheel(1.08, -0.9); wheel(-1.08, -2.9); wheel(1.08, -2.9);
+  }
+  if (style === 'skorpion') {
+    const top = new THREE.Group(); top.position.set(0, 1.05, -2.6); g.add(top); out.top = top;
+    add(new THREE.CylinderGeometry(0.12, 0.2, 1.1, 8), dark, 0, 0.55, 0, 0, 0, 0, top);
+    const head = new THREE.Group(); head.position.set(0, 1.2, 0); top.add(head); out.aim = head;
+    add(new THREE.BoxGeometry(0.22, 0.18, 2.4), wood, 0, 0, 0.3, 0, 0, 0, head);
+    add(new THREE.BoxGeometry(1.0, 0.5, 0.3), dark, 0, 0.05, 1.0, 0, 0, 0, head);
+    for (const s of [-1, 1]) { add(new THREE.CylinderGeometry(0.1, 0.1, 0.6, 8), rope, s * 0.35, 0.05, 1.0, 0, 0, 0, head); const arm = add(new THREE.BoxGeometry(0.85, 0.08, 0.1), wood, s * 0.85, 0.05, 0.9, 0, s * 0.35, 0, head); arm.castShadow = true; }
+    add(new THREE.BoxGeometry(2.3, 0.015, 0.015), rope, 0, 0.05, 0.45, 0, 0, 0, head);
+    const bolt = add(new THREE.CylinderGeometry(0.035, 0.035, 1.6, 6), wood, 0, 0.13, 0.9, Math.PI / 2, 0, 0, head); add(new THREE.ConeGeometry(0.08, 0.25, 6), bronze, 0, 0.9, 0, 0, 0, 0, bolt); out.bolt = bolt;
+    add(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 6), bronze, 0.2, 0, -0.8, 0, 0, Math.PI / 2, head);
+  }
+  if (style === 'katapult') {
+    const fr = new THREE.Group(); fr.position.set(0, 1.05, -2.0); g.add(fr);
+    for (const s of [-1, 1]) { add(new THREE.BoxGeometry(0.2, 0.25, 2.8), dark, s * 0.6, 0.15, 0, 0, 0, 0, fr); add(new THREE.BoxGeometry(0.18, 1.4, 0.18), wood, s * 0.6, 0.85, 0.45, -0.25, 0, 0, fr); }
+    add(new THREE.BoxGeometry(1.4, 0.2, 0.25), wood, 0, 1.55, 0.6, 0, 0, 0, fr);
+    add(new THREE.BoxGeometry(1.0, 0.25, 0.3), rope, 0, 0.55, 0.0, 0, 0, 0, fr);
+    add(new THREE.CylinderGeometry(0.22, 0.22, 1.25, 10), rope, 0, 0.35, -0.6, 0, 0, Math.PI / 2, fr);
+    const arm = new THREE.Group(); arm.position.set(0, 0.35, -0.6); fr.add(arm); out.arm = arm;
+    add(new THREE.BoxGeometry(0.16, 0.16, 2.6), wood, 0, 0, -1.2, 0, 0, 0, arm);
+    const cup = add(new THREE.SphereGeometry(0.32, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), dark, 0, 0.1, -2.45, 0, 0, 0, arm);
+    out.stone = add(cgeo('stone', () => new THREE.DodecahedronGeometry(0.3, 0)), lam(0x8a8478), 0, 0.15, 0, 0, 0, 0, cup);
+    arm.rotation.x = -0.15; // gespannt (nach hinten unten)
+  }
+  if (style === 'rammbock') {
+    out.riderZ = -3.4; out.riderY = 0;
+    wheel(-1.2, 1.0, 0.55); wheel(1.2, 1.0, 0.55); wheel(-1.2, -1.6, 0.55); wheel(1.2, -1.6, 0.55);
+    for (const [x, z] of [[-1.05, 1.6], [1.05, 1.6], [-1.05, -2.2], [1.05, -2.2], [-1.05, -0.3], [1.05, -0.3]]) add(new THREE.BoxGeometry(0.2, 2.4, 0.2), wood, x, 1.4, z);
+    for (const s of [-1, 1]) add(new THREE.BoxGeometry(0.14, 0.2, 4.0), dark, s * 1.05, 0.6, -0.3);
+    for (const s of [-1, 1]) { const r = add(new THREE.BoxGeometry(1.5, 0.12, 4.4), addDetail(new THREE.MeshLambertMaterial({ color: 0x8a6a40 }), 0.5, 4), s * 0.62, 2.85, -0.3, 0, 0, s * -0.62); r.receiveShadow = true; }
+    for (let k = 0; k < 4; k++) add(new THREE.BoxGeometry(2.2, 0.06, 0.18), dark, 0, 2.62, 1.4 - k * 1.2);
+    const ram = new THREE.Group(); ram.position.set(0, 1.55, -0.3); g.add(ram); out.ram = ram;
+    add(new THREE.CylinderGeometry(0.22, 0.26, 5.6, 10), dark, 0, 0, 0.6, Math.PI / 2, 0, 0, ram);
+    add(new THREE.SphereGeometry(0.42, 10, 8), bronze, 0, 0, 3.4, 0, 0, 0, ram).scale.set(1, 0.9, 1.2);
+    for (const s of [-1, 1]) add(new THREE.ConeGeometry(0.12, 0.5, 6), bronze, s * 0.3, 0.28, 3.3, 0.5, 0, s * 0.6, ram);
+    for (const z of [1.6, -0.6]) { add(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 4), rope, -0.15, 0.55, z, 0, 0, 0.2); add(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 4), rope, 0.15, 0.55, z, 0, 0, -0.2); }
+    // zwei Helfer, die schieben
+    out.crew = [];
+    for (const s of [-0.55, 0.55]) { const c = makeHumanoid({ tunic: 0x6a5a3a, helmet: true, helmetCol: 0x6a5030, crest: 0x6a5030, skin: 0xb8865a }); c.root.position.set(s, 0, -2.4); c.root.scale.setScalar(0.95); g.add(c.root); out.crew.push(c); }
+  }
+  return out;
+}
+function animateSiege(H, speed, dt) {
+  if (H.crew) for (const c of H.crew) { animateHumanoid(c, speed * 0.35, dt); c.armL.rotation.x = -1.4; c.armR.rotation.x = -1.4; }
+  if (H.arm) { const tg = H.armT ?? -0.15; H.arm.rotation.x = lerp(H.arm.rotation.x, tg, Math.min(1, dt * (tg > 1 ? 16 : 1.0))); if (tg > 1 && H.arm.rotation.x > 1.35) H.armT = -0.15; if (H.stone) H.stone.visible = H.arm.rotation.x < 0.05; }
+  if (H.ram) { H.ramT = Math.max(0, (H.ramT || 0) - dt * 2.2); H.ram.position.z = -0.3 + Math.sin(Math.min(1, H.ramT) * Math.PI) * 1.4; }
+  if (H.aim) { H.aim.rotation.x = lerp(H.aim.rotation.x, -0.08 - camPitch * 0.3, Math.min(1, dt * 6)); if (H.bolt) H.bolt.visible = player.atkCd <= 0.2; }
+}
+let camShake = 0;
+function siegeExplode(p, dmg) {
+  const R = 7;
+  for (const e of enemies) { if (e.dead) continue; const d = Math.hypot(e.x - p.x, e.z - p.z); if (d < R && Math.abs(e.y - p.y) < 6) { damageEnemy(e, dmg * (1 - d / (R * 1.4))); if (!e.dead && !e.def.boss) { const k = 3 / (d || 1); e.kb = { x: (e.x - p.x) * k * 4, z: (e.z - p.z) * k * 4, t: 0.25 }; } } }
+  const m = new THREE.Mesh(G.sphere, new THREE.MeshBasicMaterial({ color: 0xb8a888, transparent: true, opacity: 0.7, depthWrite: false })); m.position.copy(p); m.scale.setScalar(R * 0.5); scene.add(m);
+  bolts.push({ line: m, t: 0.35 });
+  floatText(p.x, p.y + 2, p.z, 'KRACH!', '#e8c46a', true); sfx('hit');
+  if (Math.hypot(p.x - player.pos.x, p.z - player.pos.z) < 60) camShake = 0.4;
+}
+function siegeFire() {
+  const H = HORSES[player.horse], kind = H.siege;
+  if (player.atkCd > 0) return;
+  camera.getWorldDirection(_cdir);
+  const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
+  const pick = (maxD, cone) => { let best = null, bs = cone; for (const e of enemies) { if (e.dead) continue; const v = new V3(e.x - camera.position.x, e.y + 1 - camera.position.y, e.z - camera.position.z), d = v.length(); if (d > maxD) continue; const a = Math.acos(clamp(v.normalize().dot(_cdir), -1, 1)); if (a < bs) { bs = a; best = e; } } return best; };
+  if (kind === 'skorpion') {
+    player.atkCd = 1.1; sfx('swing');
+    const o = new V3(player.pos.x - Math.sin(player.yaw) * 2.6, player.pos.y + 2.3, player.pos.z - Math.cos(player.yaw) * 2.6);
+    const t = pick(140, 0.12); const tgt = t ? new V3(t.x, t.y + (t.def.top || 2) * 0.55, t.z) : camera.position.clone().addScaledVector(_cdir, 120);
+    const dist = tgt.distanceTo(o); tgt.y += dist * dist * 9.8 / (2 * 95 * 95);
+    const vel = tgt.sub(o).normalize().multiplyScalar(95);
+    const g = new THREE.Group(); const a = new THREE.Mesh(ARROW_GEO, M.darkwood); a.scale.set(2.4, 2.4, 2); g.add(a); const tip = new THREE.Mesh(ARROW_TIP, M.bronze); tip.scale.set(2.4, 2.4, 2); g.add(tip);
+    g.position.copy(o); scene.add(g);
+    arrows.push({ g, vel, t: 5, stuck: 0, dmg: 70 + playerDamage() * 1.5 });
+  } else if (kind === 'katapult') {
+    player.atkCd = 3.2; sfx('swing'); horse.armT = 1.55;
+    const o = new V3(player.pos.x - Math.sin(player.yaw) * 2, player.pos.y + 3.2, player.pos.z - Math.cos(player.yaw) * 2);
+    const t = pick(160, 0.2); let tgt;
+    if (t) tgt = new V3(t.x, t.y, t.z); else { const d = clamp(40 + camPitch * -60, 25, 150); tgt = new V3(player.pos.x + fx * d, 0, player.pos.z + fz * d); tgt.y = groundAt(tgt.x, tgt.z); }
+    const dx = tgt.x - o.x, dz = tgt.z - o.z, dh = Math.hypot(dx, dz), T = 0.9 + dh / 34;
+    const vel = new V3(dx / T, (tgt.y - o.y + 0.5 * 9.8 * T * T) / T, dz / T);
+    const g = new THREE.Group(); const st = new THREE.Mesh(cgeo('stone', () => new THREE.DodecahedronGeometry(0.3, 0)), lam(0x8a8478)); st.scale.setScalar(1.6); st.castShadow = true; g.add(st);
+    g.position.copy(o); scene.add(g);
+    arrows.push({ g, vel, t: 9, stuck: 0, dmg: 150 + playerDamage() * 2, stone: true });
+  } else {
+    player.atkCd = 1.6; horse.ramT = 1; sfx('block');
+    setTimeout(() => {
+      let n = 0;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const dx = e.x - player.pos.x, dz = e.z - player.pos.z, d = Math.hypot(dx, dz);
+        const fy = Math.sin(player.yaw), fzz = Math.cos(player.yaw);
+        if (d < 6.5 + (e.def.hitR || 0.3) && (dx * fy + dz * fzz) / (d || 1) > 0.45) { damageEnemy(e, 130 + playerDamage() * 2); n++; if (!e.dead && !e.def.boss) { e.kb = { x: fy * 22, z: fzz * 22, t: 0.3 }; e.stunT = 1.5; } }
+      }
+      camShake = n ? 0.35 : 0.15;
+    }, 220);
+  }
+}
+function talkWarMaster() {
+  const opts = Object.entries(HORSES).filter(([, h]) => h.siege).map(([k, h]) => {
+    const own = player.horses.includes(k);
+    return { label: (own ? (player.horse === k ? '✔ ' : 'Nehmen: ') : 'Kaufen: ') + h.name + (own ? '' : ' (' + h.cost + ' Drachmen)'), fn: () => {
+      if (!own) { if (!spend(h.cost)) return; player.horses.push(k); banner(h.name + ' gehört dir!', SIEGE_INFO[h.siege] + ' Mit R rufen, mit Angriff abfeuern.'); }
+      player.horse = k; setHorseModel(); save(); talkWarMaster();
+    } };
+  });
+  opts.push({ label: 'Was können die Geräte?', fn: () => talk([{ who: 'Kriegsmeister Demetrios', text: 'Skorpion: ' + SIEGE_INFO.skorpion + ' Katapult: ' + SIEGE_INFO.katapult + ' Rammbock: ' + SIEGE_INFO.rammbock + ' Ruf dein Gerät mit R, ziel mit der Kamera und greif an, um zu feuern. Ideal, um Städte zu belagern!', opts: [{ label: 'Zurück', fn: () => talkWarMaster() }] }]) });
+  opts.push({ label: 'Auf Wiedersehen', fn: () => { } });
+  talk([{ who: 'Kriegsmeister Demetrios', text: 'Mit Schwertern allein erobert man keine Mauern! Ich baue echte Kriegsgeräte – wie sie die Belagerer von Rhodos benutzt haben. Dein Gefährt: ' + HORSES[player.horse].name + '.', opts }]);
+}
 function makeChariot(style = 'streit') {
+  if (SIEGE_INFO[style]) return makeSiege(style);
   const g = new THREE.Group(), horsesM = [];
   const one = style === 'karren', hc = style === 'prunk' ? 0xf4f0ea : style === 'streit' ? 0xece6dc : style === 'reise' ? 0x3a2a1a : 0x6b4325;
   for (const s of (one ? [0] : [-0.5, 0.5])) { const h = makeHorse(hc, false); h.root.position.set(s, 0, 1.6); g.add(h.root); horsesM.push(h); }
@@ -3693,17 +3856,26 @@ function renderHero() {
     }
   } else if (heroTab === 'gear') {
     const cur = player.bowMode ? 'bow' : player.blitzMode ? 'blitz' : 'sword';
-    const wr = document.createElement('div'); wr.className = 'htabs';
-    for (const [w, lab] of [['sword', '⚔ Schwert'], ['bow', '🏹 Bogen'], ['blitz', '⚡ Keraunos']]) { if (w === 'blitz' && !player.gear.includes('keraunos')) continue; wr.appendChild(adminBtn(lab + (cur === w ? ' ✔' : ''), () => { setWeapon(w); renderHero(); }, cur === w ? 'on' : '')); }
-    const wl = document.createElement('div'); wl.className = 'ahint'; wl.textContent = 'Waffe ausrüsten:'; body.appendChild(wl); body.appendChild(wr);
-    row('Waffe: ' + WEAPONS[player.wTier || 0].name + ' (' + Math.round(playerDamage()) + ' Schaden)');
-    row('Bogen: ' + Math.round(bowDamage()) + ' Schaden pro Pfeil – Taste X / 🏹 zum Wechseln');
-    row('Rüstung: ' + ARMORS[player.aTier || 0].name + ' (−' + Math.round(ARMORS[player.aTier || 0].red * 100) + ' % Schaden)');
-    row('Leben: ' + Math.ceil(player.hp) + ' / ' + player.maxHp);
-    row('Reittier: ' + HORSES[player.horse || 'gaul'].name + (player.shipTier ? ' · Schiff: ' + SHIPS[player.shipTier].name : ''));
-    row('Relikte: ' + (player.relics.length ? player.relics.map(k => RELICS[k].name).join(', ') : 'keine'));
-    row('Göttliche Schätze: ' + (player.gear.length ? player.gear.map(k => GEAR[k].name).join(', ') : 'keine'));
-    row('Gefolge: ' + (allies.length ? allies.map(a => a.def.name).join(', ') : 'niemand'));
+    const grid = document.createElement('div'); grid.className = 'invgrid'; body.appendChild(grid);
+    const left = document.createElement('div'), right = document.createElement('div'); right.className = 'invweapons'; grid.appendChild(left); grid.appendChild(right);
+    const lrow = (label) => { const r = document.createElement('div'); r.className = 'arow'; const sp = document.createElement('span'); sp.textContent = label; r.appendChild(sp); left.appendChild(r); };
+    const wh = document.createElement('div'); wh.className = 'invhead'; wh.textContent = 'Waffen'; right.appendChild(wh);
+    const weapons = [['sword', '⚔', WEAPONS[player.wTier || 0].name, Math.round(playerDamage()) + ' Schaden'], ['bow', '🏹', 'Bogen', Math.round(bowDamage()) + ' pro Pfeil']];
+    if (player.gear.includes('keraunos')) weapons.push(['blitz', '⚡', 'Keraunos', 'Blitze werfen und schlagen']);
+    for (const [w, ic, name, sub] of weapons) {
+      const b = document.createElement('button'); b.className = 'invw' + (cur === w ? ' on' : '');
+      b.innerHTML = '<span class="ic"></span><span class="nm"></span><span class="sb"></span>';
+      b.children[0].textContent = ic; b.children[1].textContent = name + (cur === w ? ' ✔' : ''); b.children[2].textContent = sub;
+      b.onclick = () => { setWeapon(w); renderHero(); }; right.appendChild(b);
+    }
+    if (player.shieldTier > 0 || player.gear.includes('aigis')) { const b = document.createElement('div'); b.className = 'invw pass'; b.innerHTML = '<span class="ic">🛡</span><span class="nm"></span><span class="sb">Blocken</span>'; b.children[1].textContent = player.gear.includes('aigis') ? 'Aigis' : ['', 'Holzschild', 'Bronzeschild'][player.shieldTier]; right.appendChild(b); }
+    if (HORSES[player.horse || 'gaul'].siege) { const b = document.createElement('div'); b.className = 'invw pass'; b.innerHTML = '<span class="ic">🏹</span><span class="nm"></span><span class="sb">Kriegsgerät – R rufen</span>'; b.children[0].textContent = '🪨'; b.children[1].textContent = HORSES[player.horse].name; right.appendChild(b); }
+    lrow('Rüstung: ' + ARMORS[player.aTier || 0].name + ' (−' + Math.round(ARMORS[player.aTier || 0].red * 100) + ' % Schaden)');
+    lrow('Leben: ' + Math.ceil(player.hp) + ' / ' + player.maxHp);
+    lrow('Reittier: ' + HORSES[player.horse || 'gaul'].name + (player.shipTier ? ' · Schiff: ' + SHIPS[player.shipTier].name : ''));
+    lrow('Relikte: ' + (player.relics.length ? player.relics.map(k => RELICS[k].name).join(', ') : 'keine'));
+    lrow('Göttliche Schätze: ' + (player.gear.length ? player.gear.map(k => GEAR[k].name).join(', ') : 'keine'));
+    lrow('Gefolge: ' + (allies.length ? allies.map(a => a.def.name).join(', ') : 'niemand'));
   } else {
     for (const ev of OLY_EVENTS) row(ev.name + ': ' + MEDALS[S.olympia[ev.id] || 0] + ' – ' + ev.goal);
     row('Alle 5 Gold schalten den Skin „Olympiasieger“ frei. Melde dich beim Kampfrichter im Stadion von Olympia.');
@@ -3763,11 +3935,11 @@ function updateArrows(dt) {
     }
     if (!hit) for (const e of enemies) {
       if (e.dead) continue;
-      if (Math.hypot(e.x - p.x, e.z - p.z) < (e.def.hitR || 0.3) + (a.blitz ? 1 : 0.45) && p.y > e.y - 0.2 && p.y < e.y + (e.def.top || 2.2)) { if (a.blitz) blitzExplode(p); else damageEnemy(e, a.dmg * rr(0.9, 1.1)); hit = true; scene.remove(a.g); arrows.splice(i, 1); break; }
+      if (Math.hypot(e.x - p.x, e.z - p.z) < (e.def.hitR || 0.3) + (a.blitz ? 1 : 0.45) && p.y > e.y - 0.2 && p.y < e.y + (e.def.top || 2.2)) { if (a.blitz) blitzExplode(p); else if (a.stone) { siegeExplode(p, a.dmg); scene.remove(a.g); arrows.splice(i, 1); hit = true; break; } else damageEnemy(e, a.dmg * rr(0.9, 1.1)); hit = true; scene.remove(a.g); arrows.splice(i, 1); break; }
     }
     if (hit && arrows[i] === a) { a.stuck = 3; continue; }
     if (hit) continue;
-    if (p.y < groundAt(p.x, p.z) || a.t <= 0) { if (a.blitz) { if (a.t > 0) blitzExplode(p); scene.remove(a.g); arrows.splice(i, 1); continue; } a.stuck = 4; }
+    if (p.y < groundAt(p.x, p.z) || a.t <= 0) { if (a.stone) { siegeExplode(p, a.dmg); scene.remove(a.g); arrows.splice(i, 1); continue; } if (a.blitz) { if (a.t > 0) blitzExplode(p); scene.remove(a.g); arrows.splice(i, 1); continue; } a.stuck = 4; }
   }
 }
 
@@ -4049,22 +4221,35 @@ function blitzExplode(p) {
 // ---------- Blitzadler ----------
 let birdM = null;
 function makeBird() {
-  const g = new THREE.Group(), glow = lam(0xbfe0ff, 0x3a7aff), gold = lam(0xffd24a, 0xa07000);
-  const add = (geo, mat, x, y, z, p = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); p.add(m); return m; };
-  add(new THREE.SphereGeometry(0.7, 12, 8), glow, 0, 0, 0).scale.set(0.8, 0.7, 1.6);
-  add(new THREE.SphereGeometry(0.4, 10, 8), glow, 0, 0.35, 1.1);
-  add(new THREE.ConeGeometry(0.14, 0.45, 6), gold, 0, 0.3, 1.55).rotation.x = Math.PI / 2;
-  for (const s of [-1, 1]) add(new THREE.SphereGeometry(0.06, 6, 4), lam(0xffffff, 0xffffff), s * 0.18, 0.45, 1.4);
-  const tail = add(new THREE.BoxGeometry(1.2, 0.08, 1.0), glow, 0, 0, -1.4); tail.rotation.x = 0.1;
-  const wings = [];
+  const g = new THREE.Group(), GL = 0x1a3a8a, wingC = 0xcfe4ff, tipC = 0xffffff, gold = 0xffd24a;
+  charMesh([
+    [SPH(), wingC, 0, 0, 0, 0, 0, 0, 0.42, 0.38, 1.05, 0.3],
+    [SPH(), 0xeaf4ff, 0, -0.08, 0.15, 0, 0, 0, 0.34, 0.3, 0.75],
+    [CYL(0.2, 0.32, 0.5, 10), wingC, 0, 0.18, 0.95, -1.1, 0, 0],
+    [SPH(), tipC, 0, 0.32, 1.2, 0, 0, 0, 0.3, 0.27, 0.34],
+    [cgeo('beak', () => new THREE.ConeGeometry(0.11, 0.42, 6)), gold, 0, 0.24, 1.58, Math.PI / 2 + 0.35, 0, 0],
+    [SPH(), 0x101828, -0.17, 0.4, 1.38, 0, 0, 0, 0.045, 0.045, 0.045], [SPH(), 0x101828, 0.17, 0.4, 1.38, 0, 0, 0, 0.045, 0.045, 0.045],
+    [BOXG(), gold, -0.17, 0.47, 1.36, 0, 0, 0.25, 0.1, 0.02, 0.05], [BOXG(), gold, 0.17, 0.47, 1.36, 0, 0, -0.25, 0.1, 0.02, 0.05],
+    [SPH(), gold, -0.18, -0.36, -0.2, 0, 0, 0, 0.08, 0.12, 0.14], [SPH(), gold, 0.18, -0.36, -0.2, 0, 0, 0, 0.08, 0.12, 0.14],
+  ], GL, g);
+  const tail = new THREE.Group(); tail.position.set(0, 0.02, -0.95); g.add(tail);
+  const tp = []; for (let k = -3; k <= 3; k++) tp.push([BOXG(), k % 2 ? tipC : wingC, k * 0.09, 0, -0.45, 0, k * 0.12, 0, 0.16, 0.03, 0.95]);
+  charMesh(tp, GL, tail);
+  const wings = [], outer = [];
   for (const s of [-1, 1]) {
-    const w = new THREE.Group(); w.position.set(s * 0.45, 0.15, 0.1); g.add(w);
-    add(new THREE.BoxGeometry(2.6, 0.08, 1.3), glow, s * 1.3, 0, 0, w);
-    add(new THREE.BoxGeometry(1.8, 0.06, 0.9), lam(0xffffff, 0x6aa0ff), s * 3.4, 0, -0.2, w);
-    for (let k = 0; k < 3; k++) add(new THREE.BoxGeometry(0.06, 0.06, 1.2), gold, s * (1 + k * 1.1), 0.05, -0.1, w);
-    wings.push(w);
+    const w = new THREE.Group(); w.position.set(s * 0.32, 0.18, 0.15); g.add(w);
+    const ip = [[BOXG(), wingC, s * 0.85, 0, 0, 0, 0, 0, 1.7, 0.1, 0.95, 0.2], [SPH(), wingC, s * 0.2, 0, 0.1, 0, 0, 0, 0.35, 0.12, 0.55]];
+    for (let k = 0; k < 6; k++) ip.push([BOXG(), k % 2 ? 0xb8d4f8 : wingC, s * (0.2 + k * 0.28), -0.02, -0.55, 0, 0, 0, 0.3, 0.04, 0.55]);
+    ip.push([BOXG(), gold, s * 0.85, 0.06, 0.38, 0, 0, 0, 1.6, 0.03, 0.06]);
+    charMesh(ip, GL, w);
+    const o = new THREE.Group(); o.position.set(s * 1.7, 0, 0); w.add(o);
+    const op = [[BOXG(), wingC, s * 0.6, 0, 0.05, 0, s * 0.18, 0, 1.25, 0.07, 0.75, 0.2]];
+    for (let k = 0; k < 6; k++) op.push([BOXG(), k % 2 ? tipC : 0xdcecff, s * (0.5 + k * 0.17), -0.01, -0.35 - k * 0.04, 0, s * (0.25 + k * 0.13), 0, 0.16, 0.03, 1.15 - k * 0.04]);
+    op.push([BOXG(), gold, s * 0.5, 0.05, 0.4, 0, s * 0.18, 0, 1.0, 0.03, 0.05]);
+    charMesh(op, GL, o);
+    wings.push(w); outer.push(o);
   }
-  return { root: g, wings };
+  return { root: g, wings, outer, tail, flapT: 0 };
 }
 function toggleBird() {
   if (player.form && !player.bird) setForm(null);
@@ -4081,14 +4266,24 @@ function toggleBird() {
 }
 function updateBird(dt, moving, sprint, canMove) {
   const P = player.pos, t = clock.elapsedTime, sp = sprint ? 120 : 60;
-  if (moving) { P.x += _mv.x * sp * dt; P.z += _mv.z * sp * dt; player.yaw = angLerp(player.yaw, Math.atan2(_mv.x, _mv.z), Math.min(1, dt * 5)); }
+  const bv = player.vel || (player.vel = new V3()); const bk = 1 - Math.exp(-dt * (moving ? 2.5 : 1.5));
+  bv.x += ((moving ? _mv.x * sp : 0) - bv.x) * bk; bv.z += ((moving ? _mv.z * sp : 0) - bv.z) * bk; P.x += bv.x * dt; P.z += bv.z * dt;
+  if (moving) player.yaw = angLerp(player.yaw, Math.atan2(_mv.x, _mv.z), Math.min(1, dt * 4));
   if (canMove && keys.Space) P.y += 25 * dt; if (canMove && (keys.KeyC || keys.ControlLeft)) P.y -= 30 * dt;
   P.x = clamp(P.x, -HALF + 10, HALF - 10); P.z = clamp(P.z, -HALF + 10, HALF - 10);
-  const floor = Math.max(groundAt(P.x, P.z), -0.5) + 1.2; if (P.y < floor) P.y = floor; if (P.y > 420) P.y = 420;
-  player.speedNow = moving ? sp : 0; player.swimming = false; player.vy = 0;
+  const floor = Math.max(heightAt(P.x, P.z), -0.5) + 1.5; if (P.y < floor) P.y = P.y < floor - 6 ? floor - 6 : lerp(P.y, floor, Math.min(1, dt * 10)); if (P.y > 420) P.y = 420;
+  player.speedNow = Math.hypot(bv.x, bv.z); player.swimming = false; player.vy = 0;
   if (!player.dead && t - player.lastHurt > 4 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * 8);
-  birdM.root.position.set(P.x, P.y, P.z); birdM.root.rotation.set(moving ? 0.15 : 0, player.yaw, Math.sin(t * 1.3) * 0.1);
-  const f = Math.sin(t * (moving ? 7 : 3.5)) * 0.6; birdM.wings[0].rotation.z = f; birdM.wings[1].rotation.z = -f;
+  { const lowB = P.y - heightAt(P.x, P.z) < 10; if (birdM.shadowOn !== lowB) { birdM.shadowOn = lowB; birdM.root.traverse(o => { if (o.isMesh) o.castShadow = lowB; }); } }
+  birdM.root.position.set(P.x, P.y, P.z); birdM.root.rotation.set(moving ? 0.12 : 0, player.yaw, Math.sin(t * 1.3) * 0.05);
+  { // Flügelschlag: beim Steigen und Langsamfliegen kräftig, beim schnellen Flug ruhiges Gleiten mit gelegentlichen Schlägen
+    const climbing = keys.Space || TOUCH.up || player.speedNow < 8;
+    birdM.flapT += dt * (climbing ? 6.5 : 4.5);
+    const glide = climbing ? 0 : clamp(Math.sin(t * 0.7) * 2 - 0.6, 0, 1);
+    const ph = birdM.flapT, f = Math.sin(ph) * 0.42 * (1 - glide) + 0.05 * glide, fo = Math.sin(ph - 0.9) * 0.3 * (1 - glide) - 0.04 * glide;
+    birdM.wings[0].rotation.z = -f; birdM.wings[1].rotation.z = f; birdM.outer[0].rotation.z = -fo; birdM.outer[1].rotation.z = fo;
+    birdM.tail.rotation.x = Math.sin(t * 1.7) * 0.06; birdM.root.position.y += -Math.sin(ph) * 0.08 * (1 - glide);
+  }
   pegasus.root.visible = false; hippo.root.visible = false; ship.root.visible = false; horse.root.visible = false;
   if (Math.random() < dt * 3) { const sx = P.x + rr(-3, 3), sz = P.z + rr(-3, 3); boltLine({ x: P.x, y: P.y - 1.5, z: P.z }, { x: sx, y: P.y - 3, z: sz }); }
 }
@@ -4435,9 +4630,15 @@ function setupTouch() {
   mk('jmp', '⤒', 'mid', () => pressKey('Space', true), () => pressKey('Space', false));
   mk('use', 'E', 'mid gold', () => pressKey('KeyE', true), () => pressKey('KeyE', false));
   mk('dn', '⤓', 'mid', () => pressKey('KeyC', true), () => pressKey('KeyC', false));
-  mk('wpn', '🏹', 'mid', () => pressKey('KeyX', true), () => pressKey('KeyX', false));
   const side = [['I', '🎒', 'KeyI'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['J', '🧜', 'KeyJ'], ['K', '♐', 'KeyK'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
-  for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, ['R', 'M', 'U', 'J', 'K'].includes(id) ? ui : row);
+  const col = document.createElement('div'); col.id = 'tCol'; ui.appendChild(col);
+  const COL = ['R', 'M', 'wpn', 'V', 'U', 'J', 'K'];
+  const sideMap = Object.fromEntries(side.map(x => [x[0], x]));
+  for (const id of COL) {
+    if (id === 'wpn') { mk('wpn', '🏹', 'small', () => pressKey('KeyX', true), () => pressKey('KeyX', false), col); continue; }
+    const [, lab, code] = sideMap[id]; mk('s' + id, lab, 'small', () => pressKey(code, true), () => pressKey(code, false), col);
+  }
+  for (const [id, lab, code] of side) { if (COL.includes(id)) continue; mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, row); }
   // Kamera: mit dem Finger über das Bild wischen, zwei Finger = Zoom
   const pts = new Map(); let pinch = 0;
   canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
@@ -4462,6 +4663,7 @@ function updateTouchUI() {
   show('dn', fly); show('sQ', player.blessed); show('sT', player.gear.includes('pegasus')); show('sG', player.gear.includes('pegasus'));
   show('sB', player.hasShip); show('sV', player.gear.includes('keraunos')); show('sU', player.gear.includes('blitzvogel')); show('sJ', player.gear.includes('sirene')); show('sK', player.gear.includes('kentaur')); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
   show('use', !!nearInter || !!dialog);
+  { const b = TOUCH.btns.wpn; if (b) { const lab = player.bowMode ? '⚔' : '🏹'; if (b.textContent !== lab) b.textContent = lab; } }
   const u = $('touchUI'); if (u) { const d = started && !mapOpen ? '' : 'none'; if (u.style.display !== d) u.style.display = d; }
 }
 
@@ -4576,7 +4778,7 @@ function updatePlayer(dt) {
   if (player.swimming && !riding) { hero.armL.rotation.x = -2.6 + Math.sin(clock.elapsedTime * 4) * 0.6; hero.armR.rotation.x = -2.6 - Math.sin(clock.elapsedTime * 4) * 0.6; }
   if (player.mounted) {
     horse.root.position.set(P.x, P.y, P.z); horse.root.rotation.y = player.yaw;
-    if (horse.horses) { for (const hh of horse.horses) animateQuad(hh, player.speedNow * 0.6, dt); for (const w of horse.wheels) w.rotation.x += player.speedNow * dt / 0.65; hero.root.position.set(P.x - Math.sin(player.yaw) * 1.3, P.y + 1.0, P.z - Math.cos(player.yaw) * 1.3); animateHumanoid(hero, 0, dt, { attack: player.atkAnim }); }
+    if (horse.horses) { for (const hh of horse.horses) animateQuad(hh, player.speedNow * 0.6, dt); for (const w of horse.wheels) w.rotation.x += player.speedNow * dt / 0.65; const rz = -(horse.riderZ ?? -1.3); hero.root.position.set(P.x - Math.sin(player.yaw) * rz, P.y + (horse.riderY ?? 1.0), P.z - Math.cos(player.yaw) * rz); animateHumanoid(hero, horse.siege === 'rammbock' ? player.speedNow * 0.4 : 0, dt, { attack: horse.siege ? 0 : player.atkAnim }); if (horse.siege) { animateSiege(horse, player.speedNow, dt); if (horse.siege === 'rammbock') { hero.armL.rotation.x = -1.3; hero.armR.rotation.x = -1.3; } } }
     else animateQuad(horse, player.speedNow * 0.6, dt);
   }
   // Wettrennen (Olympia)
@@ -4628,6 +4830,168 @@ function updateFlying(dt, moving, sprint, canMove) {
   hippo.root.visible = false; ship.root.visible = false;
   if (!player.dead && clock.elapsedTime - player.lastHurt > 6 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * 4);
 }
+// ---------- Gepflasterte Straßen ----------
+function buildRoads() {
+  const mat = new THREE.MeshLambertMaterial({ color: 0xb4a68c, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = 'varying vec3 vWP;\nattribute float edge;\nvarying float vEdge;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vWP = (modelMatrix * vec4(transformed, 1.0)).xyz; vEdge = edge;');
+    sh.fragmentShader = 'varying vec3 vWP;\nvarying float vEdge;\n' + NOISE_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  {
+    vec2 p = vWP.xz * vec2(1.6, 1.15); float row = floor(p.y); p.x += rh(vec2(row, 3.0)) * 3.0;
+    vec2 cell = floor(p), f = fract(p);
+    float mortar = smoothstep(0.0, 0.07, f.x) * smoothstep(1.0, 0.93, f.x) * smoothstep(0.0, 0.09, f.y) * smoothstep(1.0, 0.91, f.y);
+    float tone = 0.82 + rh(cell) * 0.3;
+    float wear = vn(vWP.xz * 0.35) * 0.18;
+    diffuseColor.rgb *= mix(0.55, tone + wear, mortar);
+    diffuseColor.rgb *= 1.0 - smoothstep(0.82, 1.0, abs(vEdge)) * 0.35;
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.92, 0.95, 0.8), (1.0 - vn(vWP.xz * 0.08)) * 0.25);
+  }`);
+  };
+  const P = [], E = [], I = [];
+  const W = 2.6, STEP = 2.0;
+  const nearCity = (x, z) => { for (const L of LOC_LIST) if (Math.hypot(x - L.x, z - L.z) < L.r * 0.42) return true; return false; };
+  let strip = null;
+  const flush = () => { strip = null; };
+  const push = (x, z, dx, dz) => {
+    const nx = -dz, nz = dx, base = P.length / 3;
+    for (const s of [-1, 1]) { const px = x + nx * W * s, pz = z + nz * W * s; P.push(px, Math.max(heightAt(px, pz), heightAt(x, z) - 0.5) + 0.1, pz); E.push(s); }
+    if (strip !== null) I.push(strip, strip + 1, base, strip + 1, base + 1, base);
+    strip = base;
+  };
+  const stones = [];
+  for (const r of ROADS) {
+    flush(); let acc = 0;
+    for (let i = 0; i < r.length - 1; i++) {
+      const [x0, z0] = r[i], [x1, z1] = r[i + 1], len = Math.hypot(x1 - x0, z1 - z0), dx = (x1 - x0) / len, dz = (z1 - z0) / len;
+      for (let t = 0; t <= len; t += STEP) {
+        const x = x0 + dx * t, z = z0 + dz * t;
+        if (heightAt(x, z) < 0.35 || nearCity(x, z)) { flush(); continue; }
+        push(x, z, dx, dz);
+        acc += STEP; if (acc > 160) { acc = 0; stones.push([x - dz * (W + 1), z + dx * (W + 1)]); }
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('edge', new THREE.Float32BufferAttribute(E, 1));
+  const nrm = new Float32Array(P.length); for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1; geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  geo.setIndex(I);
+  const mesh = new THREE.Mesh(geo, mat); mesh.receiveShadow = true; scene.add(mesh);
+  // Meilensteine (Hermen) am Wegesrand
+  for (const [x, z] of stones) { if (!isFree(x, z, 0.6)) continue; const h = heightAt(x, z); addStatic(G.box, M.marble2, x, h + 0.7, z, 0, 0, 0, 0.35, 1.4, 0.35); addStatic(G.sphere, M.marble2, x, h + 1.55, z, 0, 0, 0, 0.42, 0.45, 0.42); circleCol(x, z, 0.35); }
+}
+
+// ---------- Fuhrwerke, die über die Straßen fahren ----------
+const TRAFFIC = [];
+function roadPoint(r, s) {
+  let acc = 0;
+  for (let i = 0; i < r.pts.length - 1; i++) {
+    const [x0, z0] = r.pts[i], [x1, z1] = r.pts[i + 1], L = r.lens[i];
+    if (s <= acc + L || i === r.pts.length - 2) { const t = clamp((s - acc) / L, 0, 1); return [x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, (x1 - x0) / L, (z1 - z0) / L]; }
+    acc += L;
+  }
+  return [r.pts[0][0], r.pts[0][1], 1, 0];
+}
+const DRIVER_LINES = ['Aus dem Weg!', 'Platz da, ich habe Oliven geladen!', 'Pass doch auf!', 'Hü! Weiter geht’s!', 'Ich muss vor Sonnenuntergang in der Stadt sein!', 'Vorsicht, die Amphoren!'];
+function buildTraffic() {
+  const roads = ROADS.map(pts => { const lens = []; let tot = 0; for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); lens.push(l); tot += l; } return { pts, lens, tot }; }).filter(r => r.tot > 150);
+  const N = QUALITY === 'hoch' ? 16 : 10;
+  for (let i = 0; i < N; i++) {
+    const r = roads[i % roads.length], style = ['karren', 'reise', 'karren', 'streit'][i % 4];
+    const m = makeChariot(style); scene.add(m.root);
+    const drv = makeHumanoid({ tunic: [0x8a6a3a, 0x5a6a3a, 0x6a3a2a, 0xd8ccb0][i % 4], beard: i % 2 === 0, hair: [0x2a1a0e, 0x5a4a3a, 0x9a9a9a][i % 3], skin: [0xc98f5e, 0xb07a4a, 0xd8a070][i % 3] });
+    drv.root.position.set(0, 1.0, -1.3); m.root.add(drv.root); animateHumanoid(drv, 0, 0, { sitting: true });
+    TRAFFIC.push({ m, drv, r, s: rand() * r.tot, dir: rand() < 0.5 ? 1 : -1, sp: rr(5, 7.5), v: 0, wait: 0, shout: 0, yaw: 0 });
+  }
+}
+function updateTraffic(dt) {
+  const P = player.pos;
+  for (const w of TRAFFIC) {
+    const [x0, z0] = roadPoint(w.r, w.s); const far = Math.hypot(x0 - P.x, z0 - P.z) > 320;
+    // vor dem Spieler anhalten
+    let want = w.sp;
+    const [, , dx, dz] = roadPoint(w.r, w.s); const fx = dx * w.dir, fz = dz * w.dir;
+    const px = P.x - x0, pz = P.z - z0, ahead = px * fx + pz * fz, side = Math.abs(px * fz - pz * fx);
+    if (!curD && ahead > 0 && ahead < 7 && side < 2.6 && Math.abs(P.y - heightAt(x0, z0)) < 3) { want = 0; w.shout -= dt; if (w.shout <= 0 && !far) { w.shout = 4; floatText(x0, heightAt(x0, z0) + 3.2, z0, DRIVER_LINES[Math.floor(rand() * DRIVER_LINES.length)], '#ffe9b0'); } }
+    w.v += (want - w.v) * Math.min(1, dt * (want ? 0.8 : 3));
+    if (w.wait > 0) { w.wait -= dt; w.v = 0; }
+    w.s += w.v * w.dir * dt;
+    if (w.s > w.r.tot - 30) { w.s = w.r.tot - 30; w.dir = -1; w.wait = rr(6, 15); }
+    if (w.s < 30) { w.s = 30; w.dir = 1; w.wait = rr(6, 15); }
+    if (far) { w.m.root.visible = false; continue; }
+    const [x, z, ddx, ddz] = roadPoint(w.r, w.s);
+    const ox = -ddz * w.dir * 1.4, oz = ddx * w.dir * 1.4; // rechts fahren
+    const wx = x - ox, wz = z - oz, h = heightAt(wx, wz);
+    w.m.root.visible = h > 0.3 && !curD;
+    w.yaw = angLerp(w.yaw, Math.atan2(ddx * w.dir, ddz * w.dir), Math.min(1, dt * 3));
+    w.m.root.position.set(wx, Math.max(h, 0), wz); w.m.root.rotation.y = w.yaw;
+    if (w.m.horses) for (const hh of w.m.horses) animateQuad(hh, w.v, dt);
+    if (w.m.wheels) for (const wh of w.m.wheels) wh.rotation.x += w.v * dt / 0.65;
+    // Spieler nicht durchfahren lassen
+    const qx = P.x - wx, qz = P.z - wz, qd = Math.hypot(qx, qz);
+    if (qd < 2.2 && !player.mounted && Math.abs(P.y - h) < 2.5) { P.x = wx + qx / (qd || 1) * 2.2; P.z = wz + qz / (qd || 1) * 2.2; }
+  }
+}
+
+// ---------- Streitende Leute ----------
+const QUARRELS = [
+  ['Diese Ziege gehört MIR!', 'Sie stand aber in MEINEM Garten!', 'Dann hätte dein Garten einen Zaun haben sollen!', 'Ich gehe zum Archon!'],
+  ['Du schuldest mir noch drei Drachmen!', 'Für diesen sauren Wein? Niemals!', 'Der Wein war bester Qualität!', 'Der war halb Essig!'],
+  ['Athen ist die schönste Stadt der Welt!', 'Ha! Sparta hat die besten Krieger!', 'Und wir haben die Akropolis!', 'Ihr habt nur Philosophen!'],
+  ['Die Erde ist eine Scheibe!', 'Unsinn, Pythagoras sagt, sie ist eine Kugel!', 'Dann würden wir doch runterfallen!', 'Frag doch einen Gelehrten!'],
+  ['Dein Esel hat meine Feigen gefressen!', 'Mein Esel frisst nur die besten Feigen.', 'Das macht es nicht besser!', 'Er hat eben Geschmack!'],
+  ['Mein Fisch war heute Morgen noch frisch!', 'Der riecht wie der Hades selbst!', 'Das ist der Duft des Meeres!', 'Das ist der Duft von letzter Woche!'],
+  ['Zeus ist der Stärkste aller Götter!', 'Poseidon könnte ihn mit einer Welle wegspülen!', 'Zeus hat Blitze!', 'Poseidon hat ein Erdbeben!'],
+  ['Du hast beim Würfeln geschummelt!', 'Ich habe einfach Glück!', 'Sechsmal hintereinander eine Sechs?', 'Die Götter lieben mich eben!'],
+];
+const ARGUERS = [];
+function buildQuarrels() {
+  const cities = LOC_LIST.filter(L => L.city && L.r >= 22);
+  let n = 0;
+  for (const L of cities) {
+    if (n >= (QUALITY === 'hoch' ? 16 : 11)) break;
+    if (rand() < 0.3) continue;
+    const sp = findSpotNear(L, 6, L.r * 0.85, 2.2); if (!sp) continue;
+    reserve(sp[0], sp[1], 2.2);
+    const q = QUARRELS[n % QUARRELS.length], a = rand() * 6.28, ox = Math.cos(a) * 0.85, oz = Math.sin(a) * 0.85;
+    const pal = [0x8a6a3a, 0x3a5a7a, 0x7a3a3a, 0xd8ccb0, 0x5a7a3a, 0x6a4a7a];
+    const st = { q, line: 0, t: rand() * 2, calm: 0, a: null, b: null, L };
+    const talkFn = function () {
+      if (st.calm > 0) { talk([{ who: this.name, text: 'Schon gut, schon gut. Wir haben uns wieder vertragen – dank dir.' }]); return; }
+      talk([{ who: this.name, text: '„' + q[0] + '“ – „' + q[1] + '“ Die beiden streiten sich lautstark und beachten dich kaum.', opts: [
+        { label: 'Streit schlichten', fn: () => { st.calm = 300; addMoney(12); player.karma = (player.karma || 0) + 1; floatText(st.a.h.root.position.x, st.a.h.root.position.y + 2.4, st.a.h.root.position.z, 'Na gut …', '#c8f0c8'); banner('Streit geschlichtet', 'Die beiden geben sich die Hand. Sie schenken dir 12 Drachmen.'); } },
+        { label: 'Anfeuern: „Gib’s ihm!“', fn: () => { st.t = 0; floatText(st.b.h.root.position.x, st.b.h.root.position.y + 2.4, st.b.h.root.position.z, 'Jetzt reicht’s!', '#ffb0a0', true); st.push = 1; } },
+        { label: 'Weitergehen', fn: () => { } },
+      ] }]);
+    };
+    st.a = addNPC(['Bauer', 'Händler', 'Fischer', 'Töpfer', 'Hirte'][n % 5] + ' ' + ['Kleon', 'Dion', 'Lykos', 'Phokas', 'Timon', 'Bias'][n % 6], sp[0] + ox, sp[1] + oz, { tunic: pal[n % 6], beard: n % 2 === 0, hair: [0x2a1a0e, 0x5a4a3a, 0x9a9a9a][n % 3] }, talkFn);
+    st.b = addNPC(['Nachbar', 'Kunde', 'Händlerin', 'Weber', 'Wirt'][n % 5] + ' ' + ['Agis', 'Melas', 'Kallias', 'Theron', 'Nikon', 'Pheres'][n % 6], sp[0] - ox, sp[1] - oz, { tunic: pal[(n + 3) % 6], beard: n % 3 === 0, hair: [0x3a2a1a, 0x1a1a1a, 0x7a6a5a][n % 3], veil: (n % 5 === 2) ? 0xd8c8a8 : undefined }, talkFn);
+    st.a.argue = st; st.b.argue = st; st.a.partner = st.b; st.b.partner = st.a;
+    ARGUERS.push(st); n++;
+  }
+}
+function updateQuarrels(dt) {
+  const P = player.pos;
+  for (const st of ARGUERS) {
+    if (st.calm > 0) { st.calm -= dt; continue; }
+    const pa = st.a.h.root.position; if (Math.hypot(pa.x - P.x, pa.z - P.z) > 35 || dialog) continue;
+    st.t -= dt;
+    if (st.t <= 0) { st.t = 2.6; const who = st.line % 2 ? st.b : st.a, p = who.h.root.position; floatText(p.x, p.y + 2.3, p.z, st.q[st.line % st.q.length], st.line % 2 ? '#ffd0b0' : '#fff0c0'); st.line++; who.shoutT = 1.6; }
+    if (st.push > 0) { st.push -= dt; if (st.push <= 0) { st.a.shoutT = 2; st.b.stagger = 0.6; } }
+  }
+}
+function animateArguer(n, dt) {
+  const st = n.argue; if (!st || st.calm > 0 || n.talking > 0) return false;
+  const p = n.h.root.position, q = n.partner.h.root.position;
+  n.yaw = angLerp(n.yaw, Math.atan2(q.x - p.x, q.z - p.z), Math.min(1, dt * 5));
+  n.h.root.rotation.y = n.yaw;
+  animateHumanoid(n.h, 0, dt, {});
+  n.shoutT = Math.max(0, (n.shoutT || 0) - dt);
+  const t = performance.now() / 1000;
+  if (n.shoutT > 0) { n.h.armR.rotation.x = -1.2 + Math.sin(t * 9) * 0.5; n.h.armL.rotation.x = -0.8 + Math.sin(t * 7 + 1) * 0.4; n.h.foreR.rotation.x = -0.6; n.h.armR.rotation.z = 0.25; n.h.head.rotation.x = -0.12; }
+  else { n.h.armL.rotation.x = -0.25; n.h.armR.rotation.x = -0.25; n.h.foreL.rotation.x = -1.6; n.h.foreR.rotation.x = -1.6; n.h.armL.rotation.z = -0.35; n.h.armR.rotation.z = 0.35; }
+  if (n.stagger > 0) { n.stagger -= dt; n.h.root.rotation.x = -Math.sin(n.stagger / 0.6 * Math.PI) * 0.25; } else n.h.root.rotation.x = 0;
+  return true;
+}
 function updateNPCs(dt) {
   for (const n of npcs) {
     const p = n.h.root.position;
@@ -4648,6 +5012,7 @@ function updateNPCs(dt) {
       }
     }
     p.y = groundAt(p.x, p.z);
+    if (n.argue && animateArguer(n, dt)) continue;
     n.h.root.rotation.y = n.yaw;
     animateHumanoid(n.h, spd, dt, { idleTalk: n.talking > 0 && dialog });
   }
@@ -4703,16 +5068,20 @@ function camBlocked(x, y, z) {
 }
 function updateCamera(dt) {
   const P = player.pos;
-  const tgt = new V3(P.x, P.y + (player.form === 'centaur' ? 2.8 : player.bird ? 1.5 : player.sailing ? 3.5 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
+  const tgt = new V3(P.x, P.y + (player.form === 'centaur' ? 2.8 : player.bird ? 1.5 : player.sailing ? 3.5 : player.mounted && horse && horse.siege ? 4.6 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
   if (player.bowMode && !player.sailing) { tgt.x += Math.cos(camYaw) * 0.8; tgt.z -= Math.sin(camYaw) * 0.8; tgt.y += 0.2; }
   const cs = updateCamera.s || (updateCamera.s = tgt.clone());
-  if (cs.distanceToSquared(tgt) > 64) cs.copy(tgt); else { const kx = 1 - Math.exp(-dt * 10), ky = 1 - Math.exp(-dt * 6); cs.x += (tgt.x - cs.x) * kx; cs.z += (tgt.z - cs.z) * kx; cs.y += (tgt.y - cs.y) * ky; }
+  const onFoot = !player.bird && !player.flying && !player.sailing && !player.adminFly && !player.swimming;
+  if (!onFoot || Math.abs(cs.y - tgt.y) > 4) cs.copy(tgt); else { cs.x = tgt.x; cs.z = tgt.z; cs.y += (tgt.y - cs.y) * (1 - Math.exp(-dt * 12)); }
   tgt.copy(cs);
+  if (camShake > 0) { camShake = Math.max(0, camShake - dt); tgt.x += (Math.random() - 0.5) * camShake * 0.8; tgt.y += (Math.random() - 0.5) * camShake * 0.8; }
   if (player.landT > 0) { player.landT -= dt; tgt.y -= Math.sin(player.landT / 0.25 * Math.PI) * 0.18; }
   const inTav = !curD && insideTavern(P);
-  let dist = (inTav ? 4 : player.bird ? 12 : player.sailing ? 17 : player.flying ? 11 : player.mounted ? 9 : 6.5) * camZoom * (player.bowMode && !player.sailing ? 0.7 : 1);
+  let dist = (inTav ? 4 : player.bird ? 12 : player.sailing ? 17 : player.flying ? 11 : player.mounted ? (horse && horse.siege ? 12 : 9) : 6.5) * camZoom * (player.bowMode && !player.sailing ? 0.7 : 1);
   const dx = Math.sin(camYaw) * Math.cos(camPitch), dy = Math.sin(camPitch), dz = Math.cos(camYaw) * Math.cos(camPitch);
   for (let k = 0.12; k <= 1.0001; k += 0.08) { if (camBlocked(tgt.x + dx * dist * k, tgt.y + dy * dist * k, tgt.z + dz * dist * k)) { dist *= Math.max(0.12, k - 0.1); break; } }
+  if (updateCamera.d === undefined || dist < updateCamera.d) updateCamera.d = dist; else updateCamera.d += (dist - updateCamera.d) * (1 - Math.exp(-dt * 2.5));
+  dist = updateCamera.d;
   const cx = tgt.x + dx * dist, cz = tgt.z + dz * dist;
   let cy = tgt.y + dy * dist;
   if (curD) cy = Math.min(cy, curD.O.y + curD.H - 0.8);
@@ -4756,6 +5125,7 @@ function updateHUD() {
 
 function animateWorld(dt, t) {
   U_TIME.value = t; updateGrass();
+  if (started && !paused) { updateTraffic(dt); updateQuarrels(dt); }
   for (const f of fires) { f.scale.y = (f.userData.base || (f.userData.base = f.scale.y)) * (1 + Math.sin(t * 13 + f.position.x) * 0.15 + Math.sin(t * 7.3) * 0.08); f.rotation.y += dt * 2; }
   for (const c of clouds) { c.position.x += dt * 4; if (c.position.x > player.pos.x + 1700) c.position.x -= 3400; }
   water.position.set(player.pos.x, Math.sin(t * 0.6) * 0.08, player.pos.z);
@@ -4849,7 +5219,7 @@ function init() {
   buildTerrain();
   buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
   buildIslands();
-  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildAncientWorld(); buildSirenRocks(); buildServices(); buildQuizNPCs(); buildZeusQuest();
+  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildAncientWorld(); buildSirenRocks(); buildServices(); buildQuizNPCs(); buildZeusQuest(); buildQuarrels(); buildRoads(); buildTraffic();
   buildVegetation();
   finalizeStatic();
   applyRealism();
@@ -4878,7 +5248,7 @@ function init() {
   $('btnNew').onclick = () => startGame(false);
   const qb = $('btnQual'); if (qb) { const lbl = () => qb.textContent = QUALITY === 'hoch' ? 'Hoch' : 'Mittel (schneller)'; lbl(); qb.onclick = () => { setQuality(QUALITY === 'hoch' ? 'mittel' : 'hoch'); lbl(); }; }
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { makeHumanoid, makeHorse, makeWolf, scene, camera, quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);
