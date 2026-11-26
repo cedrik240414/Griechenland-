@@ -1,4 +1,4 @@
-# Hellas – Pfad der Helden
+# LEGACY OF OLYMPUS
 
 Ein Open-World-Spiel im antiken Griechenland, komplett im Browser (Three.js, alles prozedural erzeugt).
 

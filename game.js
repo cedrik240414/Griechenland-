@@ -1,4 +1,4 @@
-/* Hellas – Pfad der Helden
+/* Legacy of Olympus
  * Ein Open-World-Spiel im antiken Griechenland. Three.js (r160), alles prozedural.
  */
 'use strict';
@@ -1921,7 +1921,7 @@ function drawBigMap() {
   const [x, y] = MP(player.pos.x, player.pos.z);
   ctx.save(); ctx.translate(x, y); ctx.rotate(-player.yaw + Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(8, 9); ctx.lineTo(0, 4); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
-  ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('HELLAS', 20, 36);
+  ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('LEGACY OF OLYMPUS', 20, 36);
   ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Rätsel: ' + S.quiz.length + '/' + QUIZZERS.length + '   ·   Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen   ·   Zoom: zwei Finger / Mausrad', 20, 58);
   ctx.textAlign = 'center';
   ctx.textAlign = 'center'; ctx.font = '700 14px Alegreya Sans, sans-serif';

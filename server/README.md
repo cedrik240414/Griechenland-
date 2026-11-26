@@ -1,4 +1,4 @@
-# Hellas-Server (Mehrspieler & Datenbank)
+# Legacy-of-Olympus-Server (Mehrspieler & Datenbank)
 
 Cloudflare Worker mit
 - **Durable Object `World`**: eine Lobby mit bis zu 30 Helden (Positionen, Chat, gemeinsame Städte, die man gründen, erobern und denen man beitreten kann)

@@ -1,4 +1,4 @@
-// Hellas – Multiplayer- und Datenbank-Server (Cloudflare Worker)
+// Legacy of Olympus – Multiplayer- und Datenbank-Server (Cloudflare Worker)
 // POST /api/account   Konto: register | login | session | logout | save
 // POST /api/admin     Admin: list | ban | unban | promote
 // GET  /api/leaderboard, /api/lobbies
@@ -56,7 +56,7 @@ export default {
       }
       return json(res, r.status);
     }
-    if (url.pathname === '/') return json({ ok: true, game: 'Hellas – Pfad der Helden', maxPlayers: MAX_PLAYERS });
+    if (url.pathname === '/') return json({ ok: true, game: 'Legacy of Olympus', maxPlayers: MAX_PLAYERS });
     return json({ error: 'Nicht gefunden' }, 404);
   },
 };
