@@ -462,7 +462,9 @@ const G = {
 // Kollision
 const CGRID = 16, cgrid = new Map();
 const ckey = (cx, cz) => cx * 100003 + cz;
+let CAPTURE = null;
 function addCollider(c) {
+  if (CAPTURE) CAPTURE.cols.push(c);
   let minX, maxX, minZ, maxZ;
   if (c.t === 'c') { minX = c.x - c.r; maxX = c.x + c.r; minZ = c.z - c.r; maxZ = c.z + c.r; }
   else { minX = c.minX; maxX = c.maxX; minZ = c.minZ; maxZ = c.maxZ; }
@@ -811,7 +813,27 @@ function buildTownBases() {
     builtLvl[s.key] = 0;
   }
 }
+const TOWN_PARTS = {};
+function demolishTown(site) {
+  for (const part of TOWN_PARTS[site] || []) {
+    for (const o of part.objs) { scene.remove(o); if (o.geometry && o.isMesh && !o.geometry.parameters) o.geometry.dispose(); const fi = fires.indexOf(o); if (fi >= 0) fires.splice(fi, 1); }
+    for (const c of part.cols) for (const list of cgrid.values()) { const i = list.indexOf(c); if (i >= 0) list.splice(i, 1); }
+    for (const p of part.plats) { const i = platforms.indexOf(p); if (i >= 0) platforms.splice(i, 1); }
+    for (const n of part.npcs) { scene.remove(n.h.root); const i = npcs.indexOf(n); if (i >= 0) npcs.splice(i, 1); }
+    for (const it of part.inters) { const i = interactables.indexOf(it); if (i >= 0) interactables.splice(i, 1); }
+  }
+  TOWN_PARTS[site] = []; builtLvl[site] = 0;
+}
 function buildTownLevel(site, l) {
+  if (STATIC.size) finalizeStatic();
+  const sc0 = scene.children.length, pl0 = platforms.length, np0 = npcs.length, it0 = interactables.length;
+  CAPTURE = { cols: [] };
+  try { buildTownLevel0(site, l); } finally {
+    (TOWN_PARTS[site] = TOWN_PARTS[site] || []).push({ objs: scene.children.slice(sc0), cols: CAPTURE.cols, plats: platforms.slice(pl0), npcs: npcs.slice(np0), inters: interactables.slice(it0) });
+    CAPTURE = null;
+  }
+}
+function buildTownLevel0(site, l) {
   const L = LOCS[site], X = L.x, Z = L.z;
   const vil = { tunic: 0x6a7a4a, pants: 0x3a3024, beard: true };
   FORCE_BUILD = true;
@@ -862,6 +884,7 @@ function syncTowns() {
   for (const s of TOWN_SITES) {
     const T = TS[s.key], L = LOCS[s.key];
     const target = T ? T.lvl : 0;
+    if (builtLvl[s.key] > target) demolishTown(s.key);
     while (builtLvl[s.key] < target) buildTownLevel(s.key, ++builtLvl[s.key]);
     if (!T) { L.name = 'Siedlungsplatz'; L.sub = 'Freier Bauplatz – gründe hier deine Stadt'; }
     else if (isMine(T)) { L.name = T.name; L.sub = TOWN_LEVELS[T.lvl].name + ' – deine Stadt'; }
@@ -897,6 +920,7 @@ function townAction(site, action, extra = {}) {
   if (action === 'join') T.members = (T.members || []).concat([{ cid: 'me', name: heroName() }]);
   if (action === 'leave') T.members = (T.members || []).filter(m => m.cid !== 'me');
   if (action === 'kick') T.members = (T.members || []).filter(m => m.cid !== extra.member);
+  if (action === 'sell') { const d = TOWN_SITES.find(x => x.key === site); S.towns[site] = d && d.def ? Object.assign({}, d.def, { collected: now }) : null; }
   syncTowns(); save();
 }
 function talkTown(site) {
@@ -932,10 +956,14 @@ function talkTown(site) {
   opts.push({ label: 'Bürger zu Soldaten ausbilden (60 Drachmen) – Gefolge ' + allies.length + '/' + MAX_ALLIES, fn: () => { if (allies.length >= MAX_ALLIES) { toast('Dein Gefolge ist voll (' + MAX_ALLIES + ').'); return; } if (spend(60)) { spawnAlly('buerger'); toast('Ein Bürgersoldat aus ' + T.name + ' folgt dir!', 'gold'); save(); } } });
   if ((T.def || 0) < 10) opts.push({ label: 'Stadtwache trainieren (100 Drachmen) – Verteidiger ' + (T.def || 0) + '/10', fn: () => { if (spend(100)) { townAction(site, 'train'); toast('Die Stadtwache von ' + T.name + ' wird stärker!', 'gold'); } } });
   if ((T.members || []).length) opts.push({ label: 'Bürger verwalten (' + T.members.length + ')', fn: () => talk([{ who: T.name, text: 'Bürger von ' + T.name + ': ' + T.members.map(m => m.name).join(', ') + '. Wen willst du verbannen?', opts: T.members.slice(0, 8).map(m => ({ label: 'Verbannen: ' + m.name, fn: () => townAction(site, 'kick', { member: m.cid }) })).concat([{ label: 'Zurück', fn: () => talkTown(site) }]) }]) });
+  { const price = townSellPrice(T); opts.push({ label: '💰 Stadt verkaufen (' + price + ' Drachmen' + (tr >= 1 ? ' + ' + tr + ' aus der Schatzkammer' : '') + ')', fn: () => talk([{ who: T.name, text: 'Willst du ' + T.name + ' wirklich verkaufen? Du bekommst ' + price + ' Drachmen' + (tr >= 1 ? ' und die ' + tr + ' Drachmen aus der Schatzkammer' : '') + '. Die Stadt ist danach weg' + (SITE[site].def ? ' und gehört wieder den ' + SITE[site].def.ownerName : ' und der Platz wird wieder frei') + '. Bürger verlieren ihre Stadt.', opts: [
+    { label: 'Ja, verkaufen', fn: () => { if (NET.towns && !(NET.ws && NET.ws.readyState === 1)) { toast('Keine Verbindung zum Server – Verkauf nicht möglich.'); return; } addMoney(price + Math.max(0, tr)); townAction(site, 'sell'); banner(T.name + ' verkauft', 'Du hast ' + (price + Math.max(0, tr)) + ' Drachmen erhalten.'); sfx('coin'); } },
+    { label: 'Nein, behalten', fn: () => talkTown(site) }] }]) }); }
   opts.push({ label: 'Zurück', fn: () => { } });
   const all = Object.values(townsState()).filter(isMine);
   talk([{ who: T.name, text: T.name + ' – ' + L[T.lvl].name + ' (Stufe ' + T.lvl + '/4). Einnahmen: ' + L[T.lvl].income + ' Drachmen pro Minute. Schatzkammer: ' + tr + ' / ' + townCap(T) + '.' + (next ? ' Ausbau bringt: ' + next.desc + '.' : ' Deine Polis ist vollendet!') + (all.length > 1 ? ' Du herrschst über ' + all.length + ' Städte.' : '') + ' Vorsicht: Andere Helden können deine Stadt erobern!', opts }]);
 }
+function townSellPrice(T) { let c = 0; for (let l = 1; l <= T.lvl; l++) c += TOWN_LEVELS[l].cost || 0; return Math.round(c * 0.5 + (T.def || 0) * 25); }
 function foundTown(site) {
   if (!spend(TOWN_LEVELS[1].cost)) return;
   let nm = null;
@@ -2156,6 +2184,7 @@ function drawMinimap() {
   ctx.font = '700 12px Alegreya Sans, sans-serif'; ctx.textAlign = 'center';
   for (const q2 of QUIZZERS) { if (S.quiz.includes(q2.id)) continue; const [mx, my] = toMini(q2.x, q2.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = '#1a3a5a'; ctx.beginPath(); ctx.arc(mx, my, 6, 0, 7); ctx.fill(); ctx.fillStyle = '#8fe0ff'; ctx.fillText('?', mx, my + 4); }
   for (const tv of TAVERNS) { const [mx, my] = toMini(tv.x, tv.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = '#c08040'; ctx.fillText('🍺', mx, my + 4); }
+  for (const st of TOWN_SITES) { const L = LOCS[st.key], T = townsState()[st.key]; const [mx, my] = toMini(L.x, L.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 8) continue; ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.beginPath(); ctx.arc(mx, my, 8, 0, 7); ctx.fill(); ctx.strokeStyle = !T ? '#7dff9a' : isMine(T) ? '#ffd24a' : isMember(T) ? '#4ab0ff' : '#ff6a5a'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#fff'; ctx.fillText(!T ? '🚩' : '🏛', mx, my + 4); }
   { const zt = zeusTarget(); if (zt) { let [mx, my] = toMini(zt.x, zt.z); const ddx = mx - S2 / 2, ddy = my - S2 / 2, dd = Math.hypot(ddx, ddy), mr = S2 / 2 - 10; if (dd > mr) { mx = S2 / 2 + ddx / dd * mr; my = S2 / 2 + ddy / dd * mr; } ctx.fillStyle = '#b07aff'; ctx.beginPath(); ctx.arc(mx, my, 5, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.stroke(); } }
   if (S.bounty) { let [mx, my] = toMini(S.bounty.x, S.bounty.z); const ddx = mx - S2 / 2, ddy = my - S2 / 2, dd = Math.hypot(ddx, ddy), mr = S2 / 2 - 10; if (dd > mr) { mx = S2 / 2 + ddx / dd * mr; my = S2 / 2 + ddy / dd * mr; } ctx.fillStyle = '#e0402a'; ctx.beginPath(); ctx.arc(mx, my, 5, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.stroke(); }
   for (const ch of CHESTS) { if (ch.opened) continue; const [mx, my] = toMini(ch.x, ch.z); if (Math.hypot(mx - S2 / 2, my - S2 / 2) > S2 / 2 - 6) continue; ctx.fillStyle = ch.tier === 2 ? '#ffd24a' : '#d8b860'; ctx.strokeStyle = '#2a1a00'; ctx.lineWidth = 1; ctx.fillRect(mx - 3, my - 2.5, 6, 5); ctx.strokeRect(mx - 3, my - 2.5, 6, 5); }
@@ -2216,13 +2245,21 @@ function drawBigMap() {
   ctx.save(); ctx.translate(x, y); ctx.rotate(-player.yaw + Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(8, 9); ctx.lineTo(0, 4); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
   ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('LEGACY OF OLYMPUS', 20, 36);
-  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Rätsel: ' + S.quiz.length + '/' + QUIZZERS.length + '   ·   Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen   ·   Zoom: zwei Finger / Mausrad', 20, 58);
+  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Rätsel: ' + S.quiz.length + '/' + QUIZZERS.length + '   ·   Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen   ·   Zoom: zwei Finger / Mausrad', 20, 58); ctx.fillText('🚩 freier Siedlungsplatz (hier kannst du eine Stadt gründen)   ·   🏛 Stadt: gold = deine, blau = Bürger, rot = fremd', 20, 80);
   ctx.textAlign = 'center';
   ctx.textAlign = 'center'; ctx.font = '700 14px Alegreya Sans, sans-serif';
   for (const q2 of QUIZZERS) { const [x, y] = MP(q2.x, q2.z); ctx.fillStyle = S.quiz.includes(q2.id) ? '#4a5a6a' : '#1a3a5a'; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.fillStyle = S.quiz.includes(q2.id) ? '#9aa' : '#8fe0ff'; ctx.fillText(S.quiz.includes(q2.id) ? '✓' : '?', x, y + 5); }
   for (const tv of TAVERNS) { const [x, y] = MP(tv.x, tv.z); ctx.fillText('🍺', x + 12, y + 14); }
   if (S.bounty) { const [x, y] = MP(S.bounty.x, S.bounty.z); ctx.fillStyle = '#e0402a'; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText('☠', x, y + 5); }
-  for (const st of TOWN_SITES) { const L = LOCS[st.key], T = townsState()[st.key], [x, y] = MP(L.x, L.z); ctx.strokeStyle = !T ? '#ffffff' : isMine(T) ? '#ffd24a' : isMember(T) ? '#4ab0ff' : '#ff4a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.stroke(); }
+  for (const st of TOWN_SITES) {
+    const L = LOCS[st.key], T = townsState()[st.key], [x, y] = MP(L.x, L.z);
+    const col = !T ? '#7dff9a' : isMine(T) ? '#ffd24a' : isMember(T) ? '#4ab0ff' : '#ff6a5a';
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.beginPath(); ctx.arc(x, y, 13, 0, 7); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 13, 0, 7); ctx.stroke();
+    ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.fillText(!T ? '🚩' : '🏛', x, y + 6);
+    const lab = !T ? 'Siedlungsplatz (frei)' : T.name + (isMine(T) ? ' (deine Stadt)' : isMember(T) ? ' (Bürger)' : ' – ' + T.ownerName);
+    ctx.font = '700 14px Alegreya Sans, sans-serif'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.strokeText(lab, x, y + 30); ctx.fillStyle = col; ctx.fillText(lab, x, y + 30);
+  }
   DUNGEONS.forEach(d => { if (!d.reward && !S.foundD.includes(d.idx)) return; const [x, y] = MP(d.at[0], d.at[1]); ctx.fillStyle = S.bossDead.includes(d.key) || (d.chest && d.chest.opened) ? '#6a5a70' : '#b05aff'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(d.name, x, y - 10); ctx.fillStyle = '#e8d0ff'; ctx.fillText(d.name, x, y - 10); });
   S.found.forEach(i => { const r = RUINS[i]; if (!r) return; const [x, y] = MP(r.x, r.z); ctx.fillStyle = r.chest.opened ? '#8a8070' : '#ffd24a'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(r.name, x, y + 20); ctx.fillStyle = '#fff3d0'; ctx.fillText(r.name, x, y + 20); });
   ctx.textAlign = 'center'; ctx.font = '700 18px Cinzel, serif'; ctx.fillText('N', W / 2, 24);
@@ -2626,6 +2663,44 @@ function toggleShip() {
   toast('Stell dich ans Ufer, um dein Schiff zu rufen.');
 }
 function buyShip() { talkShipwright(); }
+// ---------- Mitfahren auf der Trireme (bis zu 10 Helden: Kapitän + 9) ----------
+const SHIP_SEATS = 9;
+function seatWorld(root, seat, out = new V3()) {
+  const sc = root.scale.x, side = seat % 2 ? 1 : -1, row = Math.floor(seat / 2);
+  const lx = side * 0.95 * sc, lz = (4.6 - row * 1.9) * sc, ly = 1.15 * sc, ry = root.rotation.y;
+  out.set(root.position.x + Math.cos(ry) * lx + Math.sin(ry) * lz, root.position.y + ly, root.position.z - Math.sin(ry) * lx + Math.cos(ry) * lz);
+  return out;
+}
+function boardableShip() {
+  if (!NET.online || player.sailing || player.riding || player.flying || player.bird || player.mounted || curD) return null;
+  let best = null, bd = 16;
+  for (const [id, r] of NET.others) { const s = r.st; if (!s || s.m !== 's' || (s.sh || 0) < 3) continue; const d = Math.hypot(r.pos.x - player.pos.x, r.pos.z - player.pos.z); if (d < bd) { bd = d; best = id; } }
+  return best;
+}
+function shipCrew(ownerId) { const used = []; for (const [id, r] of NET.others) if (r.st && r.st.m === 'r' && r.st.r === ownerId) used.push(r.st.se || 0); return used; }
+function boardShip() {
+  const id = boardableShip(); if (!id) return;
+  const used = shipCrew(id); let seat = -1; for (let i = 0; i < SHIP_SEATS; i++) if (!used.includes(i)) { seat = i; break; }
+  const r = NET.others.get(id);
+  if (seat < 0) { toast('Die Trireme von ' + r.name + ' ist voll (10/10).'); return; }
+  player.riding = { id, seat }; player.swimming = false; player.vy = 0; if (player.form) setForm(null);
+  toast('Du bist an Bord der Trireme von ' + r.name + ' (Platz ' + (seat + 2) + '/10). E zum Aussteigen.', 'gold'); sfx('quest');
+}
+function leaveShip(reason) {
+  const P = player.pos; player.riding = null;
+  for (let rr2 = 4; rr2 <= 30; rr2 += 2) for (let a = 0; a < 6.28; a += 0.4) { const x = P.x + Math.cos(a) * rr2, z = P.z + Math.sin(a) * rr2; if (heightAt(x, z) > 0.4) { P.set(x, groundAt(x, z) + 0.3, z); player.vy = 0; toast(reason || 'Du gehst an Land.'); return; } }
+  P.y = -1.2; toast((reason ? reason + ' ' : '') + 'Du springst ins Wasser.');
+}
+function updateRiding(dt) {
+  const R = player.riding, r = NET.others.get(R.id);
+  const root = r && r.st && r.st.m === 's' && r.mounts.s ? r.mounts.s.root : null;
+  if (!NET.online || !root) { leaveShip('Der Kapitän hat angelegt.'); return; }
+  seatWorld(root, R.seat, player.pos); player.yaw = root.rotation.y + (R.seat % 2 ? -0.4 : 0.4); player.vy = 0; player.speedNow = 0;
+  hero.root.visible = true; hero.root.position.copy(player.pos); hero.root.rotation.y = player.yaw;
+  animateHumanoid(hero, 0, dt, { sitting: true }); hero.armR.rotation.x = -1.0 + Math.sin(clock.elapsedTime * 2.2) * 0.5; hero.armL.rotation.x = -1.0 + Math.sin(clock.elapsedTime * 2.2) * 0.5;
+  if (horse) horse.root.visible = false;
+}
+
 function sailTo(k, price) {
   if (!spend(price)) return;
   fadeTo(() => { const d = DOCKS[k]; if (player.mounted) dismount(); player.sailing = false; ship.root.visible = false; player.pos.set(d.land[0], groundAt(d.land[0], d.land[1]) + 0.5, d.land[1]); player.vy = 0; camYaw = d.rot + Math.PI; toast('Du erreichst ' + DOCK_TITLES[k] + '.'); });
@@ -2793,7 +2868,12 @@ function updateRemotes(dt) {
     const P = r.pos; let hy = 0, sitting = false;
     if (s.m === 'h' || s.m === 'p') { hy = 1.3; sitting = true; const m = remoteMount(r, s.m); m.root.position.copy(P); m.root.rotation.y = r.yaw; animateQuad(m, s.m === 'h' ? s.sp * 0.6 : 0, dt); if (m.wings) { const f = Math.sin(t * 8) * 0.7; m.wings[0].rotation.z = 0.3 + f; m.wings[1].rotation.z = -0.3 - f; } }
     if (s.m === 'k') { hy = 1.0; sitting = true; const m = remoteMount(r, 'k'); m.root.position.set(P.x, P.y - 0.4, P.z); m.root.rotation.y = r.yaw; }
-    if (s.m === 's') { const m = remoteMount(r, 's'); m.root.position.set(P.x, -0.2, P.z); m.root.rotation.y = r.yaw; r.h.root.position.set(P.x - Math.sin(r.yaw) * 5.5, P.y + 0.3, P.z - Math.cos(r.yaw) * 5.5); }
+    if (s.m === 's') { const m = remoteMount(r, 's'); const T = SHIPS[s.sh || 2] || SHIPS[2]; if (m.root.scale.x !== T.scale) { m.root.scale.setScalar(T.scale); m.root.traverse(o => { if (o.isMesh && (o.material === M.sail || o.userData.sail)) { o.material = lam(T.sail); o.userData.sail = true; } }); } m.root.position.set(P.x, -0.2, P.z); m.root.rotation.y = r.yaw; r.h.root.position.set(P.x - Math.sin(r.yaw) * 5.5, P.y + 0.3, P.z - Math.cos(r.yaw) * 5.5); }
+    else if (s.m === 'r') {
+      const own = s.r === NET.id && player.sailing ? ship.root : (NET.others.get(s.r) && NET.others.get(s.r).mounts.s ? NET.others.get(s.r).mounts.s.root : null);
+      if (own) { seatWorld(own, s.se || 0, r.h.root.position); r.yaw = own.rotation.y + ((s.se || 0) % 2 ? -0.4 : 0.4); } else r.h.root.position.set(P.x, P.y, P.z);
+      sitting = true;
+    }
     else r.h.root.position.set(P.x, P.y + hy, P.z);
     r.h.root.rotation.y = r.yaw;
     animateHumanoid(r.h, sitting ? 0 : s.sp, dt, { attack: r.atkT, sitting });
@@ -2805,7 +2885,7 @@ function netSend(dt) {
   NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = 0.12;
   const P = player.pos;
   const m = player.sailing ? 's' : (player.flying || player.bird) ? 'p' : player.form === 'centaur' ? 'h' : player.form === 'siren' ? 'k' : player.mounted ? 'h' : (player.swimming && player.gear.includes('poseidon')) ? 'k' : '';
-  const st = { t: 'st', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +player.yaw.toFixed(2), sp: +Math.min(60, player.speedNow).toFixed(1), m, atk: player.atkAnim > 0.5, d: curD ? curD.idx : -1 };
+  const st = { t: 'st', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +player.yaw.toFixed(2), sp: +Math.min(60, player.speedNow).toFixed(1), m: player.riding ? 'r' : m, atk: player.atkAnim > 0.5, d: curD ? curD.idx : -1, sh: player.sailing ? (player.shipTier || 0) : 0, r: player.riding ? player.riding.id : '', se: player.riding ? player.riding.seat : 0 };
   const key = JSON.stringify(st), now = performance.now();
   if (key === NET.lastSt && now - (NET.lastStT || 0) < 1000) return;
   NET.lastSt = key; NET.lastStT = now;
@@ -3083,12 +3163,12 @@ const SHIPS = [
   { name: 'Trireme', cost: 400, speed: [28, 40], scale: 1.0, sail: 0xb02020 },
 ];
 const MERCS = {
-  speer: { name: 'Speerträger', cost: 40, hp: 80, dmg: 9, look: { tunic: 0x6a5a3a, pants: 0x3a3024, weapon: 'spear', shield: true, shieldCol: 0x8a6a3a, hair: 0x2a1a0e, beard: true } },
-  hoplit: { name: 'Hoplit', cost: 90, hp: 140, dmg: 13, look: { tunic: 0x1c3a7a, armor: 0xb98d3a, helmet: true, crest: 0x1c3a7a, shield: true, shieldEmblem: 0x1c3a7a, weapon: 'spear', greaves: true, pants: 0x2a2a2a } },
-  veteran: { name: 'Spartanischer Veteran', cost: 160, hp: 200, dmg: 19, look: { tunic: 0x8e1717, armor: 0xc99a42, helmet: true, crest: 0xa01818, shield: true, shieldEmblem: 0x8a1a1a, weapon: 'sword', cape: 0x8e1717, greaves: true, pants: 0x3a1414, beard: true } },
+  speer: { name: 'Speerträger', pl: 'Speerträger', cost: 40, hp: 80, dmg: 9, look: { tunic: 0x6a5a3a, pants: 0x3a3024, weapon: 'spear', shield: true, shieldCol: 0x8a6a3a, hair: 0x2a1a0e, beard: true } },
+  hoplit: { name: 'Hoplit', pl: 'Hopliten', cost: 90, hp: 140, dmg: 13, look: { tunic: 0x1c3a7a, armor: 0xb98d3a, helmet: true, crest: 0x1c3a7a, shield: true, shieldEmblem: 0x1c3a7a, weapon: 'spear', greaves: true, pants: 0x2a2a2a } },
+  veteran: { name: 'Spartanischer Veteran', pl: 'Spartanische Veteranen', cost: 160, hp: 200, dmg: 19, look: { tunic: 0x8e1717, armor: 0xc99a42, helmet: true, crest: 0xa01818, shield: true, shieldEmblem: 0x8a1a1a, weapon: 'sword', cape: 0x8e1717, greaves: true, pants: 0x3a1414, beard: true } },
   buerger: { name: 'Bürgersoldat', cost: 0, hp: 100, dmg: 11, look: { tunic: 0x5a7a4a, armor: 0x8a7a5a, helmet: true, crest: 0x5a7a4a, shield: true, weapon: 'spear', pants: 0x3a3024 } },
 };
-const MAX_ALLIES = 4;
+const MAX_ALLIES = 30;
 const allies = [];
 const playerDamage = () => (player.dmg + WEAPONS[player.wTier || 0].dmg + upLvl('dmg') * 3) * (player.mounted && HORSES[player.horse || 'gaul'].war ? 1.3 : 1) * (clock.elapsedTime < (player.powerUntil || 0) ? 1.2 : 1);
 
@@ -3184,14 +3264,31 @@ function talkTavern(tv) {
   opts.push({ label: 'Gerüchte hören', fn: () => talk([{ who: W, text: pick(RUMORS) }]) }, { label: 'Tschüss', fn: () => { } });
   talk([{ who: W, text: 'Willkommen in der ' + tv.name + '! Ein Krug Wein, ein warmes Bett – oder suchst du Arbeit?', opts }]);
 }
+function hireMany(k, n) {
+  const m = MERCS[k]; n = Math.floor(n);
+  if (!(n > 0)) return;
+  const free = MAX_ALLIES - allies.length;
+  if (free <= 0) { toast('Dein Gefolge ist voll (' + MAX_ALLIES + ').'); return; }
+  if (n > free) { toast('Du kannst nur noch ' + free + ' Kämpfer führen (höchstens ' + MAX_ALLIES + ').'); return; }
+  const total = n * m.cost;
+  if (player.money < total) { toast('Nicht genug Geld: ' + n + ' × ' + m.cost + ' = ' + total + ' Drachmen, du hast ' + player.money + '.'); return; }
+  player.money -= total; for (let i = 0; i < n; i++) spawnAlly(k);
+  banner(n + ' × ' + (n > 1 ? (m.pl || m.name) : m.name), 'Für ' + total + ' Drachmen angeheuert. Gefolge: ' + allies.length + '/' + MAX_ALLIES); sfx('coin'); save();
+}
+function askHire(k, tv) {
+  const m = MERCS[k], free = MAX_ALLIES - allies.length, can = Math.max(0, Math.min(free, Math.floor(player.money / m.cost)));
+  let v = null;
+  try { if (document.pointerLockElement) document.exitPointerLock(); v = window.prompt('Wie viele ' + (m.pl || m.name) + ' möchtest du anheuern?\nPreis: ' + m.cost + ' Drachmen pro Kämpfer · Du hast ' + player.money + ' Drachmen · Platz im Gefolge: ' + free + '\nDu kannst dir höchstens ' + can + ' leisten.', String(Math.max(1, can))); } catch (e) { }
+  if (v === null) { talkHire(tv); return; }
+  const n = parseInt(String(v).trim(), 10);
+  if (!(n > 0)) { toast('Bitte eine Zahl größer als 0 eingeben.'); talkHire(tv); return; }
+  hireMany(k, n);
+}
 function talkHire(tv) {
-  const opts = Object.entries(MERCS).filter(([k]) => k !== 'buerger').map(([k, m]) => ({ label: m.name + ' anheuern (' + m.cost + ' Drachmen) – ' + m.hp + ' Leben, ' + m.dmg + ' Schaden', fn: () => {
-    if (allies.length >= MAX_ALLIES) { toast('Mehr als ' + MAX_ALLIES + ' Söldner kannst du nicht führen.'); return; }
-    if (spend(m.cost)) { spawnAlly(k); toast(m.name + ' folgt dir jetzt!', 'gold'); save(); }
-  } }));
+  const opts = Object.entries(MERCS).filter(([k]) => k !== 'buerger').map(([k, m]) => ({ label: m.name + ' anheuern – ' + m.cost + ' Dr pro Kopf (' + m.hp + ' Leben, ' + m.dmg + ' Schaden) – Anzahl wählen', fn: () => askHire(k, tv) }));
   if (allies.length) opts.push({ label: 'Alle Söldner entlassen', fn: () => { while (allies.length) removeAlly(allies[0]); toast('Deine Söldner ziehen weiter.'); save(); } });
   opts.push({ label: 'Zurück', fn: () => talkTavern(tv) });
-  talk([{ who: tv.keeper, text: 'Ein paar Kämpfer sitzen hier herum und suchen Arbeit. Sie folgen dir und kämpfen an deiner Seite.', opts }]);
+  talk([{ who: tv.keeper, text: 'Hier sitzen genug Kämpfer, die Arbeit suchen. Sag mir, wie viele du willst – solange dein Geld reicht. Gefolge: ' + allies.length + '/' + MAX_ALLIES + ', du hast ' + player.money + ' Drachmen.', opts }]);
 }
 
 // ---------- Söldner / Gefolge ----------
@@ -4714,6 +4811,7 @@ function updatePlayer(dt) {
   player.blitzCd = Math.max(0, (player.blitzCd || 0) - dt);
   if (player.adminFly) { updateAdminFly(dt, moving, sprint, canMove); return; }
   if (player.bird) { updateBird(dt, moving, sprint, canMove); return; }
+  if (player.riding) { updateRiding(dt); return; }
   if (player.sailing) { updateSailing(dt, moving, sprint); return; }
   if (player.flying) { updateFlying(dt, moving, sprint, canMove); return; }
   const hasHippo = player.gear.includes('poseidon');
@@ -5074,16 +5172,16 @@ function camBlocked(x, y, z) {
 }
 function updateCamera(dt) {
   const P = player.pos;
-  const tgt = new V3(P.x, P.y + (player.form === 'centaur' ? 2.8 : player.bird ? 1.5 : player.sailing ? 3.5 : player.mounted && horse && horse.siege ? 4.6 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
+  const tgt = new V3(P.x, P.y + (player.form === 'centaur' ? 2.8 : player.bird ? 1.5 : player.sailing || player.riding ? 3.5 : player.mounted && horse && horse.siege ? 4.6 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
   if (player.bowMode && !player.sailing) { tgt.x += Math.cos(camYaw) * 0.8; tgt.z -= Math.sin(camYaw) * 0.8; tgt.y += 0.2; }
   const cs = updateCamera.s || (updateCamera.s = tgt.clone());
-  const onFoot = !player.bird && !player.flying && !player.sailing && !player.adminFly && !player.swimming;
+  const onFoot = !player.bird && !player.flying && !player.sailing && !player.riding && !player.adminFly && !player.swimming;
   if (!onFoot || Math.abs(cs.y - tgt.y) > 4) cs.copy(tgt); else { cs.x = tgt.x; cs.z = tgt.z; cs.y += (tgt.y - cs.y) * (1 - Math.exp(-dt * 12)); }
   tgt.copy(cs);
   if (camShake > 0) { camShake = Math.max(0, camShake - dt); tgt.x += (Math.random() - 0.5) * camShake * 0.8; tgt.y += (Math.random() - 0.5) * camShake * 0.8; }
   if (player.landT > 0) { player.landT -= dt; tgt.y -= Math.sin(player.landT / 0.25 * Math.PI) * 0.18; }
   const inTav = !curD && insideTavern(P);
-  let dist = (inTav ? 4 : player.bird ? 12 : player.sailing ? 17 : player.flying ? 11 : player.mounted ? (horse && horse.siege ? 12 : 9) : 6.5) * camZoom * (player.bowMode && !player.sailing ? 0.7 : 1);
+  let dist = (inTav ? 4 : player.bird ? 12 : player.sailing || player.riding ? 17 : player.flying ? 11 : player.mounted ? (horse && horse.siege ? 12 : 9) : 6.5) * camZoom * (player.bowMode && !player.sailing ? 0.7 : 1);
   const dx = Math.sin(camYaw) * Math.cos(camPitch), dy = Math.sin(camPitch), dz = Math.cos(camYaw) * Math.cos(camPitch);
   for (let k = 0.12; k <= 1.0001; k += 0.08) { if (camBlocked(tgt.x + dx * dist * k, tgt.y + dy * dist * k, tgt.z + dz * dist * k)) { dist *= Math.max(0.12, k - 0.1); break; } }
   if (updateCamera.d === undefined || dist < updateCamera.d) updateCamera.d = dist; else updateCamera.d += (dist - updateCamera.d) * (1 - Math.exp(-dt * 2.5));
@@ -5109,14 +5207,14 @@ function updateHUD() {
   if (player.gear.includes('sirene')) ab.push(player.form === 'siren' ? '[J] Zurückverwandeln' : '[J] Sirene');
   if (player.gear.includes('kentaur')) ab.push(player.form === 'centaur' ? '[K] Zurückverwandeln' : '[K] Kentaur');
   if (NET.account && NET.account.admin) ab.push('[P] Admin');
-  if (player.hasShip) ab.push(player.sailing ? '[B] Anlegen' : '[B] Schiff');
+  if (player.hasShip) ab.push(player.sailing ? '[B] Anlegen' + (NET.id && shipCrew(NET.id).length ? ' · Passagiere ' + (shipCrew(NET.id).length + 1) + '/10' : '') : '[B] Schiff');
   if (player.gear.includes('pegasus')) { ab.push(player.flying ? '[T] Landen' : '[T] Pegasus'); ab.push(player.medCd > 0 ? 'Medusa: ' + Math.ceil(player.medCd) + ' s' : '[G] Medusenhaupt'); }
   if (player.relics.length) ab.push('Relikte ' + player.relics.length + '/6');
   if (player.blessed) ab.push(player.zapCd > 0 ? 'Blitz: ' + Math.ceil(player.zapCd) + ' s' : '[Q] Blitz des Zeus bereit');
   $('abilities').textContent = ab.join('  ·  ');
   $('wanted').textContent = player.wanted ? 'GESUCHT  ' + '★'.repeat(player.wanted) + '☆'.repeat(5 - player.wanted) : '';
   $('bountyText').textContent = S.bounty ? '☠ Kopfgeld: ' + S.bounty.name + ' – ' + S.bounty.reward + ' Drachmen' : '';
-  $('allyText').textContent = allies.length ? '⚔ Gefolge: ' + allies.map(a => a.def.name.split(' ').pop() + ' ' + Math.ceil(a.hp)).join(', ') : '';
+  $('allyText').textContent = allies.length ? (allies.length <= 4 ? '⚔ Gefolge: ' + allies.map(a => a.def.name.split(' ').pop() + ' ' + Math.ceil(a.hp)).join(', ') : '⚔ Gefolge ' + allies.length + '/' + MAX_ALLIES + ': ' + Object.entries(allies.reduce((o, a) => { const k = a.def.name.split(' ').pop(); o[k] = (o[k] || 0) + 1; return o; }, {})).map(([k, n]) => k + ' ×' + n).join(', ')) : '';
   nearInter = dialog ? null : findInteractable();
   updateTouchUI();
   $('prompt').innerHTML = nearInter ? '<b>E</b>' + (typeof nearInter.label === 'function' ? nearInter.label() : nearInter.label) : '';
@@ -5226,6 +5324,8 @@ function init() {
   buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
   buildIslands();
   buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildAncientWorld(); buildSirenRocks(); buildServices(); buildQuizNPCs(); buildZeusQuest(); buildQuarrels(); buildRoads(); buildTraffic();
+  interactables.push({ pos: () => { const id = boardableShip(); const r = id && NET.others.get(id); return r ? new V3(r.pos.x, player.pos.y, r.pos.z) : new V3(1e9, 0, 1e9); }, r: 16, active: () => !!boardableShip(), label: () => { const id = boardableShip(); const r = NET.others.get(id); return 'An Bord der Trireme von ' + (r ? r.name : '?') + ' (' + (shipCrew(id).length + 1) + '/10)'; }, fn: boardShip });
+  interactables.push({ pos: () => player.pos, r: 5, active: () => !!player.riding, label: 'Von Bord gehen', fn: () => leaveShip() });
   buildVegetation();
   finalizeStatic();
   applyRealism();
@@ -5254,7 +5354,7 @@ function init() {
   $('btnNew').onclick = () => startGame(false);
   const qb = $('btnQual'); if (qb) { const lbl = () => qb.textContent = QUALITY === 'hoch' ? 'Hoch' : 'Mittel (schneller)'; lbl(); qb.onclick = () => { setQuality(QUALITY === 'hoch' ? 'mittel' : 'hoch'); lbl(); }; }
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { playerAttack, makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { askHire, netHandle, playerAttack, townAction, townSellPrice, builtLvl: () => builtLvl, TOWN_PARTS, seatWorld, makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);

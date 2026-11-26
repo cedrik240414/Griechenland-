@@ -215,7 +215,7 @@ export class World {
     if (!a.name) return;
     if (msg.t === 'st') {
       const n = (v, lim) => (typeof v === 'number' && isFinite(v) ? Math.max(-lim, Math.min(lim, v)) : 0);
-      a.st = { x: n(msg.x, 1e4), y: n(msg.y, 1e4), z: n(msg.z, 1e4), yaw: n(msg.yaw, 10), sp: n(msg.sp, 100), m: typeof msg.m === 'string' ? msg.m.slice(0, 2) : '', atk: !!msg.atk, d: n(msg.d, 99) };
+      a.st = { x: n(msg.x, 1e4), y: n(msg.y, 1e4), z: n(msg.z, 1e4), yaw: n(msg.yaw, 10), sp: n(msg.sp, 100), m: typeof msg.m === 'string' ? msg.m.slice(0, 2) : '', atk: !!msg.atk, d: n(msg.d, 99), sh: n(msg.sh, 9), r: typeof msg.r === 'string' ? msg.r.slice(0, 40) : '', se: n(msg.se, 20) };
       ws.serializeAttachment(a);
       this.broadcast(ws, { t: 'st', id: a.id, ...a.st });
     } else if (msg.t === 'chat') {
@@ -238,6 +238,7 @@ export class World {
       else if (msg.action === 'leave' && T && isMember(T, a.cid)) { T.members = T.members.filter(m => m.cid !== a.cid); event = a.name + ' hat ' + T.name + ' verlassen.'; }
       else if (msg.action === 'kick' && T && T.owner === a.cid && isMember(T, String(msg.member || ''))) { const m = T.members.find(m => m.cid === msg.member); T.members = T.members.filter(x => x.cid !== msg.member); event = m.name + ' wurde aus ' + T.name + ' verbannt.'; }
       else if (msg.action === 'collect' && T && T.owner === a.cid) { T.collected = now; }
+      else if (msg.action === 'sell' && T && T.owner === a.cid) { const nm = T.name; this.towns[site] = SITES[site] ? { ...SITES[site], collected: now } : null; event = a.name + ' hat die Stadt ' + nm + ' verkauft.'; }
       else return;
       await this.ctx.storage.put('towns', this.towns);
       this.all({ t: 'towns', towns: this.towns, event, site, by: a.id });

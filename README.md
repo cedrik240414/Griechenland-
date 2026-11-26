@@ -96,6 +96,14 @@ Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code lie
 - Der Held trägt immer einen Helm, hat einen neuen Look und hält die Waffe in der rechten und den Schild in der linken Hand. Im Inventar stehen die Waffen rechts.
 - Auf dem Touchscreen liegen Bogen und Blitz rechts bei Pferd, Karte und Adler.
 
+## Neu: Mitfahren, Stadtverkauf, Söldner, Intro
+
+- **Trireme für 10:** Segelt ein anderer Held mit seiner Trireme vorbei, kannst du mit E an Bord gehen (bis zu 9 Mitfahrer plus Kapitän). Mit E steigst du wieder aus; legt der Kapitän an, gehen alle an Land.
+- **Stadt verkaufen:** In deiner eigenen Stadt gibt es „Stadt verkaufen“: die Hälfte aller Ausbaukosten plus 25 Drachmen pro Wachstufe, dazu die Schatzkammer. Die Gebäude verschwinden und der Platz wird wieder frei (eroberte Städte gehen an ihre alten Herren zurück).
+- **Siedlungsplätze auf der Karte:** 🚩 freie Plätze (grün) und 🏛 Städte (gold = deine, blau = Bürger, rot = fremd) auf Minikarte und großer Karte.
+- **Söldner in beliebiger Zahl:** In der Taverne gibst du ein, wie viele du willst – bis zu 30 Kämpfer, solange das Geld reicht.
+- **SVE-Studios-Intro** mit Logo-Animation beim Start (antippen zum Überspringen).
+
 ## Steuerung
 
 | Taste | Aktion |
