@@ -1594,6 +1594,7 @@ function damageEnemy(e, dmg, crit = false) {
   if (e.hp <= 0) killEnemy(e);
 }
 function killEnemy(e) {
+  setTimeout(checkLegends, 100);
   e.dead = true; e.deadT = 0; e.respawn = 100;
   if (e.site && !isMine(townsState()[e.site]) && !isMember(townsState()[e.site])) { player.crimeKills = (player.crimeKills || 0) + 1; if (player.crimeKills % 2 === 0) addCrime(1); }
   if (e.def.hunter) { player.hunterKills = (player.hunterKills || 0) + 1; if (player.hunterKills % 3 === 0) addCrime(1); setTimeout(() => removeEnemy(e), 6000); }
@@ -1606,6 +1607,7 @@ function killEnemy(e) {
   if (e.type === 'minotaur') { banner('DER MINOTAUROS IST BESIEGT', 'Kehre nach Athen zurück, Held!'); if (S.stage === 10) setStage(11); S.minoDead = true; save(); }
   if (e.type === 'gigant' && S.zeus === 2) { S.zeusKills = (S.zeusKills || 0) + 1; updateZeusText(); toast('Gigant gefallen (' + S.zeusKills + '/3)', 'gold'); if (S.zeusKills >= 3) setZeus(3); else save(); }
   if (e.type === 'typhon' && S.zeus === 5) setTimeout(() => setZeus(6), 4500);
+  noteLegend(e.type);
   if (e.def.boss && e.key) { banner(e.def.name + ' ist besiegt!', 'Öffne den Schatz am Ende der Halle.'); if (!S.bossDead.includes(e.key)) S.bossDead.push(e.key); sfx('quest'); save(); }
 }
 function updateEnemy(e, dt) {
@@ -1696,16 +1698,17 @@ function revive(e) { e.dead = false; e.hp = e.maxHp; e.x = e.home[0]; e.z = e.ho
 // ---------- Spieler-Angriffe ----------
 function playerAttack() {
   if (sirenTap()) return;
-  if (dialog || heroOpen || player.dead || (player.swimming && !player.gear.includes('poseidon') && !player.bird) || player.stoned > 0 || player.sailing) return;
+  if (dialog || heroOpen || player.dead || (player.swimming && !player.gear.includes('poseidon') && !player.bird && player.form !== 'siren') || player.stoned > 0 || player.sailing) return;
   if (OLY && OLY.ev === 'speer') { throwJavelin(); return; }
   if (player.blocking) { shieldBash(); return; }
   if (player.bird) { throwBlitz(true); return; }
+  if (player.form === 'siren') { sirenSong(); return; }
   if (player.blitzMode) { blitzStrike(); return; }
   if (player.bowMode) { shootArrow(); return; }
   if (player.atkCd > 0) return;
   player.atkCd = 0.55; player.atkAnim = 1;
   let fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
-  const reach = (player.mounted ? (HORSES[player.horse].chariot ? 4.6 : 3.8) : 3.0) + (player.gear.includes('poseidon') ? 1.2 : 0);
+  const reach = (player.form === 'centaur' ? 4.2 : player.mounted ? (HORSES[player.horse].chariot ? 4.6 : 3.8) : 3.0) + (player.gear.includes('poseidon') ? 1.2 : 0);
   // Sanftes Auto-Zielen: nächsten Gegner im weiten Kegel vor der Kamera anvisieren
   let tgt = null, best = 1e9;
   for (const e of enemies) {
@@ -1723,7 +1726,7 @@ function playerAttack() {
     const er = e.def.hitR || 0.3;
     if (d < reach + er && Math.abs(e.y - player.pos.y) < (player.flying ? 6 : 3.5) && (d < 1 || (dx * fx + dz * fz) / d > 0.4)) {
       const crit = rand() < 0.15;
-      damageEnemy(e, playerDamage() * rr(0.85, 1.15) * (crit ? 2 : 1), crit);
+      damageEnemy(e, playerDamage() * rr(0.85, 1.15) * (crit ? 2 : 1) * (player.form === 'centaur' ? 1.3 : 1), crit);
       if (!e.dead && !e.def.charge && !e.def.boss) { const k = 1.2 / (d || 1); const p = { x: e.x + dx * k, z: e.z + dz * k }; if (e.def.fly || groundAt(p.x, p.z) > -0.5) { resolveCollisions(p, e.def.r); e.x = p.x; e.z = p.z; } }
     }
   }
@@ -1749,6 +1752,7 @@ function makeBolt(x, z) {
 
 // ---------- Pferd ----------
 function mount() {
+  if (player.form) { toast('Verwandle dich zuerst zurück.'); return; }
   if (curD) { toast('Hier unten kann dein Pferd nicht hin.'); return; }
   if (player.flying || player.sailing) return;
   if (player.swimming || (race && !race.mount)) { toast(race ? 'Beim Wettlauf kein Pferd!' : 'Im Wasser kann dein Pferd nicht kommen.'); return; }
@@ -2272,6 +2276,10 @@ function talkChiron() {
     { label: player.chiron ? 'Training (bereits abgeschlossen)' : 'Trainiere mich (80 Drachmen): +5 Schaden', fn: () => { if (!player.chiron && spend(80)) { player.chiron = true; player.dmg += 5; toast('Chirons Training: Schaden +5', 'gold'); } } },
     { label: 'Leb wohl.', fn: () => { } },
   ];
+  if (legendCount() === LEGENDS.length && !player.gear.includes('kentaur')) { talk([
+    { who: W, text: 'Du hast es geschafft! Kerberos, Talos, Skylla, Medusa, Polyphem, der Nemeische Löwe und der Kalydonische Eber – alle sieben Ungeheuer sind besiegt!' },
+    { who: W, text: 'Kein Sterblicher vor dir hat das vollbracht. Darum gebe ich dir ein Geschenk, das nur ein Kentaur geben kann: unsere Gestalt. Drücke K – und lauf schneller als der Wind!', fn: () => { gainGear('kentaur'); banner('Gestalt des Kentauren', 'K: Verwandle dich und galoppiere durch ganz Hellas!'); } }]); return; }
+  opts.unshift({ label: 'Die Prüfung der Kentauren (' + legendCount() + '/7 Ungeheuer)', fn: () => talk([{ who: W, text: 'Besiege die sieben legendären Ungeheuer, dann schenke ich dir die Gestalt der Kentauren. Bisher: ' + LEGENDS.map(([k, n]) => (legendDone(k) ? '✔ ' : '✘ ') + n).join(', ') + '.' }]) });
   talk([{ who: W, text: 'Sei gegrüßt, junger Held. Ich bin Chiron, Lehrer des Achilles und des Herakles. Meine wilden Brüder im Wald östlich von hier sind weniger freundlich …', opts }]);
 }
 
@@ -2502,7 +2510,7 @@ function netSend(dt) {
   if (!NET.ws || NET.ws.readyState !== 1 || !NET.id) return;
   NET.sendT -= dt; if (NET.sendT > 0) return; NET.sendT = 0.12;
   const P = player.pos;
-  const m = player.sailing ? 's' : (player.flying || player.bird) ? 'p' : player.mounted ? 'h' : (player.swimming && player.gear.includes('poseidon')) ? 'k' : '';
+  const m = player.sailing ? 's' : (player.flying || player.bird) ? 'p' : player.form === 'centaur' ? 'h' : player.form === 'siren' ? 'k' : player.mounted ? 'h' : (player.swimming && player.gear.includes('poseidon')) ? 'k' : '';
   const st = { t: 'st', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +player.yaw.toFixed(2), sp: +Math.min(60, player.speedNow).toFixed(1), m, atk: player.atkAnim > 0.5, d: curD ? curD.idx : -1 };
   const key = JSON.stringify(st), now = performance.now();
   if (key === NET.lastSt && now - (NET.lastStT || 0) < 1000) return;
@@ -3160,11 +3168,13 @@ function buildQuizNPCs() {
 }
 GEAR.aigis = { name: 'Aigis der Athene', desc: '+100 Leben, 40 % weniger Schaden, jeder Block wird zur Parade' };
 function athenaReward() {
-  if (player.gear.includes('aigis')) return;
+  if (player.gear.includes('aigis') && player.gear.includes('sirene')) return;
+  if (player.gear.includes('aigis')) { gainGear('sirene'); return; }
   flash = 1.2; sfx('zap');
   talk([
     { who: 'Athene, Göttin der Weisheit', text: 'Ich habe dich beobachtet, Sterblicher. Du hast ALLE Gelehrten von Hellas überzeugt – kein Held vor dir war so klug!' },
-    { who: 'Athene, Göttin der Weisheit', text: 'Nimm meine Aigis, den Schild der Götter. Kein Schwert, kein Pfeil, kein Ungeheuer wird dich mehr leicht verletzen.', fn: () => { player.maxHp += 100; player.hp = player.maxHp; gainGear('aigis'); banner('MEISTER DES WISSENS', 'Athene schenkt dir die Aigis!'); } }]);
+    { who: 'Athene, Göttin der Weisheit', text: 'Nimm meine Aigis, den Schild der Götter. Kein Schwert, kein Pfeil, kein Ungeheuer wird dich mehr leicht verletzen.', fn: () => { player.maxHp += 100; player.hp = player.maxHp; gainGear('aigis'); } },
+    { who: 'Athene, Göttin der Weisheit', text: 'Und weil Wissen wie das Meer ist – tief und weit –, schenke ich dir die Gestalt der Sirene. Drücke J, und das Meer gehört dir!', fn: () => { gainGear('sirene'); banner('Gestalt der Sirene', 'J: Verwandle dich und schwimme schneller als jedes Schiff!'); } }]);
 }
 function talkQuiz(q) {
   const W = q.name;
@@ -3225,6 +3235,8 @@ addEventListener('keydown', (e) => {
   if (k === 'KeyX') cycleWeapon();
   if (k === 'KeyV') throwBlitz(false);
   if (k === 'KeyU') toggleBird();
+  if (k === 'KeyJ') setForm('siren');
+  if (k === 'KeyK') setForm('centaur');
   if (k === 'KeyT') toggleFly();
   if (k === 'KeyB') toggleShip();
   if (k === 'KeyG') medusaHead();
@@ -3685,6 +3697,7 @@ function makeBird() {
   return { root: g, wings };
 }
 function toggleBird() {
+  if (player.form && !player.bird) setForm(null);
   if (!player.gear.includes('blitzvogel')) { toast('Nur wer Typhon besiegt, erhält die Gestalt des Blitzadlers.'); return; }
   if (curD) { toast('Unter der Erde kannst du dich nicht verwandeln.'); return; }
   if (player.bird) {
@@ -3871,7 +3884,7 @@ function updateSirens(dt) {
   const C = LOCS.sirenen, P = player.pos, d = Math.hypot(P.x - C.x, P.z - C.z), hud = $('sirenHud');
   if (!SIRENMG) {
     if (hud.style.display !== 'none') hud.style.display = 'none';
-    const exposed = (player.sailing || player.swimming) && d < 130 && d > 25 && clock.elapsedTime > (player.sirenSafe || 0) && !curD;
+    const exposed = player.form !== 'siren' && (player.sailing || player.swimming) && d < 130 && d > 25 && clock.elapsedTime > (player.sirenSafe || 0) && !curD;
     if (exposed) { SIRENMG = { t: 0, res: 35 }; for (const k in keys) keys[k] = false; sfx('quest'); }
     return;
   }
@@ -3941,6 +3954,72 @@ function buildTavernHall(L, i, tv) {
 function insideTavern(P) { for (const tv of TAVERNS) { const b = tv.box; if (b && P.x > b.minX && P.x < b.maxX && P.z > b.minZ && P.z < b.maxZ) return tv; } return null; }
 
 // ============================================================
+// Verwandlungen: Sirene (Wasser) & Kentaur (Land)
+// ============================================================
+GEAR.sirene = { name: 'Gestalt der Sirene', desc: 'J: Verwandle dich in eine Sirene – blitzschnell schwimmen, Angriff = betörender Gesang' };
+GEAR.kentaur = { name: 'Gestalt des Kentauren', desc: 'K: Verwandle dich in einen Kentauren – rasend schnell an Land, starke Speerstöße' };
+const LEGENDS = [['hades', 'Kerberos'], ['hephaistos', 'Talos'], ['poseidon', 'Skylla'], ['medusa', 'Medusa'], ['polyphem', 'Polyphem'], ['loewe', 'Nemeischer Löwe'], ['eber_boss', 'Kalydonischer Eber']];
+const legendDone = (k) => (S.bossDead || []).includes(k) || (S.legends || []).includes(k);
+const legendCount = () => LEGENDS.filter(([k]) => legendDone(k)).length;
+function noteLegend(type) {
+  if (!['loewe', 'eber_boss'].includes(type)) return;
+  S.legends = S.legends || []; if (!S.legends.includes(type)) S.legends.push(type);
+}
+function checkLegends() {
+  if (legendCount() === LEGENDS.length && !player.gear.includes('kentaur') && !S.legendHint) { S.legendHint = true; setTimeout(() => banner('Alle 7 Ungeheuer besiegt!', 'Chiron, der Kentaur am Pelion, möchte dich sprechen.'), 5000); save(); }
+}
+let sirenM = null, centM = null;
+function makeSirenForm() {
+  const h = makeHumanoid({ skin: 0xe8c8b0, tunic: 0x3aa0b0, pants: 0x2a7a8a, hair: 0x1a5a6a, veil: 0x8fe0f0, wreath: true, eyes: 0x7af0ff });
+  h.legL.visible = false; h.legR.visible = false;
+  const tailM = lam(0x2aa0a0, 0x063030), finM = lam(0x8fe0f0, 0x104040);
+  const tail = new THREE.Group(); tail.position.set(0, 0.95, 0); h.root.add(tail);
+  const t1 = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.6, 10), tailM); t1.rotation.x = Math.PI; t1.position.y = -0.7; tail.add(t1);
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.06, 0.5), finM); fin.position.set(0, -1.5, -0.1); tail.add(fin);
+  h.tail = tail; return h;
+}
+function makeCentaurForm() {
+  const L = heroLook();
+  return makeCentaur(Object.assign({}, L, { body: 0x6b4325, weapon: 'spear', shield: false, cape: undefined }));
+}
+function setForm(form) {
+  if (curD) { toast('Unter der Erde kannst du dich nicht verwandeln.'); return; }
+  const key = form === 'siren' ? 'sirene' : 'kentaur';
+  if (form && !player.gear.includes(key)) { toast(form === 'siren' ? 'Die Gestalt der Sirene schenkt Athene dem, der alle 64 Gelehrten überzeugt.' : 'Die Gestalt des Kentauren gibt Chiron nur dem, der alle 7 legendären Ungeheuer besiegt.'); return; }
+  if (player.form === form) form = null;
+  if (form) { if (player.mounted) dismount(); if (player.flying) stopFlying(true); if (player.bird) { player.bird = false; birdM.root.visible = false; } if (player.sailing) { toast('Erst an Land gehen!'); return; } }
+  player.form = form;
+  if (sirenM) sirenM.root.visible = form === 'siren';
+  if (form === 'centaur') { if (centM) scene.remove(centM.root); centM = makeCentaurForm(); scene.add(centM.root); } else if (centM) centM.root.visible = false;
+  hero.root.visible = !form;
+  flash = 0.6; sfx('zap');
+  if (form) toast(form === 'siren' ? '🧜 Sirene! Im Wasser bist du blitzschnell. Angriff = Gesang. J zurückverwandeln' : '♐ Kentaur! Rasend schnell an Land. K zurückverwandeln', 'gold');
+}
+let songCd = 0;
+function sirenSong() {
+  if (songCd > 0) return; songCd = 2; player.atkAnim = 1; sfx('quest');
+  floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, '♪ ♫ ♪', '#8fe0ff', true);
+  for (const e of enemies) { if (e.dead) continue; const d = Math.hypot(e.x - player.pos.x, e.z - player.pos.z); if (d < 12) { damageEnemy(e, 28 + playerDamage() * 0.5); if (!e.def.boss && !e.dead) { e.stunT = 2.5; } } }
+}
+function updateForms(dt) {
+  songCd = Math.max(0, songCd - dt);
+  const P = player.pos, t = clock.elapsedTime;
+  if (player.form === 'siren') {
+    if (player.swimming) player.sirenSafe = t + 5;
+    const y = player.swimming ? -1.35 + Math.sin(t * 2) * 0.1 : P.y;
+    sirenM.root.position.set(P.x, y + (player.swimming ? -0.6 : 0), P.z); sirenM.root.rotation.y = player.yaw;
+    sirenM.root.rotation.x = player.swimming && player.speedNow > 5 ? 0.9 : 0;
+    animateHumanoid(sirenM, 0, dt, { attack: player.atkAnim });
+    if (player.swimming && player.speedNow > 5) { sirenM.armL.rotation.x = -2.8; sirenM.armR.rotation.x = -2.8; }
+    sirenM.tail.rotation.x = Math.sin(t * (player.speedNow > 5 ? 10 : 3)) * 0.35;
+  } else if (player.form === 'centaur' && centM) {
+    centM.root.visible = true; centM.root.position.set(P.x, P.y, P.z); centM.root.rotation.y = player.yaw;
+    animateQuad(centM, player.speedNow * 0.5, dt);
+    if (player.atkAnim > 0) { const k = 1 - player.atkAnim; centM.armR.rotation.x = k < 0.35 ? lerp(-0.3, -2.7, k / 0.35) : lerp(-2.7, -0.4, (k - 0.35) / 0.65); } else centM.armR.rotation.x = -0.5;
+  }
+}
+
+// ============================================================
 // Touch-Steuerung (iPad / Handy)
 // ============================================================
 const TOUCH = { on: false, jx: 0, jy: 0, sprint: false, btns: {} };
@@ -3987,7 +4066,7 @@ function setupTouch() {
   mk('use', 'E', 'mid gold', () => pressKey('KeyE', true), () => pressKey('KeyE', false));
   mk('dn', '⤓', 'mid', () => pressKey('KeyC', true), () => pressKey('KeyC', false));
   mk('wpn', '🏹', 'mid', () => pressKey('KeyX', true), () => pressKey('KeyX', false));
-  const side = [['I', '🎒', 'KeyI'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
+  const side = [['I', '🎒', 'KeyI'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['J', '🧜', 'KeyJ'], ['K', '♐', 'KeyK'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
   for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, (id === 'R' || id === 'M') ? ui : row);
   // Kamera: mit dem Finger über das Bild wischen, zwei Finger = Zoom
   const pts = new Map(); let pinch = 0;
@@ -4011,7 +4090,7 @@ function updateTouchUI() {
   const show = (id, v) => { v = !!v; const b = TOUCH.btns[id]; if (b && (b.style.display === 'none') === v) b.style.display = v ? '' : 'none'; };
   const fly = player.flying || player.adminFly || player.bird;
   show('dn', fly); show('sQ', player.blessed); show('sT', player.gear.includes('pegasus')); show('sG', player.gear.includes('pegasus'));
-  show('sB', player.hasShip); show('sV', player.gear.includes('keraunos')); show('sU', player.gear.includes('blitzvogel')); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
+  show('sB', player.hasShip); show('sV', player.gear.includes('keraunos')); show('sU', player.gear.includes('blitzvogel')); show('sJ', player.gear.includes('sirene')); show('sK', player.gear.includes('kentaur')); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
   show('use', !!nearInter || !!dialog);
   const u = $('touchUI'); if (u) { const d = started && !mapOpen ? '' : 'none'; if (u.style.display !== d) u.style.display = d; }
 }
@@ -4066,8 +4145,11 @@ function updatePlayer(dt) {
   if (player.blocking) speed = 3.2;
   if (player.relics.includes('hermes')) speed *= 1.2;
   if (!player.mounted && !player.swimming) speed *= 1 + 0.04 * upLvl('spd');
+  if (player.form === 'siren') speed = player.swimming ? (sprint ? 75 : 45) : 4;
+  if (player.form === 'centaur') speed = player.swimming ? 5 : (sprint ? 55 : 34);
   const stMul = (player.relics.includes('herakles') ? 0.5 : 1) * (race ? 0.5 : 1) * (1 - 0.1 * upLvl('st'));
-  if (sprint && !player.mounted) player.stamina = Math.max(0, player.stamina - dt * 22 * stMul);
+  if (sprint && !player.mounted && !player.form) player.stamina = Math.max(0, player.stamina - dt * 22 * stMul);
+  else if (sprint && player.form) player.stamina = Math.max(0, player.stamina - dt * 6);
   else if (sprint && player.mounted) player.stamina = Math.max(0, player.stamina - dt * 10 * stMul);
   else player.stamina = Math.min(100, player.stamina + dt * 16);
   const ox = P.x, oz = P.z;
@@ -4096,7 +4178,7 @@ function updatePlayer(dt) {
       player.vy = 0; player.onGround = true;
     } else if (player.onGround && player.vy <= 0 && P.y - g < (player.mounted ? 1.4 : 0.8)) { P.y = g; player.vy = 0; }
     else player.onGround = false;
-    if (canMove && keys.Space && player.onGround) { player.vy = player.mounted ? 12 : 10.5; player.onGround = false; }
+    if (canMove && keys.Space && player.onGround) { player.vy = player.mounted || player.form === 'centaur' ? 13 : 10.5; player.onGround = false; }
   }
   // Regeneration
   if (!player.dead && clock.elapsedTime - player.lastHurt > 6 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + dt * (clock.elapsedTime < (player.regenUntil || 0) ? 14 : 4));
@@ -4106,6 +4188,7 @@ function updatePlayer(dt) {
   hero.root.position.set(P.x, P.y + hy + (riding ? 1.0 : player.swimming ? -0.85 : 0), P.z);
   hero.root.rotation.y = player.yaw;
   animateHumanoid(hero, player.mounted || riding ? 0 : player.speedNow, dt, { attack: player.atkAnim, block: player.blocking, sitting: player.mounted || riding, bow: player.bowMode });
+  if (player.form) hero.root.visible = false;
   hippo.root.visible = riding; if (riding) { hippo.root.position.set(P.x, P.y - 0.4, P.z); hippo.root.rotation.y = player.yaw; animateQuad(hippo, player.speedNow * 0.4, dt); }
   pegasus.root.visible = false; ship.root.visible = false;
   if (player.swimming && !riding) { hero.armL.rotation.x = -2.6 + Math.sin(clock.elapsedTime * 4) * 0.6; hero.armR.rotation.x = -2.6 - Math.sin(clock.elapsedTime * 4) * 0.6; }
@@ -4238,7 +4321,7 @@ function camBlocked(x, y, z) {
 }
 function updateCamera(dt) {
   const P = player.pos;
-  const tgt = new V3(P.x, P.y + (player.bird ? 1.5 : player.sailing ? 3.5 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
+  const tgt = new V3(P.x, P.y + (player.form === 'centaur' ? 2.8 : player.bird ? 1.5 : player.sailing ? 3.5 : player.mounted || player.flying ? 3.0 : 1.75) + (player.swimming && !player.gear.includes('poseidon') ? -0.6 : 0), P.z);
   if (player.bowMode && !player.sailing) { tgt.x += Math.cos(camYaw) * 0.8; tgt.z -= Math.sin(camYaw) * 0.8; tgt.y += 0.2; }
   const inTav = !curD && insideTavern(P);
   let dist = (inTav ? 4 : player.bird ? 12 : player.sailing ? 17 : player.flying ? 11 : player.mounted ? 9 : 6.5) * camZoom * (player.bowMode && !player.sailing ? 0.7 : 1);
@@ -4262,6 +4345,8 @@ function updateHUD() {
   ab.push('[X] ' + (player.bowMode ? (player.gear.includes('keraunos') ? 'Keraunos' : 'Schwert') : player.blitzMode ? 'Schwert' : 'Bogen'), '[I] Held');
   if (player.gear.includes('keraunos')) ab.push(player.blitzCd > 0 ? 'Blitz ' + player.blitzCd.toFixed(1) + ' s' : '[V] Blitz werfen');
   if (player.gear.includes('blitzvogel')) ab.push(player.bird ? '[U] Zurückverwandeln' : '[U] Blitzadler');
+  if (player.gear.includes('sirene')) ab.push(player.form === 'siren' ? '[J] Zurückverwandeln' : '[J] Sirene');
+  if (player.gear.includes('kentaur')) ab.push(player.form === 'centaur' ? '[K] Zurückverwandeln' : '[K] Kentaur');
   if (NET.account && NET.account.admin) ab.push('[P] Admin');
   if (player.hasShip) ab.push(player.sailing ? '[B] Anlegen' : '[B] Schiff');
   if (player.gear.includes('pegasus')) { ab.push(player.flying ? '[T] Landen' : '[T] Pegasus'); ab.push(player.medCd > 0 ? 'Medusa: ' + Math.ceil(player.medCd) + ' s' : '[G] Medusenhaupt'); }
@@ -4298,7 +4383,7 @@ function loop() {
     updatePlayer(dt);
     for (const e of enemies) updateEnemy(e, dt);
     updateNPCs(dt);
-    updateRemotes(dt); netSend(dt); updateAllies(dt); updateWanted(dt); updateArrows(dt); updateOly(dt); updateStrikes(dt); updateSirens(dt);
+    updateRemotes(dt); netSend(dt); updateAllies(dt); updateWanted(dt); updateArrows(dt); updateOly(dt); updateStrikes(dt); updateSirens(dt); updateForms(dt);
     updatePickups(dt, t);
     updateSky(dt);
     animateWorld(dt, t);
@@ -4355,6 +4440,7 @@ function startGame(fromSave) {
   if (!sv) S.towns = defaultTowns();
   if (mpEnabled()) setTimeout(() => { if (!NET.towns) syncTowns(); }, 6000); else syncTowns();
   setHorseModel(); setShipModel();
+  if (NET.account && NET.account.admin) { let got = false; for (const k of ['keraunos', 'blitzvogel']) if (!player.gear.includes(k)) { player.gear.push(k); got = true; } if (got) setTimeout(() => toast('⚡ Admin: Keraunos (X/V) und Blitzadler (U) freigeschaltet', 'gold'), 2500); }
   S.altars = S.altars || []; S.zeus = S.zeus || 0; ZEUS_ALTARS.forEach((A, i) => { A.fire.visible = S.altars.includes(i); }); if (S.zeus === 2) spawnGiants(); updateZeusText();
   started = true;
   $('menu').classList.add('hidden'); $('hud').classList.remove('hidden');
@@ -4382,6 +4468,7 @@ function init() {
   hero = makeHumanoid(heroLook()); scene.add(hero.root);
   horse = makeHorse(); horse.root.visible = false; scene.add(horse.root);
   birdM = makeBird(); birdM.root.visible = false; scene.add(birdM.root);
+  sirenM = makeSirenForm(); sirenM.root.visible = false; scene.add(sirenM.root);
   pegasus = makePegasus(); pegasus.root.visible = false; scene.add(pegasus.root);
   hippo = makeHippo(); hippo.root.visible = false; scene.add(hippo.root);
   ship = makeShip(); ship.root.visible = false; scene.add(ship.root);
@@ -4399,7 +4486,7 @@ function init() {
   $('heroClose').onclick = (e) => { e.stopPropagation(); if (heroOpen) toggleHero(); };
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);

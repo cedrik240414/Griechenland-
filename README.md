@@ -50,6 +50,12 @@ Die Karte ist dem **echten Griechenland** nachgebildet (Küstenlinien nach Läng
 
 Hermes in Olympia startet die Reihe: Alle 5 Olympia-Goldmedaillen → 3 Giganten am Olymp besiegen → die Altäre von Dodona, Lykaion und Ida entzünden → Zeus übergibt den **Keraunos** (Blitzschlag mit Kettenblitz, **V** = Blitz werfen) → letzte, sehr schwere Prüfung: **Typhon** im Gipfel der Stürme (rote Ringe = gleich schlägt der Blitz ein!) → Belohnung: die **Gestalt des Blitzadlers** (**U**), mit der man blitzschnell fliegt und Blitze schleudert.
 
+## Die Prüfung der Kentauren
+
+Besiege die 7 legendären Ungeheuer – Kerberos, Talos, Skylla, Medusa, Polyphem, den Nemeischen Löwen und den Kalydonischen Eber – und kehre zu **Chiron** am Pelion zurück. Er schenkt dir die **Gestalt des Kentauren** (**K**): rasend schnell an Land und mit kräftigen Speerstößen.
+
+Admins haben Keraunos und Blitzadler von Anfang an.
+
 ## Tavernen, Händler & Nebenmissionen
 
 - **14 begehbare Tavernen** (🍺 auf der Karte): antikes griechisches Essen (Gerstenbrot, Linsensuppe, Ziegenkäse mit Honig, Thunfisch, Kykeon, Krasis, in Sparta die Schwarze Suppe), Bett zum Heilen, **Söldner anheuern** (Speerträger, Hoplit, Spartanischer Veteran – bis zu 4 folgen dir und kämpfen mit), **Kopfgeldbrett** mit Gesetzlosen zum Jagen, Gerüchte und das eigene Kopfgeld begleichen
@@ -58,7 +64,7 @@ Hermes in Olympia startet die Reihe: Alle 5 Olympia-Goldmedaillen → 3 Giganten
 - **Schmiede**: Waffen (bis Xiphos des Champions) und Rüstungen (bis Hoplitenrüstung)
 - **Schiffsbauer** in Piräus, Kreta und Ithaka: Fischerboot, Handelsschiff, Trireme
 - **3 Mythenwälder**: Hain der Dryaden, Wald von Nemea (Nemeischer Löwe), Kalydonischer Wald (Kalydonischer Eber) – mit Satyrn, Dryaden und einem Schatz
-- **64 Gelehrte** (❓ auf der Karte) – darunter Sokrates, Platon, Pythagoras, Thales, Hippokrates, Homer, Sappho und Alexander an ihren echten Orten – stellen je **5 leichte Fragen über Griechenland**. Wer alle überzeugt, bekommt von **Athene die Aigis**.
+- **64 Gelehrte** (❓ auf der Karte) – darunter Sokrates, Platon, Pythagoras, Thales, Hippokrates, Homer, Sappho und Alexander an ihren echten Orten – stellen je **5 leichte Fragen über Griechenland**. Wer alle überzeugt, bekommt von **Athene die Aigis** und die **Gestalt der Sirene** (**J**: rasend schnell schwimmen, Angriff = betörender Gesang).
 - **Eigene Stadt**: Bürger zu Soldaten ausbilden (Gefolge) und die Stadtwache trainieren (mehr Verteidiger gegen Eroberer)
 
 ## Mehrspieler & Städte
@@ -94,6 +100,8 @@ Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code lie
 | X | Waffe wechseln (Schwert, Bogen, Keraunos) |
 | V | Blitz werfen (Keraunos) |
 | U | Blitzadler |
+| J | Sirene |
+| K | Kentaur |
 | I | Heldenmenü |
 | Esc | Gespräch schließen |
 | P | Admin-Menü (nur Admins) |
