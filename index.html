@@ -85,6 +85,9 @@
   #damageFlash { position:fixed; inset:0; pointer-events:none; background:radial-gradient(transparent 40%, rgba(170,0,0,.55)); opacity:0; transition:opacity .25s; }
   #fade { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity .6s; }
   #bigmap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.6); }
+  #bigmap canvas { touch-action:none; cursor:grab; }
+  #mapBtns { position:absolute; bottom:calc(14px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); display:flex; gap:10px; }
+  #mapBtns .abtn { font-size:17px; padding:9px 16px; background:rgba(28,20,12,.85); }
   #bigmap canvas { width:min(86vh, 92vw); height:min(86vh, 92vw); border:2px solid var(--gold-d); border-radius:8px; }
 
   #menu { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
@@ -184,7 +187,7 @@
 <div id="adminPanel" class="panel hidden"><h3>⚙ Admin-Menü</h3><div class="ahint">[P] schließen – danach ins Spiel klicken</div><div id="adminBody"></div></div>
 <div id="damageFlash"></div>
 <div id="banner"><h2></h2><div></div></div>
-<div id="bigmap" class="hidden"><canvas id="bigmapCanvas" width="900" height="900"></canvas><div id="leader" class="panel hidden"></div></div>
+<div id="bigmap" class="hidden"><canvas id="bigmapCanvas" width="900" height="900"></canvas><div id="mapBtns"><button id="mapCenter" class="abtn">◎ Mich zeigen</button><button id="mapClose" class="abtn">✕ Schließen</button></div><div id="leader" class="panel hidden"></div></div>
 <div id="pause" class="hidden">Klicke, um weiterzuspielen</div>
 <div id="fade"></div>
 

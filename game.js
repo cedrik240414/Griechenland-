@@ -1868,32 +1868,65 @@ function drawMinimap() {
   ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(5.5, 6); ctx.lineTo(0, 3); ctx.lineTo(-5.5, 6); ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.restore();
 }
+const MAPV = { z: 1, cx: 450, cy: 450 };
+function clampMapView(W) { const h = W / (2 * MAPV.z); MAPV.cx = clamp(MAPV.cx, h, W - h); MAPV.cy = clamp(MAPV.cy, h, W - h); }
+function mapZoomAt(sx, sy, nz, W) {
+  nz = clamp(nz, 1, 8);
+  const wx = (sx - W / 2) / MAPV.z + MAPV.cx, wy = (sy - W / 2) / MAPV.z + MAPV.cy;
+  MAPV.z = nz; MAPV.cx = wx - (sx - W / 2) / nz; MAPV.cy = wy - (sy - W / 2) / nz; clampMapView(W);
+}
+function setupMapZoom() {
+  const c = $('bigmapCanvas'), pts = new Map(); let pinch = 0;
+  const toCanvas = (e) => { const r = c.getBoundingClientRect(), f = c.width / r.width; return [(e.clientX - r.left) * f, (e.clientY - r.top) * f]; };
+  c.addEventListener('pointerdown', (e) => { e.preventDefault(); c.setPointerCapture(e.pointerId); pts.set(e.pointerId, toCanvas(e)); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+  c.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return;
+    const prev = pts.get(e.pointerId), now = toCanvas(e); pts.set(e.pointerId, now);
+    if (pts.size === 1) { MAPV.cx -= (now[0] - prev[0]) / MAPV.z; MAPV.cy -= (now[1] - prev[1]) / MAPV.z; clampMapView(c.width); }
+    else if (pts.size === 2) {
+      const [a, b] = [...pts.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2;
+      if (pinch) mapZoomAt(mx, my, MAPV.z * d / pinch, c.width);
+      pinch = d;
+    }
+  });
+  const end = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; };
+  c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+  c.addEventListener('wheel', (e) => { e.preventDefault(); const [x, y] = toCanvas(e); mapZoomAt(x, y, MAPV.z * (e.deltaY > 0 ? 0.85 : 1.18), c.width); }, { passive: false });
+  c.addEventListener('dblclick', (e) => { e.preventDefault(); const [x, y] = toCanvas(e); mapZoomAt(x, y, MAPV.z > 3 ? 1 : MAPV.z * 2.2, c.width); });
+  $('mapClose').addEventListener('click', (e) => { e.stopPropagation(); if (mapOpen) pressKey('KeyM', true); });
+  $('mapCenter').addEventListener('click', (e) => { e.stopPropagation(); const k = c.width / N; MAPV.cx = w2m(player.pos.x) * k; MAPV.cy = w2m(player.pos.z) * k; if (MAPV.z < 2.5) MAPV.z = 2.5; clampMapView(c.width); });
+}
 function drawBigMap() {
-  const c = $('bigmapCanvas'), ctx = c.getContext('2d'), W = c.width, k = W / N;
-  ctx.drawImage(mapCanvas, 0, 0, W, W);
+  const c = $('bigmapCanvas'), ctx = c.getContext('2d'), W = c.width, k = W / N, Z = MAPV.z;
+  clampMapView(W);
+  const MP = (wx, wz) => [(w2m(wx) * k - MAPV.cx) * Z + W / 2, (w2m(wz) * k - MAPV.cy) * Z + W / 2];
+  ctx.fillStyle = '#16465e'; ctx.fillRect(0, 0, W, W);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(mapCanvas, (0 - MAPV.cx) * Z + W / 2, (0 - MAPV.cy) * Z + W / 2, W * Z, W * Z);
   ctx.strokeStyle = 'rgba(232,196,106,.5)'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, W - 2, W - 2);
   ctx.textAlign = 'center';
   for (const L of LOC_LIST) {
     if (L.hidden) continue;
-    const x = w2m(L.x) * k, y = w2m(L.z) * k;
+    const [x, y] = MP(L.x, L.z);
+    if (x < -60 || y < -30 || x > W + 60 || y > W + 30) continue;
     ctx.fillStyle = '#1b140c'; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill(); ctx.fillStyle = '#e8c46a'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill();
     ctx.font = '700 17px Cinzel, serif'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.strokeText(L.name, x, y - 10); ctx.fillStyle = '#fff3d0'; ctx.fillText(L.name, x, y - 10);
   }
   const q = questTarget();
-  if (q) { const x = w2m(q.x) * k, y = w2m(q.z) * k; ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x + 8, y); ctx.lineTo(x, y + 12); ctx.lineTo(x - 8, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
-  const x = w2m(player.pos.x) * k, y = w2m(player.pos.z) * k;
+  if (q) { const [x, y] = MP(q.x, q.z); ctx.fillStyle = '#ffd24a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 12); ctx.lineTo(x + 8, y); ctx.lineTo(x, y + 12); ctx.lineTo(x - 8, y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  const [x, y] = MP(player.pos.x, player.pos.z);
   ctx.save(); ctx.translate(x, y); ctx.rotate(-player.yaw + Math.PI); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(8, 9); ctx.lineTo(0, 4); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
   ctx.font = '700 22px Cinzel, serif'; ctx.fillStyle = '#e8c46a'; ctx.textAlign = 'left'; ctx.fillText('HELLAS', 20, 36);
-  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Rätsel: ' + S.quiz.length + '/' + QUIZZERS.length + '   ·   Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen', 20, 58);
+  ctx.font = '15px Alegreya Sans, sans-serif'; ctx.fillStyle = '#fff3d0'; ctx.fillText('Rätsel: ' + S.quiz.length + '/' + QUIZZERS.length + '   ·   Amphoren: ' + S.amph.length + '/40   ·   Relikte: ' + player.relics.length + '/6   ·   Tempel entdeckt: ' + S.found.length + '/' + RUINS.length + '   ·   [M] schließen   ·   Zoom: zwei Finger / Mausrad', 20, 58);
   ctx.textAlign = 'center';
   ctx.textAlign = 'center'; ctx.font = '700 14px Alegreya Sans, sans-serif';
-  for (const q2 of QUIZZERS) { const x = w2m(q2.x) * k, y = w2m(q2.z) * k; ctx.fillStyle = S.quiz.includes(q2.id) ? '#4a5a6a' : '#1a3a5a'; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.fillStyle = S.quiz.includes(q2.id) ? '#9aa' : '#8fe0ff'; ctx.fillText(S.quiz.includes(q2.id) ? '✓' : '?', x, y + 5); }
-  for (const tv of TAVERNS) { const x = w2m(tv.x) * k, y = w2m(tv.z) * k; ctx.fillText('🍺', x + 12, y + 14); }
-  if (S.bounty) { const x = w2m(S.bounty.x) * k, y = w2m(S.bounty.z) * k; ctx.fillStyle = '#e0402a'; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText('☠', x, y + 5); }
-  for (const st of TOWN_SITES) { const L = LOCS[st.key], T = townsState()[st.key], x = w2m(L.x) * k, y = w2m(L.z) * k; ctx.strokeStyle = !T ? '#ffffff' : isMine(T) ? '#ffd24a' : isMember(T) ? '#4ab0ff' : '#ff4a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.stroke(); }
-  DUNGEONS.forEach(d => { if (!d.reward && !S.foundD.includes(d.idx)) return; const x = w2m(d.at[0]) * k, y = w2m(d.at[1]) * k; ctx.fillStyle = S.bossDead.includes(d.key) || (d.chest && d.chest.opened) ? '#6a5a70' : '#b05aff'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(d.name, x, y - 10); ctx.fillStyle = '#e8d0ff'; ctx.fillText(d.name, x, y - 10); });
-  S.found.forEach(i => { const r = RUINS[i]; if (!r) return; const x = w2m(r.x) * k, y = w2m(r.z) * k; ctx.fillStyle = r.chest.opened ? '#8a8070' : '#ffd24a'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(r.name, x, y + 20); ctx.fillStyle = '#fff3d0'; ctx.fillText(r.name, x, y + 20); });
+  for (const q2 of QUIZZERS) { const [x, y] = MP(q2.x, q2.z); ctx.fillStyle = S.quiz.includes(q2.id) ? '#4a5a6a' : '#1a3a5a'; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill(); ctx.fillStyle = S.quiz.includes(q2.id) ? '#9aa' : '#8fe0ff'; ctx.fillText(S.quiz.includes(q2.id) ? '✓' : '?', x, y + 5); }
+  for (const tv of TAVERNS) { const [x, y] = MP(tv.x, tv.z); ctx.fillText('🍺', x + 12, y + 14); }
+  if (S.bounty) { const [x, y] = MP(S.bounty.x, S.bounty.z); ctx.fillStyle = '#e0402a'; ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillText('☠', x, y + 5); }
+  for (const st of TOWN_SITES) { const L = LOCS[st.key], T = townsState()[st.key], [x, y] = MP(L.x, L.z); ctx.strokeStyle = !T ? '#ffffff' : isMine(T) ? '#ffd24a' : isMember(T) ? '#4ab0ff' : '#ff4a3a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.stroke(); }
+  DUNGEONS.forEach(d => { if (!d.reward && !S.foundD.includes(d.idx)) return; const [x, y] = MP(d.at[0], d.at[1]); ctx.fillStyle = S.bossDead.includes(d.key) || (d.chest && d.chest.opened) ? '#6a5a70' : '#b05aff'; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(d.name, x, y - 10); ctx.fillStyle = '#e8d0ff'; ctx.fillText(d.name, x, y - 10); });
+  S.found.forEach(i => { const r = RUINS[i]; if (!r) return; const [x, y] = MP(r.x, r.z); ctx.fillStyle = r.chest.opened ? '#8a8070' : '#ffd24a'; ctx.fillRect(x - 5, y - 5, 10, 10); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 5, y - 5, 10, 10); ctx.font = '600 13px Alegreya Sans, sans-serif'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(r.name, x, y + 20); ctx.fillStyle = '#fff3d0'; ctx.fillText(r.name, x, y + 20); });
   ctx.textAlign = 'center'; ctx.font = '700 18px Cinzel, serif'; ctx.fillText('N', W / 2, 24);
 }
 
@@ -3971,16 +4004,16 @@ function setupTouch() {
   canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
   // Gespräche per Antippen weiterklicken
   $('dialog').addEventListener('click', (e) => { if (e.target.tagName !== 'BUTTON' && dialog && !dialog.pages[dialog.i].opts) advanceDialog(); });
-  $('bigmap').addEventListener('click', () => { if (mapOpen) pressKey('KeyM', true); });
+  $('bigmap').addEventListener('click', (e) => { if (mapOpen && e.target.id === 'bigmap') pressKey('KeyM', true); });
 }
 function updateTouchUI() {
   if (!TOUCH.on) return;
-  const show = (id, v) => { const b = TOUCH.btns[id]; if (b && (b.style.display === 'none') === v) b.style.display = v ? '' : 'none'; };
+  const show = (id, v) => { v = !!v; const b = TOUCH.btns[id]; if (b && (b.style.display === 'none') === v) b.style.display = v ? '' : 'none'; };
   const fly = player.flying || player.adminFly || player.bird;
   show('dn', fly); show('sQ', player.blessed); show('sT', player.gear.includes('pegasus')); show('sG', player.gear.includes('pegasus'));
   show('sB', player.hasShip); show('sV', player.gear.includes('keraunos')); show('sU', player.gear.includes('blitzvogel')); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
   show('use', !!nearInter || !!dialog);
-  const u = $('touchUI'); if (u) u.style.display = started ? '' : 'none';
+  const u = $('touchUI'); if (u) { const d = started && !mapOpen ? '' : 'none'; if (u.style.display !== d) u.style.display = d; }
 }
 
 let nearInter = null;
@@ -4361,7 +4394,7 @@ function init() {
   $('loading').textContent = '';
   $('btnNew').disabled = false;
   if (loadSave()) $('btnLoad').classList.remove('hidden');
-  setupMenuNet(); setupTouch();
+  setupMenuNet(); setupTouch(); setupMapZoom();
   $('dlgClose').onclick = (e) => { e.stopPropagation(); dialog = null; renderDialog(); };
   $('heroClose').onclick = (e) => { e.stopPropagation(); if (heroOpen) toggleHero(); };
   $('btnNew').onclick = () => startGame(false);
