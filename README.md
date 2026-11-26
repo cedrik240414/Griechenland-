@@ -103,6 +103,8 @@ Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code lie
 - **Siedlungsplätze auf der Karte:** 🚩 freie Plätze (grün) und 🏛 Städte (gold = deine, blau = Bürger, rot = fremd) auf Minikarte und großer Karte.
 - **Söldner in beliebiger Zahl:** In der Taverne gibst du ein, wie viele du willst – bis zu 30 Kämpfer, solange das Geld reicht.
 - **Inselstadt auf Lesbos:** Eine gewölbte Steinbrücke mit Pfeilern und Laternen verbindet die Insel mit dem Festland; im Westen liegt ein Holzsteg mit Fischerboot.
+- **Zur eigenen Stadt reisen:** Taste H, der Knopf „🏛 Zu meiner Stadt“ auf der großen Karte oder im Heldenmenü. Dein Gefolge reist mit. Nicht im Kampf, in der Unterwelt oder während eines Wettkampfs.
+- **Anlegen per Touch:** Beim Segeln erscheint unten der ⚓-Knopf (oder E); Land wird im Umkreis von 45 m gesucht.
 - **SVE-Studios-Intro** mit Logo-Animation beim Start (antippen zum Überspringen).
 
 ## Steuerung

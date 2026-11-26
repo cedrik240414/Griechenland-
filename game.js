@@ -1018,6 +1018,35 @@ function talkTown(site) {
   const all = Object.values(townsState()).filter(isMine);
   talk([{ who: T.name, text: T.name + ' – ' + L[T.lvl].name + ' (Stufe ' + T.lvl + '/4). Einnahmen: ' + L[T.lvl].income + ' Drachmen pro Minute. Schatzkammer: ' + tr + ' / ' + townCap(T) + '.' + (next ? ' Ausbau bringt: ' + next.desc + '.' : ' Deine Polis ist vollendet!') + (all.length > 1 ? ' Du herrschst über ' + all.length + ' Städte.' : '') + ' Vorsicht: Andere Helden können deine Stadt erobern!', opts }]);
 }
+// ---------- Zur eigenen Stadt reisen ----------
+function myTownSites() { const TS = townsState(); return TOWN_SITES.filter(s => TS[s.key] && (isMine(TS[s.key]) || isMember(TS[s.key]))); }
+function townTravelMenu() {
+  const list = myTownSites();
+  if (!list.length) { toast('Du hast noch keine eigene Stadt. Gründe eine an einem 🚩 Siedlungsplatz (siehe Karte).'); return; }
+  if (list.length === 1) { travelToTown(list[0].key); return; }
+  const TS = townsState();
+  talk([{ who: 'Reise', text: 'Zu welcher Stadt willst du reisen?', opts: list.map(s => ({ label: '🏛 ' + TS[s.key].name + (isMine(TS[s.key]) ? ' (deine Stadt)' : ' (Bürger)'), fn: () => travelToTown(s.key) })).concat([{ label: 'Abbrechen', fn: () => { } }]) }]);
+}
+function travelToTown(site) {
+  if (curD) { toast('Aus der Unterwelt kannst du nicht reisen – geh erst hinaus.'); return; }
+  if (race || OLY) { toast('Nicht während eines Wettkampfs!'); return; }
+  if (player.dead) return;
+  if (clock.elapsedTime - (player.lastHurt || -99) < 5) { toast('Mitten im Kampf kannst du nicht reisen.'); return; }
+  const T = townsState()[site]; if (!T) return;
+  if (mapOpen) { mapOpen = false; $('bigmap').classList.add('hidden'); }
+  if (heroOpen) toggleHero();
+  fadeTo(() => {
+    if (player.riding) player.riding = null;
+    if (player.mounted) dismount(); if (player.flying) stopFlying(true);
+    if (player.sailing) { player.sailing = false; ship.root.visible = false; }
+    if (player.bird) toggleBird();
+    if (player.adminFly) player.adminFly = false;
+    const L = LOCS[site], x = L.x + 5, z = L.z + 5;
+    player.pos.set(x, groundAt(x, z) + 0.3, z); player.vy = 0; if (player.vel) player.vel.set(0, 0, 0);
+    allies.forEach((a, i) => { const ang = i / Math.max(1, allies.length) * 6.28, r = 3 + (i % 3); a.x = x + Math.cos(ang) * r; a.z = z + Math.sin(ang) * r; a.y = groundAt(a.x, a.z); });
+    toast('Willkommen in ' + T.name + '!', 'gold'); sfx('quest');
+  });
+}
 function townSellPrice(T) { let c = 0; for (let l = 1; l <= T.lvl; l++) c += TOWN_LEVELS[l].cost || 0; return Math.round(c * 0.5 + (T.def || 0) * 25); }
 function foundTown(site) {
   if (!spend(TOWN_LEVELS[1].cost)) return;
@@ -2276,6 +2305,7 @@ function setupMapZoom() {
   c.addEventListener('wheel', (e) => { e.preventDefault(); const [x, y] = toCanvas(e); mapZoomAt(x, y, MAPV.z * (e.deltaY > 0 ? 0.85 : 1.18), c.width); }, { passive: false });
   c.addEventListener('dblclick', (e) => { e.preventDefault(); const [x, y] = toCanvas(e); mapZoomAt(x, y, MAPV.z > 3 ? 1 : MAPV.z * 2.2, c.width); });
   $('mapClose').addEventListener('click', (e) => { e.stopPropagation(); if (mapOpen) pressKey('KeyM', true); });
+  $('mapTown').addEventListener('click', (e) => { e.stopPropagation(); townTravelMenu(); });
   $('mapCenter').addEventListener('click', (e) => { e.stopPropagation(); const k = c.width / N; MAPV.cx = w2m(player.pos.x) * k; MAPV.cy = w2m(player.pos.z) * k; if (MAPV.z < 2.5) MAPV.z = 2.5; clampMapView(c.width); });
 }
 function drawBigMap() {
@@ -2707,14 +2737,14 @@ function toggleShip() {
   if (curD) return;
   if (player.sailing) {
     const P = player.pos;
-    for (let r = 4; r <= 18; r += 2) for (let a = 0; a < 6.28; a += 0.4) { const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (heightAt(x, z) > 0.4) { player.sailing = false; ship.root.visible = false; player.pos.set(x, groundAt(x, z) + 0.3, z); player.vy = 0; toast('Du gehst an Land.'); return; } }
-    toast('Kein Land in der Nähe zum Anlegen.'); return;
+    for (let r = 4; r <= 45; r += 2) for (let a = 0; a < 6.28; a += 0.3) { const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (heightAt(x, z) > 0.4) { player.sailing = false; ship.root.visible = false; player.pos.set(x, groundAt(x, z) + 0.3, z); player.vy = 0; toast('Du gehst an Land.'); return; } }
+    toast('Kein Land in der Nähe – fahr näher ans Ufer (höchstens 45 m) und tippe dann ⚓.'); return;
   }
   if (!player.hasShip) { toast('Du hast noch kein Schiff. Der Schiffsbauer in Piräus verkauft welche.'); return; }
   const P = player.pos;
   for (let r = 0; r <= 14; r += 2) for (let a = 0; a < 6.28; a += 0.4) { const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (heightAt(x, z) < -2.2) {
     if (player.mounted) dismount(); if (player.flying) stopFlying(true);
-    player.sailing = true; player.shipSpeed = 0; player.pos.set(x, 0.9, z); ship.root.visible = true; toast('An Bord! WASD steuern, B zum Anlegen.'); sfx('quest'); return; } }
+    player.sailing = true; player.shipSpeed = 0; player.pos.set(x, 0.9, z); ship.root.visible = true; toast(TOUCH.on ? 'An Bord! Joystick steuern, ⚓ zum Anlegen.' : 'An Bord! WASD steuern, B oder E zum Anlegen.'); sfx('quest'); return; } }
   toast('Stell dich ans Ufer, um dein Schiff zu rufen.');
 }
 function buyShip() { talkShipwright(); }
@@ -3928,7 +3958,8 @@ addEventListener('keydown', (e) => {
   if (k === 'KeyT') toggleFly();
   if (k === 'KeyB') toggleShip();
   if (k === 'KeyG') medusaHead();
-  if (k === 'KeyM') { mapOpen = !mapOpen; $('bigmap').classList.toggle('hidden', !mapOpen); if (mapOpen) showLeaderboard(); }
+  if (k === 'KeyH') townTravelMenu();
+  if (k === 'KeyM') { mapOpen = !mapOpen; $('bigmap').classList.toggle('hidden', !mapOpen); if (mapOpen) { showLeaderboard(); $('mapTown').style.display = myTownSites().length ? '' : 'none'; } }
   if (k === 'Space') { e.preventDefault(); sirenTap(); }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -4026,6 +4057,7 @@ function renderHero() {
     }
     if (player.shieldTier > 0 || player.gear.includes('aigis')) { const b = document.createElement('div'); b.className = 'invw pass'; b.innerHTML = '<span class="ic">🛡</span><span class="nm"></span><span class="sb">Blocken</span>'; b.children[1].textContent = player.gear.includes('aigis') ? 'Aigis' : ['', 'Holzschild', 'Bronzeschild'][player.shieldTier]; right.appendChild(b); }
     if (HORSES[player.horse || 'gaul'].siege) { const b = document.createElement('div'); b.className = 'invw pass'; b.innerHTML = '<span class="ic">🏹</span><span class="nm"></span><span class="sb">Kriegsgerät – R rufen</span>'; b.children[0].textContent = '🪨'; b.children[1].textContent = HORSES[player.horse].name; right.appendChild(b); }
+    if (myTownSites().length) { const tb = document.createElement('button'); tb.className = 'invw'; tb.innerHTML = '<span class="ic">🏛</span><span class="nm">Zur eigenen Stadt reisen</span><span class="sb">Teleport, auch Taste H</span>'; tb.onclick = () => townTravelMenu(); right.appendChild(tb); }
     lrow('Rüstung: ' + ARMORS[player.aTier || 0].name + ' (−' + Math.round(ARMORS[player.aTier || 0].red * 100) + ' % Schaden)');
     lrow('Leben: ' + Math.ceil(player.hp) + ' / ' + player.maxHp);
     lrow('Reittier: ' + HORSES[player.horse || 'gaul'].name + (player.shipTier ? ' · Schiff: ' + SHIPS[player.shipTier].name : ''));
@@ -4819,13 +4851,14 @@ function updateTouchUI() {
   const fly = player.flying || player.adminFly || player.bird;
   show('dn', fly); show('sQ', player.blessed); show('sT', player.gear.includes('pegasus')); show('sG', player.gear.includes('pegasus'));
   show('sB', player.hasShip); show('sV', player.gear.includes('keraunos')); show('sU', player.gear.includes('blitzvogel')); show('sJ', player.gear.includes('sirene')); show('sK', player.gear.includes('kentaur')); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
-  show('use', !!nearInter || !!dialog);
+  show('use', !!nearInter || !!dialog || player.sailing);
+  { const b = TOUCH.btns.use; if (b) { const lab = player.sailing && !nearInter && !dialog ? '⚓' : 'E'; if (b.textContent !== lab) b.textContent = lab; } }
   { const b = TOUCH.btns.wpn; if (b) { const lab = player.bowMode ? '⚔' : '🏹'; if (b.textContent !== lab) b.textContent = lab; } }
   const u = $('touchUI'); if (u) { const d = started && !mapOpen ? '' : 'none'; if (u.style.display !== d) u.style.display = d; }
 }
 
 let nearInter = null;
-function interact() { if (nearInter && !player.dead) nearInter.fn(); }
+function interact() { if (nearInter && !player.dead) nearInter.fn(); else if (player.sailing && !player.dead) toggleShip(); }
 function findInteractable() {
   let best = null, bd = 1e9;
   for (const it of interactables) {
@@ -5262,7 +5295,7 @@ function updateHUD() {
   if (player.gear.includes('sirene')) ab.push(player.form === 'siren' ? '[J] Zurückverwandeln' : '[J] Sirene');
   if (player.gear.includes('kentaur')) ab.push(player.form === 'centaur' ? '[K] Zurückverwandeln' : '[K] Kentaur');
   if (NET.account && NET.account.admin) ab.push('[P] Admin');
-  if (player.hasShip) ab.push(player.sailing ? '[B] Anlegen' + (NET.id && shipCrew(NET.id).length ? ' · Passagiere ' + (shipCrew(NET.id).length + 1) + '/10' : '') : '[B] Schiff');
+  if (player.hasShip) ab.push(player.sailing ? '[B/E] Anlegen' + (NET.id && shipCrew(NET.id).length ? ' · Passagiere ' + (shipCrew(NET.id).length + 1) + '/10' : '') : '[B] Schiff');
   if (player.gear.includes('pegasus')) { ab.push(player.flying ? '[T] Landen' : '[T] Pegasus'); ab.push(player.medCd > 0 ? 'Medusa: ' + Math.ceil(player.medCd) + ' s' : '[G] Medusenhaupt'); }
   if (player.relics.length) ab.push('Relikte ' + player.relics.length + '/6');
   if (player.blessed) ab.push(player.zapCd > 0 ? 'Blitz: ' + Math.ceil(player.zapCd) + ' s' : '[Q] Blitz des Zeus bereit');
@@ -5409,7 +5442,7 @@ function init() {
   $('btnNew').onclick = () => startGame(false);
   const qb = $('btnQual'); if (qb) { const lbl = () => qb.textContent = QUALITY === 'hoch' ? 'Hoch' : 'Mittel (schneller)'; lbl(); qb.onclick = () => { setQuality(QUALITY === 'hoch' ? 'mittel' : 'hoch'); lbl(); }; }
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { platforms, askHire, netHandle, playerAttack, townAction, townSellPrice, builtLvl: () => builtLvl, TOWN_PARTS, seatWorld, makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { travelToTown, townTravelMenu, platforms, askHire, netHandle, playerAttack, townAction, townSellPrice, builtLvl: () => builtLvl, TOWN_PARTS, seatWorld, makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);
