@@ -102,6 +102,7 @@ Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code lie
 - **Stadt verkaufen:** In deiner eigenen Stadt gibt es „Stadt verkaufen“: die Hälfte aller Ausbaukosten plus 25 Drachmen pro Wachstufe, dazu die Schatzkammer. Die Gebäude verschwinden und der Platz wird wieder frei (eroberte Städte gehen an ihre alten Herren zurück).
 - **Siedlungsplätze auf der Karte:** 🚩 freie Plätze (grün) und 🏛 Städte (gold = deine, blau = Bürger, rot = fremd) auf Minikarte und großer Karte.
 - **Söldner in beliebiger Zahl:** In der Taverne gibst du ein, wie viele du willst – bis zu 30 Kämpfer, solange das Geld reicht.
+- **Inselstadt auf Lesbos:** Eine gewölbte Steinbrücke mit Pfeilern und Laternen verbindet die Insel mit dem Festland; im Westen liegt ein Holzsteg mit Fischerboot.
 - **SVE-Studios-Intro** mit Logo-Animation beim Start (antippen zum Überspringen).
 
 ## Steuerung

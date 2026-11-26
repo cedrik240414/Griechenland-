@@ -802,6 +802,61 @@ function townNPC(site, name, dx, dz, look, wander = 10) {
   const L = LOCS[site];
   return addNPC(name, L.x + dx, L.z + dz, look, function () { const T = townsState()[site]; talk([{ who: this.name, text: pick(TOWN_LINES).replace('{S}', T ? T.name : 'unsere Stadt') }]); }, wander);
 }
+// ---------- Brücke und Steg bei der Inselstadt (Siedlungsplatz auf Lesbos) ----------
+function buildBridge(x0, z0, dx, dz, maxLen = 260) {
+  // vom Startpunkt in Richtung (dx,dz): erstes Wasser suchen, dann das nächste Ufer
+  let w1 = -1, w2 = -1;
+  for (let d = 0; d < maxLen; d += 1) { const h = heightAt(x0 + dx * d, z0 + dz * d); if (w1 < 0 && h < 0) w1 = d; else if (w1 >= 0 && h > 0.6) { w2 = d; break; } }
+  if (w1 < 0 || w2 < 0) return null;
+  const s = w1 - 7, e = w2 + 7, len = e - s, rot = Math.atan2(dx, dz);
+  const f = new Frame(x0 + dx * s, z0 + dz * s, rot, 0);
+  const hs = heightAt(x0 + dx * s, z0 + dz * s), he = heightAt(x0 + dx * e, z0 + dz * e);
+  const arch = Math.max(4.5, 7 - Math.abs(he - hs) * 0.3);
+  const deck = (t) => lerp(hs, he, t) + Math.sin(Math.PI * t) * arch + 0.25;
+  const W = 5.2, stone = M.stone, stone2 = M.stone2, STEP = 2;
+  for (let d = 0; d < len; d += STEP) {
+    const t0 = d / len, t1 = Math.min(1, (d + STEP) / len), y0 = deck(t0), y1 = deck(t1), ym = (y0 + y1) / 2, pitch = Math.atan2(y1 - y0, STEP);
+    f.put(G.box, stone, 0, ym - 0.35, d + STEP / 2, -pitch, 0, 0, W, 0.7, STEP + 0.15);
+    for (const sx of [-1, 1]) {
+      f.put(G.box, stone2, sx * (W / 2 - 0.2), ym + 0.45, d + STEP / 2, -pitch, 0, 0, 0.4, 0.9, STEP + 0.15);
+      if (d % 6 === 0) f.put(G.box, M.marble2, sx * (W / 2 - 0.2), ym + 1.05, d + STEP / 2, 0, 0, 0, 0.5, 0.35, 0.5);
+    }
+    f.platform(0, d + STEP / 2, W - 0.8, STEP + 0.3, ym + 0.02);
+  }
+  // Geländer als Wand, damit niemand ins Wasser fällt (an den Enden offen)
+  for (const sx of [-1, 1]) for (let d = 4; d < len - 4; d += STEP) { const ym = (deck(d / len) + deck((d + STEP) / len)) / 2; f.colBox(sx * (W / 2 - 0.2), d + STEP / 2, 0.4, STEP, 1e9); }
+  // Pfeiler und Bögen im Wasser
+  for (let d = 8; d < len - 6; d += 9) { const xz = f.w(0, d), g = heightAt(xz[0], xz[1]); if (g > 0.3) continue; const top = deck(d / len) - 0.7; f.put(G.box, stone2, 0, (g - 2 + top) / 2, d, 0, 0, 0, W - 0.6, top - g + 2, 2.2); f.put(G.box, M.stone, 0, -0.2, d, 0, 0, 0, W + 0.4, 0.6, 3.0); }
+  // Laternen an beiden Enden
+  for (const d of [1, len - 1]) for (const sx of [-1, 1]) { const y = deck(d / len); f.put(G.cyl8, M.darkwood, sx * (W / 2 + 0.4), y + 1.1, d, 0, 0, 0, 0.18, 2.2, 0.18); f.put(G.sphere, M.fire, sx * (W / 2 + 0.4), y + 2.3, d, 0, 0, 0, 0.35, 0.35, 0.35); }
+  for (let d = 0; d < len; d += 8) { const [x, z] = f.w(0, d); reserve(x, z, 4.5); }
+  return { f, len, s, e };
+}
+function buildJetty(x0, z0, dx, dz) {
+  let w1 = -1; for (let d = 0; d < 300; d++) if (heightAt(x0 + dx * d, z0 + dz * d) < 0) { w1 = d; break; }
+  if (w1 < 0) return null;
+  const s = w1 - 5, len = 30, rot = Math.atan2(dx, dz), f = new Frame(x0 + dx * s, z0 + dz * s, rot, 0), W = 3.6, top = 1.1;
+  const plank = addDetail(new THREE.MeshLambertMaterial({ color: 0x8a6440 }), 0.35, 3.0);
+  for (let d = 0; d < len; d += 1) { const [x, z] = f.w(0, d + 0.5); if (heightAt(x, z) > top + 0.2) continue; f.put(G.box, plank, 0, top - 0.12, d + 0.5, 0, 0, 0, W, 0.22, 0.92); }
+  f.platform(0, len / 2, W, len, top);
+  for (let d = 2; d <= len; d += 4) for (const sx of [-1, 1]) f.put(G.cyl8, M.darkwood, sx * (W / 2 - 0.1), top - 2.5, d, 0, 0, 0, 0.32, 5.4, 0.32);
+  f.box(M.wood, 0, top, len - 0.4, W, 0.9, 0.25, true);
+  for (const sx of [-1, 1]) f.put(G.box, M.wood, sx * (W / 2 + 0.05), top + 0.45, len - 4, 0, 0, 0, 0.18, 0.9, 8);
+  for (const sx of [-1, 1]) f.colBox(sx * (W / 2 + 0.05), len - 4, 0.25, 8, 1e9);
+  // Poller mit Tau, Laterne, Fässer
+  for (const d of [10, 20]) f.put(G.cyl8, M.darkwood, W / 2 - 0.4, top + 0.35, d, 0, 0, 0, 0.35, 0.7, 0.35);
+  f.put(G.cyl8, M.darkwood, -W / 2 + 0.3, top + 1.3, len - 1, 0, 0, 0, 0.14, 2.6, 0.14); f.put(G.sphere, M.fire, -W / 2 + 0.3, top + 2.7, len - 1, 0, 0, 0, 0.32, 0.32, 0.32);
+  for (let i = 0; i < 3; i++) f.put(G.cyl, M.darkwood, -0.9 + i * 0.65, top + 0.4, 3 + (i % 2) * 0.7, 0, 0, 0, 0.55, 0.8, 0.55);
+  // Ein Fischerboot liegt am Steg
+  const boat = makeShip(); boat.root.scale.setScalar(0.45); const [bx, bz] = f.w(W / 2 + 2.6, len * 0.55); boat.root.position.set(bx, -0.15, bz); boat.root.rotation.y = rot; scene.add(boat.root);
+  for (let d = 0; d < len; d += 6) { const [x, z] = f.w(0, d); reserve(x, z, 3.5); }
+  return { f, len };
+}
+function buildIslandLinks() {
+  const L = LOCS.chalkis; if (!L) return;
+  buildBridge(L.x + 18, L.z, 0, -1);   // nach Norden zum Festlandstreifen
+  buildJetty(L.x, L.z + 6, -1, 0);     // nach Westen ins offene Meer
+}
 function buildTownBases() {
   for (const s of TOWN_SITES) {
     const L = LOCS[s.key];
@@ -5323,7 +5378,7 @@ function init() {
   buildTerrain();
   buildAthens(); buildDelphi(); buildOlympia(); buildSparta(); buildPiraeus(); buildKreta(); buildMisc();
   buildIslands();
-  buildTownBases(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildAncientWorld(); buildSirenRocks(); buildServices(); buildQuizNPCs(); buildZeusQuest(); buildQuarrels(); buildRoads(); buildTraffic();
+  buildTownBases(); buildIslandLinks(); buildRuins(); buildOldRuins(); buildDungeons(); buildMythForests(); buildAncientWorld(); buildSirenRocks(); buildServices(); buildQuizNPCs(); buildZeusQuest(); buildQuarrels(); buildRoads(); buildTraffic();
   interactables.push({ pos: () => { const id = boardableShip(); const r = id && NET.others.get(id); return r ? new V3(r.pos.x, player.pos.y, r.pos.z) : new V3(1e9, 0, 1e9); }, r: 16, active: () => !!boardableShip(), label: () => { const id = boardableShip(); const r = NET.others.get(id); return 'An Bord der Trireme von ' + (r ? r.name : '?') + ' (' + (shipCrew(id).length + 1) + '/10)'; }, fn: boardShip });
   interactables.push({ pos: () => player.pos, r: 5, active: () => !!player.riding, label: 'Von Bord gehen', fn: () => leaveShip() });
   buildVegetation();
@@ -5354,7 +5409,7 @@ function init() {
   $('btnNew').onclick = () => startGame(false);
   const qb = $('btnQual'); if (qb) { const lbl = () => qb.textContent = QUALITY === 'hoch' ? 'Hoch' : 'Mittel (schneller)'; lbl(); qb.onclick = () => { setQuality(QUALITY === 'hoch' ? 'mittel' : 'hoch'); lbl(); }; }
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { askHire, netHandle, playerAttack, townAction, townSellPrice, builtLvl: () => builtLvl, TOWN_PARTS, seatWorld, makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { platforms, askHire, netHandle, playerAttack, townAction, townSellPrice, builtLvl: () => builtLvl, TOWN_PARTS, seatWorld, makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);
