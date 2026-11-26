@@ -67,6 +67,8 @@
   .tbtn.small { width:46px; height:46px; font-size:20px; right:calc(18px + env(safe-area-inset-right)); }
   #tb_sR { top:250px; } #tb_sM { top:304px; right:calc(18px + env(safe-area-inset-right)); }
   #tb_wpn { right:236px; bottom:34px; }
+  #tb_sU, #tb_sJ, #tb_sK { right:calc(18px + env(safe-area-inset-right)); }
+  #tb_sU { top:358px; } #tb_sJ { top:412px; } #tb_sK { top:466px; }
   #tRow { position:absolute; top:calc(24px + env(safe-area-inset-top)); right:calc(236px + env(safe-area-inset-right)); display:flex; flex-direction:row-reverse; gap:8px; pointer-events:none; }
   #tRow .tbtn.small { position:static; }
   body.touch #crosshair, body.touch #pause { display:none !important; }
@@ -76,7 +78,7 @@
   body.touch #chatInput { bottom:auto; top:120px; }
   body.touch #prompt { bottom:42%; }
   @media (max-height:500px) { #joyBase { bottom:90px; width:120px; height:120px; } .tbtn.big { width:80px; height:80px; bottom:20px; }
-    #tb_sR { top:130px; } #tb_sM { top:182px; } #tb_wpn { right:196px; bottom:20px; } #tRow { top:12px; right:136px; } #minimapWrap { width:100px; height:100px; } }
+    #tb_sR { top:130px; } #tb_sM { top:182px; } #tb_sU { top:130px; right:72px; } #tb_sJ { top:182px; right:72px; } #tb_sK { top:234px; right:72px; } #tb_wpn { right:196px; bottom:20px; } #tRow { top:12px; right:136px; } #minimapWrap { width:100px; height:100px; } }
   @media (max-width:760px) { #tRow { top:auto; bottom:250px; right:12px; flex-direction:column-reverse; } }
   #toasts { position:absolute; right:20px; bottom:20px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
   .toast { padding:8px 14px; font-size:15px; animation:tin .3s ease-out; }
@@ -241,8 +243,16 @@
   </div>
 </div>
 
-<script src="lib/three.min.js"></script>
-<script src="config.js"></script>
-<script src="game.js"></script>
+<script>
+// Lädt das Spiel immer in der neuesten Version (Versionskennung = ETag von game.js auf dem Server)
+(async () => {
+  let v = '';
+  try { const r = await fetch('game.js', { method: 'HEAD', cache: 'no-store' }); v = (r.headers.get('etag') || r.headers.get('last-modified') || '').replace(/[^A-Za-z0-9]/g, '').slice(-16); } catch (e) { }
+  window.HELLAS_VERSION = v;
+  const q = v ? '?v=' + v : '';
+  const load = (src) => new Promise((ok, err) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = err; document.body.appendChild(s); });
+  await load('lib/three.min.js'); await load('config.js' + q); await load('game.js' + q);
+})();
+</script>
 </body>
 </html>

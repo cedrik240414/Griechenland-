@@ -2568,11 +2568,18 @@ async function accCall(body, path = '/api/account') {
   if (!r.ok || j.error) { const e = new Error(j.error || 'Fehler'); e.banned = j.banned; throw e; }
   return j;
 }
+function grantAdminGear() {
+  if (!NET.account || !NET.account.admin) return;
+  let got = false;
+  for (const k of ['keraunos', 'blitzvogel']) if (!player.gear.includes(k)) { player.gear.push(k); got = true; }
+  if (got && started) setTimeout(() => toast('⚡ Admin: Keraunos (X/V) und Blitzadler (U) freigeschaltet', 'gold'), 2500);
+}
 function setAccount(j) {
   NET.account = { name: j.name, token: j.token, admin: !!j.admin };
   lsSet('hellas-session', JSON.stringify(NET.account));
   if (j.data) lsSet(saveKey(), JSON.stringify(j.data));
   updateMenuAccount();
+  if (started) grantAdminGear();
 }
 function logout() {
   if (NET.account) accCall({ op: 'logout', token: NET.account.token }).catch(() => { });
@@ -2609,6 +2616,52 @@ async function showLeaderboard() {
     el.appendChild(ol);
     const c = document.createElement('div'); c.className = 'code'; c.textContent = NET.account ? 'Angemeldet als ' + NET.account.name + ' – dein Spielstand wird automatisch in der Cloud gespeichert.' : 'Offline – melde dich an, um in die Rangliste zu kommen.'; el.appendChild(c);
   } catch (e) { el.textContent = 'Server nicht erreichbar.'; }
+}
+// ---------- Automatische Updates ----------
+const UPD = { tags: null, pending: false };
+async function fileTags() {
+  const out = {};
+  for (const f of ['game.js', 'index.html', 'config.js']) {
+    const r = await fetch(f + '?check=' + Date.now(), { method: 'HEAD', cache: 'no-store' });
+    out[f] = r.headers.get('etag') || r.headers.get('last-modified') || String(r.headers.get('content-length'));
+  }
+  return out;
+}
+async function checkForUpdate() {
+  if (UPD.pending || location.protocol === 'file:') return;
+  try {
+    const t = await fileTags();
+    if (!UPD.tags) { UPD.tags = t; return; }
+    if (Object.keys(t).some(k => t[k] && UPD.tags[k] && t[k] !== UPD.tags[k])) applyUpdate();
+  } catch (e) { /* offline – später erneut */ }
+}
+function applyUpdate() {
+  UPD.pending = true;
+  if (!started) { location.reload(); return; }
+  let n = 10;
+  banner('✨ Neue Version verfügbar!', 'Dein Spielstand wird gespeichert – das Spiel aktualisiert sich in 10 Sekunden.');
+  const tick = setInterval(() => {
+    n--;
+    if (n > 0) { if (n <= 5) toast('Update in ' + n + ' …'); return; }
+    clearInterval(tick);
+    if (curD) { toast('Update wartet, bis du den Dungeon verlässt.'); UPD.pending = false; return; }
+    save(); cloudSave(true);
+    try { sessionStorage.setItem('hellas-autocontinue', '1'); } catch (e) { }
+    setTimeout(() => location.reload(), 400);
+  }, 1000);
+}
+function autoContinueAfterUpdate() {
+  let flag = null; try { flag = sessionStorage.getItem('hellas-autocontinue'); sessionStorage.removeItem('hellas-autocontinue'); } catch (e) { }
+  if (!flag) return;
+  const t0 = Date.now();
+  const go = () => {
+    if (started) return;
+    const waitingForLogin = lsGet('hellas-session') && !NET.account && Date.now() - t0 < 5000;
+    if (waitingForLogin) { setTimeout(go, 250); return; }
+    startGame(!!loadSave());
+    setTimeout(() => toast('✨ Spiel aktualisiert – viel Spaß mit der neuen Version!', 'gold'), 1500);
+  };
+  setTimeout(go, 300);
 }
 function setupMenuNet() {
   const q = new URLSearchParams(location.search);
@@ -3261,6 +3314,7 @@ addEventListener('mousemove', (e) => {
 addEventListener('wheel', (e) => { camZoom = clamp(camZoom * (e.deltaY > 0 ? 1.1 : 0.9), 0.45, 2.2); }, { passive: true });
 document.addEventListener('pointerlockchange', () => { paused = started && document.pointerLockElement !== canvas && !dialog && !mapOpen && !adminOpen && !heroOpen && !NET.chatOpen && !TOUCH.on; $('pause').classList.toggle('hidden', !paused); });
 addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); resizeOverlay(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.left = mouse.right = false; });
 
 // ============================================================
@@ -4037,7 +4091,7 @@ function setupTouch() {
   if (!isTouchDevice()) return;
   TOUCH.on = true;
   document.body.classList.add('touch');
-  const ui = document.createElement('div'); ui.id = 'touchUI'; document.body.appendChild(ui);
+  const ui = document.createElement('div'); ui.id = 'touchUI'; ui.style.display = 'none'; document.body.appendChild(ui);
   // Joystick
   const base = document.createElement('div'); base.id = 'joyBase'; const knob = document.createElement('div'); knob.id = 'joyKnob'; base.appendChild(knob); ui.appendChild(base);
   let joyId = null;
@@ -4067,7 +4121,7 @@ function setupTouch() {
   mk('dn', '⤓', 'mid', () => pressKey('KeyC', true), () => pressKey('KeyC', false));
   mk('wpn', '🏹', 'mid', () => pressKey('KeyX', true), () => pressKey('KeyX', false));
   const side = [['I', '🎒', 'KeyI'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['J', '🧜', 'KeyJ'], ['K', '♐', 'KeyK'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
-  for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, (id === 'R' || id === 'M') ? ui : row);
+  for (const [id, lab, code] of side) mk('s' + id, lab, 'small', () => { if (id === 'C') openChat(); else pressKey(code, true); }, () => { if (code) pressKey(code, false); }, ['R', 'M', 'U', 'J', 'K'].includes(id) ? ui : row);
   // Kamera: mit dem Finger über das Bild wischen, zwei Finger = Zoom
   const pts = new Map(); let pinch = 0;
   canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
@@ -4440,7 +4494,7 @@ function startGame(fromSave) {
   if (!sv) S.towns = defaultTowns();
   if (mpEnabled()) setTimeout(() => { if (!NET.towns) syncTowns(); }, 6000); else syncTowns();
   setHorseModel(); setShipModel();
-  if (NET.account && NET.account.admin) { let got = false; for (const k of ['keraunos', 'blitzvogel']) if (!player.gear.includes(k)) { player.gear.push(k); got = true; } if (got) setTimeout(() => toast('⚡ Admin: Keraunos (X/V) und Blitzadler (U) freigeschaltet', 'gold'), 2500); }
+  grantAdminGear();
   S.altars = S.altars || []; S.zeus = S.zeus || 0; ZEUS_ALTARS.forEach((A, i) => { A.fire.visible = S.altars.includes(i); }); if (S.zeus === 2) spawnGiants(); updateZeusText();
   started = true;
   $('menu').classList.add('hidden'); $('hud').classList.remove('hidden');
@@ -4482,11 +4536,13 @@ function init() {
   $('btnNew').disabled = false;
   if (loadSave()) $('btnLoad').classList.remove('hidden');
   setupMenuNet(); setupTouch(); setupMapZoom();
+  checkForUpdate(); setInterval(checkForUpdate, 60000);
+  autoContinueAfterUpdate();
   $('dlgClose').onclick = (e) => { e.stopPropagation(); dialog = null; renderDialog(); };
   $('heroClose').onclick = (e) => { e.stopPropagation(); if (heroOpen) toggleHero(); };
   $('btnNew').onclick = () => startGame(false);
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);
