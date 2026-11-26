@@ -1764,7 +1764,7 @@ const EDEF = {
   bandit: { hp: 65, dmg: 11, speed: 6.5, range: 2.1, aggro: 24, cd: 1.4, name: 'Bandit', money: [6, 16], r: 0.5 },
   guard: { hp: 110, dmg: 14, speed: 6.2, range: 2.6, aggro: 22, cd: 1.5, name: 'Tempelwächter', money: [12, 25], r: 0.5 },
   minotaur: { hp: 650, dmg: 26, speed: 6.5, range: 3.6, aggro: 21, cd: 1.8, name: 'Minotauros', money: [150, 150], r: 1.0, hitR: 1.4, top: 4.4, charge: true, bossLike: true },
-  gigant: { hp: 800, dmg: 32, speed: 6, range: 4.2, aggro: 32, cd: 2.0, name: 'Gigant', money: [120, 120], r: 1.4, hitR: 1.8, top: 7.2, charge: true, bossLike: true },
+  gigant: { hp: 550, dmg: 32, speed: 6, range: 4.2, aggro: 32, cd: 2.0, name: 'Gigant', money: [120, 120], r: 1.4, hitR: 1.8, top: 7.2, charge: true, bossLike: true },
   typhon: { hp: 3600, dmg: 42, speed: 6.5, range: 5.2, aggro: 45, cd: 1.6, name: 'Typhon, Vater der Ungeheuer', money: [500, 500], r: 2.0, hitR: 2.6, top: 9.5, charge: true, boss: true, storm: true },
   athlet: { hp: 220, dmg: 11, speed: 7.5, range: 2.0, aggro: 80, cd: 1.0, name: 'Champion Milon', money: [0, 0], r: 0.5, bossLike: true },
   satyr: { hp: 70, dmg: 12, speed: 8.5, range: 2.2, aggro: 24, cd: 1.2, name: 'Satyr', money: [5, 12], r: 0.5 },
@@ -1879,7 +1879,8 @@ function die() {
 }
 function damageEnemy(e, dmg, crit = false) {
   e.hp -= dmg; e.flashT = 0.15; e.state = 'chase';
-  if (!e.def.boss && e.x !== undefined) { const kx = e.x - player.pos.x, kz = e.z - player.pos.z, kd = Math.hypot(kx, kz) || 1; e.kb = { x: kx / kd * Math.min(10, 3 + dmg * 0.05), z: kz / kd * Math.min(10, 3 + dmg * 0.05), t: 0.18 }; }
+  if (e.type === 'gigant' && e.gi !== undefined) { S.gigHp = S.gigHp || []; S.gigHp[e.gi] = Math.max(1, Math.round(e.hp)); }
+  if (!e.def.boss && !e.def.bossLike && !e.def.charge && (e.def.hitR || 0.3) < 1 && e.x !== undefined) { const kx = e.x - player.pos.x, kz = e.z - player.pos.z, kd = Math.hypot(kx, kz) || 1; e.kb = { x: kx / kd * Math.min(10, 3 + dmg * 0.05), z: kz / kd * Math.min(10, 3 + dmg * 0.05), t: 0.18 }; }
   floatText(e.x, e.y + (e.def.top || (e.type === 'wolf' ? 1.7 : 2.4)), e.z, String(Math.round(dmg)) + (crit ? '!' : ''), crit ? '#ffd24a' : '#ffffff', crit);
   sfx('hit');
   if (e.hp <= 0) killEnemy(e);
@@ -1896,7 +1897,7 @@ function killEnemy(e) {
   if (e.type === 'wolf' && S.stage === 4) { S.wolves++; updateQuestText(); if (S.wolves >= 5) { toast('Genug Wölfe besiegt! Zurück zur Pythia.', 'gold'); setStage(5); } }
   if (e.type === 'bandit' && S.stage === 7 && Math.hypot(e.home[0] - LOCS.banditen.x, e.home[1] - LOCS.banditen.z) < 40) { S.bandits++; updateQuestText(); if (S.bandits >= 4) { toast('Das Lager ist befreit! Zurück zu Leonidas.', 'gold'); setStage(8); } }
   if (e.type === 'minotaur') { banner('DER MINOTAUROS IST BESIEGT', 'Kehre nach Athen zurück, Held!'); if (S.stage === 10) setStage(11); S.minoDead = true; save(); }
-  if (e.type === 'gigant' && S.zeus === 2) { S.zeusKills = (S.zeusKills || 0) + 1; updateZeusText(); toast('Gigant gefallen (' + S.zeusKills + '/3)', 'gold'); if (S.zeusKills >= 3) setZeus(3); else save(); }
+  if (e.type === 'gigant' && S.zeus === 2) { if (S.gigHp && e.gi !== undefined) { S.gigHp.splice(e.gi, 1); enemies.forEach(o => { if (o.type === 'gigant' && o.gi > e.gi) o.gi--; }); } S.zeusKills = (S.zeusKills || 0) + 1; updateZeusText(); toast('Gigant gefallen (' + S.zeusKills + '/3)', 'gold'); if (S.zeusKills >= 3) setZeus(3); else save(); }
   if (e.type === 'typhon' && S.zeus === 5) setTimeout(() => setZeus(6), 4500);
   noteLegend(e.type);
   if (e.def.boss && e.key) { banner(e.def.name + ' ist besiegt!', 'Öffne den Schatz am Ende der Halle.'); if (!S.bossDead.includes(e.key)) S.bossDead.push(e.key); sfx('quest'); save(); }
@@ -1932,7 +1933,7 @@ function updateEnemy(e, dt) {
     if (d < D.aggro && !player.dead && !player.flying && !player.adminFly && !player.bird && !player.sailing && !(player.swimming && !D.fly) && homeD < 90 && Math.abs(P.y - e.y) < 12) e.state = 'chase';
   } else if (e.state === 'chase') {
     const homeD = Math.hypot(e.x - e.home[0], e.z - e.home[1]);
-    if (player.dead || player.flying || player.adminFly || player.bird || player.sailing || d > D.aggro * 2.5 || homeD > (D.hunter ? 1e9 : D.boss ? 40 : D.charge ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
+    if (player.dead || player.flying || player.adminFly || player.bird || player.sailing || d > D.aggro * 2.5 || homeD > (D.hunter ? 1e9 : D.boss ? 40 : e.type === 'gigant' ? 70 : D.charge ? 30 : 110)) { e.state = 'idle'; e.tx = e.home[0]; e.tz = e.home[1]; if (e.type !== 'gigant') e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.5); }
     else {
       if (D.charge) {
         e.chargeCd -= dt;
@@ -2017,7 +2018,7 @@ function playerAttack() {
     if (e.dead) continue;
     const dx = e.x - player.pos.x, dz = e.z - player.pos.z, d = Math.hypot(dx, dz);
     const er = e.def.hitR || 0.3;
-    if (d < reach + er && Math.abs(e.y - player.pos.y) < (player.flying ? 6 : 3.5) && (d < 1 || (dx * fx + dz * fz) / d > 0.4)) {
+    if (d < reach + er && player.pos.y > e.y - (player.flying ? 6 : 3.5) && player.pos.y < e.y + Math.max(player.flying ? 6 : 3.5, (e.def.top || 2) * 0.8) && (d < 1 || (dx * fx + dz * fz) / d > 0.4)) {
       const crit = rand() < 0.15;
       damageEnemy(e, playerDamage() * rr(0.85, 1.15) * (crit ? 2 : 1) * (player.form === 'centaur' ? 1.3 : 1), crit);
       if (!e.dead && !e.def.charge && !e.def.boss) { const k = 1.2 / (d || 1); const p = { x: e.x + dx * k, z: e.z + dz * k }; if (e.def.fly || groundAt(p.x, p.z) > -0.5) { resolveCollisions(p, e.def.r); e.x = p.x; e.z = p.z; } }
@@ -4127,7 +4128,8 @@ function spawnGiants() {
   for (const e of enemies.filter(e => e.type === 'gigant')) removeEnemy(e);
   const left = 3 - (S.zeusKills || 0);
   const O = LOCS.olymp, spots = [[O.x - 60, O.z + 90], [O.x + 70, O.z + 80], [O.x + 10, O.z + 120]];
-  for (let i = 0; i < left; i++) { let [x, z] = spots[i]; for (let k = 0; k < 50 && heightAt(x, z) < 3; k++) { x = spots[i][0] + rr(-40, 40); z = spots[i][1] + rr(-40, 40); } spawnEnemy('gigant', x, z); }
+  S.gigHp = S.gigHp || [];
+  for (let i = 0; i < left; i++) { let [x, z] = spots[i]; for (let k = 0; k < 50 && heightAt(x, z) < 3; k++) { x = spots[i][0] + rr(-40, 40); z = spots[i][1] + rr(-40, 40); } const g = spawnEnemy('gigant', x, z); if (g) { g.gi = i; if (S.gigHp[i] > 0) g.hp = Math.min(g.maxHp, S.gigHp[i]); } }
 }
 function updateZeusText() { const el = $('zeusText'); if (el) el.textContent = S.zeus > 0 && S.zeus < 6 ? '⚡ ' + ZEUS_STEPS[S.zeus]() : ''; }
 function zeusTarget() {
@@ -5252,7 +5254,7 @@ function init() {
   $('btnNew').onclick = () => startGame(false);
   const qb = $('btnQual'); if (qb) { const lbl = () => qb.textContent = QUALITY === 'hoch' ? 'Hoch' : 'Mittel (schneller)'; lbl(); qb.onclick = () => { setQuality(QUALITY === 'hoch' ? 'mittel' : 'hoch'); lbl(); }; }
   $('btnLoad').onclick = () => startGame(true);
-  window.__hellas = { makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
+  window.__hellas = { playerAttack, makeHumanoid, makeHorse, makeWolf, scene, camera, TRAFFIC, ARGUERS, mount, dismount, setHorse: () => setHorseModel(), spawnEnemy, refresh: () => refreshHeroLook(), quizReward: (c) => quizItemReward(c), checkForUpdate, athena: () => athenaReward(), setForm, legendCount, form: () => player.form, siren: () => SIRENMG && { ...SIRENMG }, setZeus, gainGear2: (k) => gainGear(k), toggleBird, throwBlitz, cycleWeapon, ZEUS_ALTARS, setCam: (y, pt) => { camYaw = y; camPitch = pt; }, olyStart, toggleBow, toggleHero, OLY: () => OLY, race: () => race, arrows, allies, TAVERNS, QUIZZERS, MYTH_FORESTS, setWanted, addCrime, spawnAlly, acceptBounty, toggleAdmin, renderAdmin, setAccount, roadDist, NET, DUNGEONS, DOCKS, enterDungeon, exitDungeon, gainGear, toggleShip, toggleFly, curD: () => curD, CHESTS, RUINS, talkTown, foundTown, upgradeTown, townsState, syncTowns, cam: () => [camYaw, camPitch], renderer, player, S, enemies, npcs, LOCS, SPOTS, heightAt, setStage, startGame, pickups, docks: () => [piraeusDock, kretaDock] };
   loop();
 }
 setTimeout(init, 30);
