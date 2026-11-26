@@ -1737,7 +1737,7 @@ function questTarget() {
 // ---------- Speichern ----------
 function saveData() {
     const sp = curD ? { x: curD.out[0], z: curD.out[1] } : player.pos;
-  return ({ v: 3, S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, shieldTier: player.shieldTier, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })), up: player.up, skins: player.skins, skin: player.skin } });
+  return ({ v: 3, S, p: { x: sp.x, z: sp.z, hp: player.hp, maxHp: player.maxHp, money: player.money, potions: player.potions, dmg: player.dmg, blessed: player.blessed, hasArmor: player.hasArmor, hasBlade: player.hasBlade, relics: player.relics, shieldTier: player.shieldTier, gear: player.gear, hasShip: player.hasShip, chiron: player.chiron, wTier: player.wTier, aTier: player.aTier, horse: player.horse, horses: player.horses, prevRide: player.prevRide, shipTier: player.shipTier, wanted: player.wanted, allies: allies.map(a => ({ type: a.type, hp: Math.round(a.hp) })), up: player.up, skins: player.skins, skin: player.skin } });
 }
 function save() {
   try { localStorage.setItem(saveKey(), JSON.stringify(saveData())); } catch (e) { /* ignorieren */ }
@@ -3606,17 +3606,34 @@ function siegeFire() {
     }, 220);
   }
 }
+function ownedSieges() { return Object.keys(HORSES).filter(k => HORSES[k].siege && player.horses.includes(k)); }
+function summonSiege(k) {
+  if (!k) {
+    if (player.mounted && HORSES[player.horse].siege) { dismount(); return; }
+    const own = ownedSieges();
+    if (!own.length) { toast('Du hast noch kein Kriegsgerät. Kriegsmeister Demetrios verkauft welche (Athen, Sparta, Korinth, Rhodos, Troja).'); return; }
+    if (own.length === 1) { summonSiege(own[0]); return; }
+    talk([{ who: 'Kriegsgerät', text: 'Welches Kriegsgerät willst du rufen?', opts: own.map(x => ({ label: HORSES[x].name, fn: () => summonSiege(x) })).concat([{ label: 'Abbrechen', fn: () => { } }]) }]);
+    return;
+  }
+  if (player.flying || player.sailing) return;
+  if (player.mounted) dismount();
+  if (!HORSES[player.horse].siege) player.prevRide = player.horse;
+  player.horse = k; setHorseModel(); mount();
+  if (player.mounted) toast(HORSES[k].name + ' bereit! Zielen mit der Kamera, ⚔ zum Feuern.', 'gold');
+  save();
+}
 function talkWarMaster() {
   const opts = Object.entries(HORSES).filter(([, h]) => h.siege).map(([k, h]) => {
     const own = player.horses.includes(k);
     return { label: (own ? (player.horse === k ? '✔ ' : 'Nehmen: ') : 'Kaufen: ') + h.name + (own ? '' : ' (' + h.cost + ' Drachmen)'), fn: () => {
-      if (!own) { if (!spend(h.cost)) return; player.horses.push(k); banner(h.name + ' gehört dir!', SIEGE_INFO[h.siege] + ' Mit R rufen, mit Angriff abfeuern.'); }
+      if (!own) { if (!spend(h.cost)) return; player.horses.push(k); banner(h.name + ' gehört dir!', SIEGE_INFO[h.siege] + ' Mit N oder dem 🪨-Knopf rufen, mit Angriff abfeuern.'); }
       player.horse = k; setHorseModel(); save(); talkWarMaster();
     } };
   });
-  opts.push({ label: 'Was können die Geräte?', fn: () => talk([{ who: 'Kriegsmeister Demetrios', text: 'Skorpion: ' + SIEGE_INFO.skorpion + ' Katapult: ' + SIEGE_INFO.katapult + ' Rammbock: ' + SIEGE_INFO.rammbock + ' Ruf dein Gerät mit R, ziel mit der Kamera und greif an, um zu feuern. Ideal, um Städte zu belagern!', opts: [{ label: 'Zurück', fn: () => talkWarMaster() }] }]) });
+  opts.push({ label: 'Was können die Geräte?', fn: () => talk([{ who: 'Kriegsmeister Demetrios', text: 'Skorpion: ' + SIEGE_INFO.skorpion + ' Katapult: ' + SIEGE_INFO.katapult + ' Rammbock: ' + SIEGE_INFO.rammbock + ' Ruf dein Gerät mit N (oder 🪨), ziel mit der Kamera und greif an, um zu feuern. Ideal, um Städte zu belagern!', opts: [{ label: 'Zurück', fn: () => talkWarMaster() }] }]) });
   opts.push({ label: 'Auf Wiedersehen', fn: () => { } });
-  talk([{ who: 'Kriegsmeister Demetrios', text: 'Mit Schwertern allein erobert man keine Mauern! Ich baue echte Kriegsgeräte – wie sie die Belagerer von Rhodos benutzt haben. Dein Gefährt: ' + HORSES[player.horse].name + '.', opts }]);
+  talk([{ who: 'Kriegsmeister Demetrios', text: 'Mit Schwertern allein erobert man keine Mauern! Ich baue echte Kriegsgeräte – wie sie die Belagerer von Rhodos benutzt haben. Deine Geräte: ' + (ownedSieges().map(k => HORSES[k].name).join(', ') || 'keine') + '.', opts }]);
 }
 function makeChariot(style = 'streit') {
   if (SIEGE_INFO[style]) return makeSiege(style);
@@ -3944,7 +3961,8 @@ addEventListener('keydown', (e) => {
   if (dialog && k === 'Escape') { dialog = null; renderDialog(); return; }
   if (dialog && /^Digit[1-9]$/.test(k)) chooseOpt(+k.slice(5) - 1);
   if (dialog) return;
-  if (k === 'KeyR' && !player.flying && !player.sailing) { player.mounted ? dismount() : mount(); }
+  if (k === 'KeyR' && !player.flying && !player.sailing) { if (player.mounted) dismount(); else { if (HORSES[player.horse].siege) { player.horse = player.prevRide && player.horses.includes(player.prevRide) ? player.prevRide : 'gaul'; setHorseModel(); } mount(); } }
+  if (k === 'KeyN' && !player.flying && !player.sailing) summonSiege();
   if (k === 'KeyF') { if (player.potions > 0 && player.hp < player.maxHp) { player.potions--; player.hp = Math.min(player.maxHp, player.hp + 60); sfx('drink'); floatText(player.pos.x, player.pos.y + 2.4, player.pos.z, '+60', '#7aff8a'); } else if (player.potions <= 0) toast('Keine Ambrosia mehr. Kleon in Athen verkauft welche.'); }
   if (k === 'KeyQ') zeusBolt();
   if (k === 'KeyP') toggleAdmin();
@@ -4056,7 +4074,7 @@ function renderHero() {
       b.onclick = () => { setWeapon(w); renderHero(); }; right.appendChild(b);
     }
     if (player.shieldTier > 0 || player.gear.includes('aigis')) { const b = document.createElement('div'); b.className = 'invw pass'; b.innerHTML = '<span class="ic">🛡</span><span class="nm"></span><span class="sb">Blocken</span>'; b.children[1].textContent = player.gear.includes('aigis') ? 'Aigis' : ['', 'Holzschild', 'Bronzeschild'][player.shieldTier]; right.appendChild(b); }
-    if (HORSES[player.horse || 'gaul'].siege) { const b = document.createElement('div'); b.className = 'invw pass'; b.innerHTML = '<span class="ic">🏹</span><span class="nm"></span><span class="sb">Kriegsgerät – R rufen</span>'; b.children[0].textContent = '🪨'; b.children[1].textContent = HORSES[player.horse].name; right.appendChild(b); }
+    if (ownedSieges().length) { const sb2 = document.createElement('button'); sb2.className = 'invw'; sb2.innerHTML = '<span class="ic">🪨</span><span class="nm">Kriegsgerät rufen</span><span class="sb"></span>'; sb2.children[2].textContent = ownedSieges().map(k => HORSES[k].name.split(' ')[0]).join(', ') + ' – Taste N'; sb2.onclick = () => { toggleHero(); summonSiege(); }; right.appendChild(sb2); }
     if (myTownSites().length) { const tb = document.createElement('button'); tb.className = 'invw'; tb.innerHTML = '<span class="ic">🏛</span><span class="nm">Zur eigenen Stadt reisen</span><span class="sb">Teleport, auch Taste H</span>'; tb.onclick = () => townTravelMenu(); right.appendChild(tb); }
     lrow('Rüstung: ' + ARMORS[player.aTier || 0].name + ' (−' + Math.round(ARMORS[player.aTier || 0].red * 100) + ' % Schaden)');
     lrow('Leben: ' + Math.ceil(player.hp) + ' / ' + player.maxHp);
@@ -4819,9 +4837,9 @@ function setupTouch() {
   mk('jmp', '⤒', 'mid', () => pressKey('Space', true), () => pressKey('Space', false));
   mk('use', 'E', 'mid gold', () => pressKey('KeyE', true), () => pressKey('KeyE', false));
   mk('dn', '⤓', 'mid', () => pressKey('KeyC', true), () => pressKey('KeyC', false));
-  const side = [['I', '🎒', 'KeyI'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['J', '🧜', 'KeyJ'], ['K', '♐', 'KeyK'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
+  const side = [['N', '🪨', 'KeyN'], ['I', '🎒', 'KeyI'], ['V', '⚡↗', 'KeyV'], ['U', '🦅', 'KeyU'], ['J', '🧜', 'KeyJ'], ['K', '♐', 'KeyK'], ['R', '🐎', 'KeyR'], ['F', '✚', 'KeyF'], ['Q', '⚡', 'KeyQ'], ['T', '🪽', 'KeyT'], ['B', '⛵', 'KeyB'], ['G', '🐍', 'KeyG'], ['M', '🗺', 'KeyM'], ['C', '💬', null], ['P', '⚙', 'KeyP']];
   const col = document.createElement('div'); col.id = 'tCol'; ui.appendChild(col);
-  const COL = ['R', 'M', 'wpn', 'V', 'U', 'J', 'K'];
+  const COL = ['R', 'N', 'M', 'wpn', 'V', 'U', 'J', 'K'];
   const sideMap = Object.fromEntries(side.map(x => [x[0], x]));
   for (const id of COL) {
     if (id === 'wpn') { mk('wpn', '🏹', 'small', () => pressKey('KeyX', true), () => pressKey('KeyX', false), col); continue; }
@@ -4850,7 +4868,7 @@ function updateTouchUI() {
   const show = (id, v) => { v = !!v; const b = TOUCH.btns[id]; if (b && (b.style.display === 'none') === v) b.style.display = v ? '' : 'none'; };
   const fly = player.flying || player.adminFly || player.bird;
   show('dn', fly); show('sQ', player.blessed); show('sT', player.gear.includes('pegasus')); show('sG', player.gear.includes('pegasus'));
-  show('sB', player.hasShip); show('sV', player.gear.includes('keraunos')); show('sU', player.gear.includes('blitzvogel')); show('sJ', player.gear.includes('sirene')); show('sK', player.gear.includes('kentaur')); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
+  show('sN', ownedSieges().length > 0); show('sB', player.hasShip); show('sV', player.gear.includes('keraunos')); show('sU', player.gear.includes('blitzvogel')); show('sJ', player.gear.includes('sirene')); show('sK', player.gear.includes('kentaur')); show('sC', NET.online); show('sP', !!(NET.account && NET.account.admin));
   show('use', !!nearInter || !!dialog || player.sailing);
   { const b = TOUCH.btns.use; if (b) { const lab = player.sailing && !nearInter && !dialog ? '⚓' : 'E'; if (b.textContent !== lab) b.textContent = lab; } }
   { const b = TOUCH.btns.wpn; if (b) { const lab = player.bowMode ? '⚔' : '🏹'; if (b.textContent !== lab) b.textContent = lab; } }
@@ -5289,6 +5307,7 @@ function updateHUD() {
   $('money').textContent = player.money; $('potions').textContent = player.potions;
   const ab = [];
   ab.push(player.mounted ? '[R] Absteigen' : '[R] ' + HORSES[player.horse || 'gaul'].name);
+  if (ownedSieges().length) ab.push(player.mounted && HORSES[player.horse].siege ? '[N] Kriegsgerät abstellen' : '[N] Kriegsgerät');
   ab.push('[X] ' + (player.bowMode ? (player.gear.includes('keraunos') ? 'Keraunos' : 'Schwert') : player.blitzMode ? 'Schwert' : 'Bogen'), '[I] Held');
   if (player.gear.includes('keraunos')) ab.push(player.blitzCd > 0 ? 'Blitz ' + player.blitzCd.toFixed(1) + ' s' : '[V] Blitz werfen');
   if (player.gear.includes('blitzvogel')) ab.push(player.bird ? '[U] Zurückverwandeln' : '[U] Blitzadler');

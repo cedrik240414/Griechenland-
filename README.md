@@ -89,7 +89,7 @@ Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code lie
 
 ## Kriegsgeräte, Straßen & Leben in der Welt
 
-- **Kriegsmeister Demetrios** (Athen, Sparta, Korinth, Rhodos, Troja) verkauft echte Kriegsgeräte: **Skorpion** (Pfeilgeschütz, weite und genaue Bolzen), **Katapult** (Felsbrocken im Bogen, trifft ganze Gruppen) und **Rammbock** (überdachter Widder mit Bronzekopf). Mit R rufen, mit der Kamera zielen, mit Angriff feuern.
+- **Kriegsmeister Demetrios** (Athen, Sparta, Korinth, Rhodos, Troja) verkauft echte Kriegsgeräte: **Skorpion** (Pfeilgeschütz, weite und genaue Bolzen), **Katapult** (Felsbrocken im Bogen, trifft ganze Gruppen) und **Rammbock** (überdachter Widder mit Bronzekopf). Mit N oder dem 🪨-Knopf rufen (bei mehreren Geräten zur Auswahl), mit der Kamera zielen, mit Angriff feuern. 🐎/R ruft danach wieder dein normales Pferd oder deinen Wagen.
 - **Gepflasterte Straßen** mit Steinplatten und Meilensteinen verbinden die Städte.
 - **Fuhrwerke** fahren über die Straßen, halten vor dir an und schimpfen, wenn du im Weg stehst.
 - **Streitende Leute** in den Städten: Du kannst den Streit schlichten (Belohnung) oder anfeuern.
