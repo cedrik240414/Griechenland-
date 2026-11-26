@@ -47,6 +47,7 @@
   #dlgName { font-family:'Cinzel',serif; color:var(--gold); font-size:18px; margin-bottom:6px; }
   #dlgText { font-size:18px; line-height:1.45; min-height:52px; }
   #dlgOpts { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+  #qualBox { margin:8px 0 2px; font-size:14px; opacity:.9; } #qualBox .btn { padding:4px 14px; margin-left:6px; }
   #dlgOpts button { text-align:left; font:inherit; font-size:16px; color:#f3e9d2; background:rgba(232,196,106,.12); border:1px solid rgba(232,196,106,.45);
     border-radius:5px; padding:6px 10px; cursor:pointer; }
   #dlgOpts button:hover { background:rgba(232,196,106,.28); }
@@ -213,6 +214,7 @@
       <select id="lobbySel" class="hidden"></select>
       <div id="mpStatus"></div>
     </div>
+    <div id="qualBox">Grafik: <button class="btn alt small" id="btnQual">Mittel</button></div>
     <div id="loading">Die Welt wird erschaffen …</div>
     <div id="controls">
       <b>W A S D</b><span>Laufen</span>

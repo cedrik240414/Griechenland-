@@ -80,6 +80,13 @@ Admins haben Keraunos und Blitzadler von Anfang an.
 
 Der Server läuft unter https://hellas-server.cedrikve.workers.dev, der Code liegt im Ordner [`server/`](server/README.md) (Cloudflare Worker). Ist er nicht erreichbar, läuft das Spiel als Einzelspieler.
 
+## Grafik & Physik
+
+- **Figuren:** runde Körper mit Hals, Händen, Füßen und Gesicht (Augen, Brauen, Nase, Mund), Ellbogen- und Kniegelenke, weichere Lauf- und Kampfanimationen. Pferde und Wölfe haben runde Körper und geknickte Beine.
+- **Welt:** feine Bodenstruktur ohne Kachelmuster, Gesteinsschichten an steilen Hängen, wehendes Gras rund um den Spieler, Bäume aus mehreren Laubballen, die sich im Wind bewegen, Wasser mit Wellen, Glanz und Spiegelung am Horizont, leichter Dunst in der Ferne.
+- **Physik:** Trägheit beim Loslaufen und Anhalten (zu Pferd stärker), bergauf langsamer und bergab schneller, kaum Steuerung in der Luft, realistischere Schwerkraft und Sprunghöhe, harte Landungen bremsen und verletzen ab etwa 11 m Fallhöhe, Treffer stoßen Spieler und Gegner zurück, weich nachgeführte Kamera.
+- **Grafikstufe** im Startmenü: *Hoch* oder *Mittel (schneller)*. Auf Tablets ist *Mittel* voreingestellt. Die Stufe wird gespeichert und wirkt vollständig nach dem nächsten Laden.
+
 ## Steuerung
 
 | Taste | Aktion |
